@@ -1,0 +1,6 @@
+{
+  "name": "Funny Exact Anagram Lab",
+  "description": "Discover hilarious and witty exact anagrams, test phrases with the anagram lie detector, play anagram games, and generate letter-rearrangement animated GIFs and videos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "theme": {
+    "colors": {
+      "neutral": "#09090b",
+      "surface": "#18181b",
+      "border": "#27272a",
+      "borderHighlight": "#3f3f46",
+      "primary": "#f4f4f5",
+      "secondary": "#a1a1aa",
+      "tertiary": "#38bdf8",
+      "accentSuccess": "#10b981",
+      "accentWarning": "#f59e0b",
+      "accentDanger": "#ef4444"
+    },
+    "typography": {
+      "display": "ui-monospace, monospace",
+      "body": "ui-sans-serif, system-ui, sans-serif",
+      "mono": "ui-monospace, monospace"
+    },
+    "rounded": {
+      "sm": "4px",
+      "md": "6px",
+      "lg": "8px",
+      "xl": "12px",
+      "full": "9999px"
+    }
+  },
+  "narrative": {
+    "northStar": "The Mechanical Typesetter's Laboratory",
+    "overview": "Anagram Lab is built upon a Precision Darkroom Studio aesthetic. It marries the sterile rigor of a typography typesetting laboratory with tactile physics and neon-hued verification telemetry.",
+    "keyCharacteristics": [
+      "Obsidian & Zinc Backdrop: Deep #09090b and #18181b canvas depths that allow vibrant letter tiles and motion arcs to command visual focus.",
+      "Hairline Precision: 1px subtle zinc borders (#27272a / #3f3f46) creating structured instrument panels without heavy bevels or drop-shadow clutter.",
+      "Auditory & Tactile Resonance: Instant micro-feedback with subtle pop/chime SFX, confetti on exact solutions, and smooth timeline scrubbing."
+    ],
+    "rules": [
+      {
+        "name": "The Semantic Semaphore Rule",
+        "body": "Color is never applied purely for ornamental decoration; emerald is reserved exclusively for validated mathematical truth, amber for warnings/streaks, and sky/cyan for active tools."
+      },
+      {
+        "name": "The Alignment Tabular Rule",
+        "body": "Any count, frequency chip, time counter, or Scrabble value must render in a monospace tabular typeface to prevent jitter during real-time typing and solver execution."
+      },
+      {
+        "name": "The Compact Command Deck Rule",
+        "body": "Controls and filter options must be consolidated into structured grid decks rather than sprawling multi-page forms, ensuring the primary input and output viewports remain visible simultaneously."
+      }
+    ],
+    "dos": [
+      "Always display letter counts and multiset verification chips alongside candidate phrases.",
+      "Provide instant one-click pathways between tools (e.g., 'Animate in Motion Studio', 'Verify in Lie Detector').",
+      "Keep SFX subtle, non-intrusive, and easily toggleable from the global toolbar.",
+      "Maintain strict 100% letter conservation across all solver operations."
+    ],
+    "donts": [
+      "Do not introduce low-contrast text that compromises legibility on dark backgrounds.",
+      "Do not use arbitrary floating pastel gradients or decorative blobs that clash with the precision laboratory aesthetic.",
+      "Do not hide validation errors or silently drop extra characters."
+    ]
+  }
+}
