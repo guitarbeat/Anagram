@@ -1,45 +1,63 @@
-# Product
+# Anagram Lab — Product Specification
+
 <!-- uizze:product-schema 1 -->
 
-## Platform
-web
+## 1. Platform & Target Audience
 
-## Users
-Writers, anagrammatists, puzzle enthusiasts, game designers, and wordplay lovers seeking exact multiset transpositions, lexical exploration, and visual rearrangeable motion for names, phrases, and creative titles.
+| Dimension | Details |
+|---|---|
+| **Platform** | Web (Desktop & Mobile Responsive) |
+| **Primary Users** | Writers, wordsmiths, puzzle designers, cryptographers, content creators, and typography enthusiasts |
+| **Use Cases** | Exact name/phrase anagram discovery, character parity verification, visual video/GIF creation for social sharing, and lexical exploration |
 
-## Product Purpose
-Anagram Lab is a full-featured suite for anagram discovery, dynamic typography animation, combinatorial word chaining, lexicon decomposition, and truth verification. Success is instant, zero-leak multiset precision paired with cinematic, frame-by-frame letter animation and playful word-discovery tools.
+---
 
-## Positioning
-Unlike simple single-word dictionary unscramblers or static anagram tables, Anagram Lab combines a multi-word backtracking search engine with customizable personality heuristics, an interactive particle-motion canvas studio with GIF/video export, and verified multiset truth inspectors.
+## 2. Product Purpose & Positioning
 
-## Operating Context
-Web-based interactive desktop and mobile environments. Users paste names, book titles, or cryptic phrases to generate thematic anagrams, animate letter transformations for video sharing, build complex multi-word chains, or test anagram validity with character-level diff inspections.
+**Anagram Lab** provides high-precision computational wordplay and dynamic typography motion tools in a unified, distraction-free environment.
 
-## Capabilities and Constraints
-- **Multi-Word Search Engine**: Deep 50,000-word unabridged lexicon always active with all words available, anchor constraints, wildcard pattern filtering (`*ing`, `*cat*`), custom word banks, and clean partition controls.
-- **Motion Studio**: HTML5 Canvas rendering engine with multiple trajectory physics (arcs, orbits, vortex, drift, snap, matrix), custom particle trails, 5 typography styles, timeline scrubber, and animated GIF/PNG capture.
-- **Word Chain Builder**: Interactive branch-by-branch partition constructor tracking exact remaining letter multisets.
-- **Sub-Words Explorer**: Exhaustive single-word partition discovery with Scrabble point calculations and entropy analysis.
-- **Truth Verifier (Lie Detector)**: Real-time letter frequency counting and diff categorization (exact, missing, surplus, substitute).
-- **Interactive Letter Sandbox**: Tactile, drag-and-drop letter tile board with magnetic snapping and multiset telemetry.
-- **Game Hub**: Riddle Quest clue puzzles, 60-Second Speed Blitz sprints, and custom challenge creator with shareable codes.
-- **Constraint**: Zero character additions or deletions in exact anagram mode; 100% client-side deterministic verification.
+### Key Differentiators
+- **100% Deterministic Multiset Integrity**: Every exact anagram guarantees identical letter counts with zero character loss or addition.
+- **Integrated Motion Studio**: Transforms static anagrams into animated vector letter flight paths ready for video and animated GIF export.
+- **All-in-One Studio**: Combines a multi-word backtracking search engine, tactile letter-rack sandbox, dictionary explorer, and real-time parity checker into a single streamlined workspace.
 
-## Brand Commitments
-- **Name**: Anagram Lab
-- **Voice**: Clean, cerebral, tactile, scientific yet playful.
-- **Aesthetic**: Technical darkroom studio aesthetic (obsidian, zinc, subtle emerald/amber/sky accents, crisp monospace and geometric typography).
+---
 
-## Evidence on Hand
-- Full-featured codebase with comprehensive unit solvers in `/src/utils/anagramSolver.ts` and `/src/utils/canvasRenderer.ts`.
-- Curated classic anagram Hall of Fame datasets and predefined puzzle dictionaries.
+## 3. Core Capabilities
 
-## Product Principles
-1. **Multiset Truth is Inviolate**: An anagram is exact if and only if character multisets match 100%. No silent approximations.
-2. **Tactile & Responsive**: Every interaction, from letter dragging to animation scrubbing, provides instantaneous visual and auditory feedback.
-3. **Deep Expressiveness**: Provide both computational depth (wildcards, anchors, lexicon depth) and narrative flair (personality modes, story generators, motion aesthetics).
-4. **Zero-Clutter Usability**: Complex combinatorial tooling organized into intuitive, focused workspaces with streamlined navigation.
+### 3.1 Multi-Word Anagram Solver
+- Deep unabridged dictionary exploration with recursive combinatorial backtracking.
+- Heuristic scoring sorting combinations by legibility, word length balance, and phrasing harmony.
+- Quick filter and sort options (Best Score, Fewest Words, Most Words, Alphabetical).
 
-## Accessibility & Inclusion
-Keyboard navigable controls, high-contrast dark theme (WCAG AA compliant contrast on zinc-950/zinc-900 surfaces), audio cues with global mute toggle, and clear visual diff indicators for color-blind users.
+### 3.2 Interactive Letter Rack & Parity Verifier
+- Visual letter tile bank with click-to-place and physical keyboard input.
+- Real-time character multiset diff engine calculating exact matches, missing characters, and surplus letters.
+- Predictive completion chips suggesting valid words that exhaust remaining unplaced tiles.
+
+### 3.3 Dictionary Sub-Words Browser
+- Exhaustive listing of all valid single words constructible from the source text.
+- Word length selector, substring search, and alphabetical/length sorting.
+- One-click transfer to add words directly into the interactive letter rack.
+
+### 3.4 Motion Letter Animator
+- HTML5 Canvas rendering engine with 6 distinct physics models:
+  - *Flying Arcs*: Curved parabolic flight trajectories.
+  - *Orbit & Settle*: Gravitational spiral motion.
+  - *Direct*: Straight linear interpolation.
+  - *Scatter / Explosion*: Outward dispersal and snap-in convergence.
+  - *Vortex*: Swirling vortex rotation.
+  - *Elastic Bounce*: Spring-damped trajectory overshoot.
+- 8 curated color themes (Standard Dark, Clean Light, Neon Blue, Cyberpunk, Parchment, Retro 80s, Emerald, Sunset).
+- 5 typography choices (Monospace, Geometric Sans, Classical Serif, Cyber Hacker, Pixel).
+- Timeline scrubber with play/pause, step backward/forward, and loop configurations.
+- Direct export to Animated GIF, WebM video recording, and instant PNG frame clipboard copying.
+
+---
+
+## 4. Product Principles
+
+1. **Multiset Truth is Inviolate**: An anagram is considered exact if and only if character multisets match 100%. No silent approximations or character loss.
+2. **Tactile & Fluid Feedback**: Every tile manipulation, search filter, and animation parameter updates instantaneously with zero layout thrashing.
+3. **Streamlined Workflow**: Zero unnecessary modals or nested pages; all tools are accessible within a single continuous workspace with sticky navigation.
+4. **Accessible Contrast**: Strict adherence to WCAG AA contrast standards using high-legibility zinc and emerald telemetry on obsidian backdrops.

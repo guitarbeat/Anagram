@@ -1,7 +1,7 @@
-import { ARTICLES, AUX, COMMON_3, COMMON_SHORT, CONJS, CYBER_WORDS, FANTASY_WORDS, FUNNY_WORDS, NOIR_WORDS, PREPS, PRONOUNS, SCRABBLE_POINTS, SPICY, VERBS } from '../data/lexicon';
+import { ARTICLES, AUX, COMMON_3, COMMON_SHORT, CONJS, FUNNY_WORDS, PREPS, PRONOUNS, SCRABBLE_POINTS, VERBS } from '../data/lexicon';
 import { UNABRIDGED_WORDS, UNABRIDGED_COUNT, getUnabridgedCountsBuffer } from '../data/unabridgedLexicon';
 import { FREQUENCY_DICTIONARY, FREQUENCY_MAP } from '../data/words';
-import { AnagramResult, LetterDiff, PersonalityMode, SubWord, VocabularyDepth, WordCandidate } from '../types';
+import { AnagramResult, LetterDiff, SubWord, VocabularyDepth, WordCandidate } from '../types';
 
 export function normalize(s: string): string {
   return (s.toLowerCase().match(/[a-z]/g) || []).join('');
@@ -53,47 +53,6 @@ export function calculateScrabbleScore(word: string): number {
     total += SCRABBLE_POINTS[char] || 1;
   }
   return total;
-}
-
-export function getLetterStatistics(source: string) {
-  const clean = normalize(source);
-  const counts = countsArray(source);
-  const VOWELS = new Set(['a', 'e', 'i', 'o', 'u', 'y']);
-  let vowels = 0;
-  let consonants = 0;
-  let totalScrabble = 0;
-
-  const letterDistribution: { char: string; count: number; points: number }[] = [];
-
-  for (let i = 0; i < 26; i++) {
-    const count = counts[i];
-    if (count > 0) {
-      const char = String.fromCharCode(97 + i);
-      const points = (SCRABBLE_POINTS[char] || 1) * count;
-      totalScrabble += points;
-      if (VOWELS.has(char)) {
-        vowels += count;
-      } else {
-        consonants += count;
-      }
-      letterDistribution.push({ char, count, points });
-    }
-  }
-
-  letterDistribution.sort((a, b) => b.count - a.count || a.char.localeCompare(b.char));
-
-  const vowelRatio = clean.length > 0 ? (vowels / clean.length) * 100 : 0;
-  const uniqueCount = letterDistribution.length;
-
-  return {
-    totalLetters: clean.length,
-    vowels,
-    consonants,
-    vowelRatio: Math.round(vowelRatio),
-    totalScrabble,
-    uniqueCount,
-    distribution: letterDistribution,
-  };
 }
 
 export function getLetterDiff(source: string, target: string): LetterDiff {
@@ -256,7 +215,6 @@ export function polishPhrase(words: string[]): string {
 export interface SolveOptions {
   source: string;
   depth?: VocabularyDepth;
-  mode?: PersonalityMode;
   maxWords?: number;
   resultLimit?: number;
   allowSpicy?: boolean;
@@ -452,36 +410,6 @@ export async function solveAnagrams(options: SolveOptions): Promise<{ results: A
       candidatesCount: cands.length,
     },
   };
-}
-
-export function findAnchorSuggestions(
-  source: string,
-  depth: VocabularyDepth = 50000
-): { word: string; category: string; funny: boolean }[] {
-  const cands = buildCandidates(source, depth, '', '');
-  const sCounts = countsArray(source);
-  const rareWeight = new Array(26).fill(0).map((_, i) => (sCounts[i] ? 1 / sCounts[i] : 0));
-
-  const scored = cands
-    .filter(x => x.w.length >= 4)
-    .map(x => {
-      let rare = 0;
-      for (let i = 0; i < 26; i++) {
-        if (x.c[i]) rare += rareWeight[i] * x.c[i];
-      }
-      const funny = FUNNY_WORDS.has(x.w);
-      const score = x.base + x.w.length * 0.8 + rare * 2.5 + (funny ? 6 : 0);
-      return {
-        word: x.w,
-        category: getWordCategory(x.w),
-        funny,
-        score,
-      };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 24);
-
-  return scored;
 }
 
 export function autocompleteMissingLetters(source: string, partial: string): string[] {

@@ -9,21 +9,23 @@ import {
   Repeat,
   ChevronLeft,
   ChevronRight,
-  Grid,
   Sparkles,
-  Type,
+  Copy,
+  Check,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { AnimationSpeed, AspectRatio, CanvasFont, CanvasTheme, LoopMode, MotionStyle } from '../types';
 import { renderRearrangementCanvas } from '../utils/canvasRenderer';
 import { createRearrangementGif } from '../utils/gifExporter';
-import { soundFX, fireConfetti } from '../utils/audioEffects';
 import { exact } from '../utils/anagramSolver';
+import { showToast } from '../utils/toast';
 
 interface AnimationStudioProps {
   sourceText: string;
   targetPhrase: string;
   onSetSource: (val: string) => void;
   onSetTarget: (val: string) => void;
+  onOpenRack?: (target: string) => void;
 }
 
 export const AnimationStudio: React.FC<AnimationStudioProps> = ({
@@ -31,6 +33,7 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
   targetPhrase,
   onSetSource,
   onSetTarget,
+  onOpenRack,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -49,49 +52,75 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
   const [isGeneratingGif, setIsGeneratingGif] = useState<boolean>(false);
   const [gifProgress, setGifProgress] = useState<number>(0);
   const [generatedGifUrl, setGeneratedGifUrl] = useState<string | null>(null);
-
   const [isRecordingVideo, setIsRecordingVideo] = useState<boolean>(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [copiedCanvas, setCopiedCanvas] = useState<boolean>(false);
 
-  const animTokenRef = useRef<number>(0);
   const isExactMatch = exact(sourceText, targetPhrase);
+  const animTokenRef = useRef<number>(0);
 
-  // Set canvas dimensions
   const updateCanvasDimensions = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    let w = 840;
+    let h = 472; // default 16:9
+
     if (aspectRatio === 'square') {
-      canvas.width = 560;
-      canvas.height = 560;
+      w = 640;
+      h = 640;
     } else if (aspectRatio === 'story') {
-      canvas.width = 400;
-      canvas.height = 700;
+      w = 480;
+      h = 854;
     } else if (aspectRatio === 'banner') {
-      canvas.width = 800;
-      canvas.height = 300;
-    } else {
-      // wide
-      canvas.width = 760;
-      canvas.height = 380;
+      w = 880;
+      h = 320;
     }
+
+    canvas.width = w;
+    canvas.height = h;
   }, [aspectRatio]);
 
-  // Main animation loop
   useEffect(() => {
     updateCanvasDimensions();
-    animTokenRef.current++;
-    const token = animTokenRef.current;
+  }, [aspectRatio, updateCanvasDimensions]);
 
+  // Main animation render loop
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const token = ++animTokenRef.current;
+
     if (!isExactMatch) {
-      renderRearrangementCanvas(1, canvas, sourceText, targetPhrase, motionStyle, theme, customSubtitle, fontOption, showGrid, trailIntensity);
+      renderRearrangementCanvas(
+        0,
+        canvas,
+        sourceText,
+        targetPhrase,
+        motionStyle,
+        theme,
+        customSubtitle,
+        fontOption,
+        showGrid,
+        trailIntensity
+      );
       return;
     }
 
     if (!isPlaying) {
-      renderRearrangementCanvas(progress, canvas, sourceText, targetPhrase, motionStyle, theme, customSubtitle, fontOption, showGrid, trailIntensity);
+      renderRearrangementCanvas(
+        progress,
+        canvas,
+        sourceText,
+        targetPhrase,
+        motionStyle,
+        theme,
+        customSubtitle,
+        fontOption,
+        showGrid,
+        trailIntensity
+      );
       return;
     }
 
@@ -119,7 +148,18 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
 
       const currentProg = phase === 'forward' ? p : 1 - p;
       setProgress(currentProg);
-      renderRearrangementCanvas(currentProg, canvas, sourceText, targetPhrase, motionStyle, theme, customSubtitle, fontOption, showGrid, trailIntensity);
+      renderRearrangementCanvas(
+        currentProg,
+        canvas,
+        sourceText,
+        targetPhrase,
+        motionStyle,
+        theme,
+        customSubtitle,
+        fontOption,
+        showGrid,
+        trailIntensity
+      );
 
       if (p >= 1) {
         if (loopMode === 'once') {
@@ -130,7 +170,6 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
           phase = phase === 'forward' ? 'reverse' : 'forward';
           pauseUntil = now + pauseDuration;
         } else {
-          // restart
           phase = 'forward';
           pauseUntil = now + pauseDuration;
         }
@@ -167,18 +206,27 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
       const next = Math.max(0, Math.min(1, prev + delta));
       const canvas = canvasRef.current;
       if (canvas) {
-        renderRearrangementCanvas(next, canvas, sourceText, targetPhrase, motionStyle, theme, customSubtitle, fontOption, showGrid, trailIntensity);
+        renderRearrangementCanvas(
+          next,
+          canvas,
+          sourceText,
+          targetPhrase,
+          motionStyle,
+          theme,
+          customSubtitle,
+          fontOption,
+          showGrid,
+          trailIntensity
+        );
       }
       return next;
     });
-    soundFX.playPop();
   };
 
   const handleExportGif = async () => {
     const canvas = canvasRef.current;
     if (!canvas || !isExactMatch) return;
 
-    soundFX.playPop();
     setIsGeneratingGif(true);
     setGifProgress(5);
 
@@ -199,10 +247,10 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
       });
 
       setGeneratedGifUrl(url);
-      soundFX.playSuccess();
-      fireConfetti();
+      showToast('GIF export ready', 'success');
     } catch (err) {
       console.error('GIF Export Error:', err);
+      showToast('GIF export failed', 'error');
     } finally {
       setIsGeneratingGif(false);
       updateCanvasDimensions();
@@ -213,7 +261,6 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
     const canvas = canvasRef.current;
     if (!canvas || !isExactMatch) return;
 
-    soundFX.playPop();
     setIsRecordingVideo(true);
 
     try {
@@ -230,64 +277,85 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
         const url = URL.createObjectURL(blob);
         setVideoUrl(url);
         setIsRecordingVideo(false);
-        soundFX.playSuccess();
+        showToast('WebM video recorded successfully', 'success');
       };
 
       recorder.start();
+      showToast('Recording animation sequence...', 'info');
 
       const duration = speed === 'slow' ? 7000 : speed === 'fast' ? 3600 : 5200;
       setTimeout(() => {
-        recorder.stop();
+        if (recorder.state === 'recording') recorder.stop();
       }, duration);
     } catch (err) {
       console.error('Video capture error:', err);
       setIsRecordingVideo(false);
+      showToast('Video recording failed in this browser', 'error');
     }
   };
-
-  const [pngNotice, setPngNotice] = useState<boolean>(false);
 
   const handleCapturePng = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    soundFX.playPop();
+
     const dataUrl = canvas.toDataURL('image/png');
     const link = document.createElement('a');
-    link.download = `anagram-${Date.now()}.png`;
+    link.download = 'anagram-frame.png';
     link.href = dataUrl;
     link.click();
-    setPngNotice(true);
-    setTimeout(() => setPngNotice(false), 2000);
+    showToast('Saved animation PNG frame', 'success');
+  };
+
+  const handleCopyCanvasImage = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      canvas.toBlob(async blob => {
+        if (!blob) return;
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob }),
+          ]);
+          setCopiedCanvas(true);
+          showToast('Copied frame image to clipboard', 'success');
+          setTimeout(() => setCopiedCanvas(false), 2000);
+        } catch {
+          showToast('Direct image clipboard not supported on this browser', 'info');
+        }
+      }, 'image/png');
+    } catch {
+      showToast('Clipboard operation failed', 'error');
+    }
   };
 
   const handleSwap = () => {
-    soundFX.playPop();
     const temp = sourceText;
     onSetSource(targetPhrase);
     onSetTarget(temp);
+    showToast('Swapped source and target phrases', 'info');
   };
 
   return (
     <div className="space-y-5">
       <section className="bg-zinc-900/70 border border-zinc-800 rounded-xl p-5 sm:p-6 space-y-5">
-        {/* Header & Direct Target Phrase Controller */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-850 pb-4">
+        {/* Header & Swap Button */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-4">
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-semibold text-zinc-100 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-emerald-400" />
+              <h2 className="text-base font-semibold text-zinc-100 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-zinc-400" />
                 <span>Motion Letter Animator</span>
               </h2>
               <span className={`text-[11px] font-mono px-2 py-0.5 rounded border ${
                 isExactMatch
                   ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
-                  : 'bg-amber-950/60 border-amber-800 text-amber-300'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-400'
               }`}>
-                {isExactMatch ? 'Exact Anagram' : 'Letter Discrepancy'}
+                {isExactMatch ? 'Exact Match' : 'Discrepancy'}
               </span>
             </div>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Live vector rearrangement with customizable particle physics and recording export.
+              High-precision letter flight path simulation and recording studio.
             </p>
           </div>
 
@@ -298,7 +366,7 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
               title="Swap source text and target phrase"
             >
               <Repeat className="w-3.5 h-3.5" />
-              <span>Swap Order</span>
+              <span>Swap</span>
             </button>
           </div>
         </div>
@@ -306,7 +374,7 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
         {/* Compact Target Input Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 bg-zinc-950 p-2.5 rounded-lg border border-zinc-800/80">
           <div className="flex items-center gap-1.5 text-xs text-zinc-500 font-mono shrink-0 pl-1">
-            <span className="text-zinc-400 font-medium">Animating Target:</span>
+            <span className="text-zinc-400 font-medium">Target Phrase:</span>
           </div>
           <input
             type="text"
@@ -315,9 +383,16 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
             placeholder="Target anagram phrase to animate..."
             className="flex-1 bg-zinc-900 border border-zinc-800 focus:border-zinc-500 rounded px-2.5 py-1.5 text-xs sm:text-sm font-mono text-zinc-100 focus:outline-none transition-all"
           />
-          <div className="text-[11px] font-mono text-zinc-500 px-2 py-1 bg-zinc-900 rounded border border-zinc-850 shrink-0">
-            Source: <span className="text-zinc-300">{sourceText}</span>
-          </div>
+          {onOpenRack && (
+            <button
+              onClick={() => onOpenRack(targetPhrase)}
+              className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded text-xs transition-colors flex items-center gap-1 shrink-0"
+              title="Load into letter rack"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-zinc-400" />
+              <span>Rack</span>
+            </button>
+          )}
         </div>
 
         {/* Canvas Viewport */}
@@ -331,12 +406,9 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
           <div className="w-full max-w-3xl flex items-center justify-between gap-2.5 pt-3 px-1 text-xs text-zinc-400">
             <div className="flex items-center gap-1">
               <button
-                onClick={() => {
-                  setIsPlaying(!isPlaying);
-                  soundFX.playPop();
-                }}
-                aria-label={isPlaying ? 'Pause animation playback' : 'Start animation playback'}
-                className="p-1.5 rounded-md bg-zinc-100 hover:bg-white text-zinc-950 transition-colors focus:ring-2 focus:ring-zinc-400 focus:outline-none"
+                onClick={() => setIsPlaying(!isPlaying)}
+                aria-label={isPlaying ? 'Pause animation' : 'Start animation'}
+                className="p-1.5 rounded-md bg-zinc-100 hover:bg-white text-zinc-950 transition-colors focus:outline-none"
                 title={isPlaying ? 'Pause' : 'Play'}
               >
                 {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
@@ -346,10 +418,9 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
                 onClick={() => {
                   setProgress(0);
                   setIsPlaying(true);
-                  soundFX.playPop();
                 }}
-                aria-label="Restart animation from beginning"
-                className="p-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors focus:ring-1 focus:ring-zinc-500 focus:outline-none"
+                aria-label="Restart animation"
+                className="p-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors focus:outline-none"
                 title="Restart"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -357,8 +428,8 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
 
               <button
                 onClick={() => handleStep(-0.05)}
-                aria-label="Step backward 5 percent"
-                className="p-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors focus:ring-1 focus:ring-zinc-500 focus:outline-none"
+                aria-label="Step backward"
+                className="p-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors focus:outline-none"
                 title="Step backward 5%"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -366,8 +437,8 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
 
               <button
                 onClick={() => handleStep(0.05)}
-                aria-label="Step forward 5 percent"
-                className="p-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors focus:ring-1 focus:ring-zinc-500 focus:outline-none"
+                aria-label="Step forward"
+                className="p-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 transition-colors focus:outline-none"
                 title="Step forward 5%"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -378,36 +449,54 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
               </span>
             </div>
 
-            {/* Slider */}
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={progress}
-              aria-label="Animation progress scrubber"
-              onChange={e => {
-                setIsPlaying(false);
-                const val = Number(e.target.value);
-                setProgress(val);
-                const canvas = canvasRef.current;
-                if (canvas) {
-                  renderRearrangementCanvas(val, canvas, sourceText, targetPhrase, motionStyle, theme, customSubtitle, fontOption, showGrid, trailIntensity);
-                }
-              }}
-              className="flex-1 mx-2 accent-zinc-100 h-1 bg-zinc-800 rounded-lg cursor-pointer"
-            />
+            {/* Slider track */}
+            <div className="flex-1 mx-2">
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.005}
+                value={progress}
+                onChange={e => {
+                  setIsPlaying(false);
+                  const val = parseFloat(e.target.value);
+                  setProgress(val);
+                  const canvas = canvasRef.current;
+                  if (canvas) {
+                    renderRearrangementCanvas(
+                      val,
+                      canvas,
+                      sourceText,
+                      targetPhrase,
+                      motionStyle,
+                      theme,
+                      customSubtitle,
+                      fontOption,
+                      showGrid,
+                      trailIntensity
+                    );
+                  }
+                }}
+                className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-200"
+              />
+            </div>
 
+            {/* Snapshot Actions */}
             <div className="flex items-center gap-1.5">
-              {pngNotice && (
-                <span className="text-[10px] font-mono text-emerald-400 animate-in fade-in duration-200">
-                  PNG Saved!
-                </span>
-              )}
+              <button
+                onClick={handleCopyCanvasImage}
+                aria-label="Copy frame image"
+                className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded-md font-mono text-[11px] flex items-center gap-1 transition-colors"
+                title="Copy frame image to clipboard"
+              >
+                {copiedCanvas ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                <span className="hidden sm:inline">{copiedCanvas ? 'Copied' : 'Copy'}</span>
+              </button>
               <button
                 onClick={handleCapturePng}
-                aria-label="Capture single PNG snapshot frame"
+                aria-label="Capture PNG frame"
                 className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded-md font-mono text-[11px] flex items-center gap-1 transition-colors"
+                title="Download PNG image"
               >
                 <ImageIcon className="w-3 h-3" />
                 <span className="hidden sm:inline">PNG</span>
@@ -420,7 +509,7 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           <div>
             <label className="text-xs font-medium text-zinc-400 block mb-1">
-              Trajectory
+              Trajectory Style
             </label>
             <select
               value={motionStyle}
@@ -475,21 +564,6 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
 
           <div>
             <label className="text-xs font-medium text-zinc-400 block mb-1">
-              Particle Sparks
-            </label>
-            <select
-              value={trailIntensity}
-              onChange={e => setTrailIntensity(e.target.value as any)}
-              className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-zinc-600 font-mono"
-            >
-              <option value="none">No Particles</option>
-              <option value="subtle">Subtle Glow (Default)</option>
-              <option value="high">High Sparks</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-zinc-400 block mb-1">
               Speed
             </label>
             <select
@@ -537,7 +611,7 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
 
           <div>
             <label className="text-xs font-medium text-zinc-400 block mb-1">
-              Subtitle
+              Subtitle Tagline
             </label>
             <input
               type="text"
@@ -547,23 +621,27 @@ export const AnimationStudio: React.FC<AnimationStudioProps> = ({
               className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-zinc-600 font-mono"
             />
           </div>
-        </div>
 
-        {/* Blueprint Grid Toggle */}
-        <div className="flex items-center gap-2 pt-1">
-          <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-zinc-400 font-mono">
-            <input
-              type="checkbox"
-              checked={showGrid}
-              onChange={e => setShowGrid(e.target.checked)}
-              className="rounded bg-zinc-950 border-zinc-700 text-zinc-100 focus:ring-0 w-3.5 h-3.5"
-            />
-            <span>Show Blueprint Grid Background</span>
-          </label>
+          <div>
+            <label className="text-xs font-medium text-zinc-400 block mb-1">
+              Blueprint Grid
+            </label>
+            <div className="h-8 flex items-center">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-zinc-400 font-mono">
+                <input
+                  type="checkbox"
+                  checked={showGrid}
+                  onChange={e => setShowGrid(e.target.checked)}
+                  className="rounded bg-zinc-950 border-zinc-700 text-zinc-100 focus:ring-0 w-3.5 h-3.5"
+                />
+                <span>Enable Grid</span>
+              </label>
+            </div>
+          </div>
         </div>
 
         {/* Export Strip */}
-        <div className="pt-2 border-t border-zinc-850 flex flex-wrap items-center gap-2.5">
+        <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center gap-2.5">
           <button
             onClick={handleExportGif}
             disabled={isGeneratingGif || !isExactMatch}

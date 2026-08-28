@@ -44,105 +44,75 @@ spacing:
   section: "24px"
 ---
 
-# Overview
+# Design System: Precision Darkroom
 
-Anagram Lab is built upon a **Precision Darkroom Studio** aesthetic. It marries the sterile rigor of a typography typesetting laboratory with tactile physics and neon-hued verification telemetry.
+**Creative North Star: The Mechanical Typesetter's Laboratory**
 
-**Creative North Star: "The Mechanical Typesetter's Laboratory"**
-
-The interface treats every letter not as ephemeral text, but as a physical tile with mass, frequency, and trajectory. Layouts emphasize information density without sensory overload, utilizing high-contrast zinc gradations, hairline 1px borders, crisp tabular numbers, and rich monospace telemetry.
-
-**Key Characteristics:**
-- **Obsidian & Zinc Backdrop**: Deep `#09090b` and `#18181b` canvas depths that allow vibrant letter tiles and motion arcs to command visual focus.
-- **Hairline Precision**: 1px subtle zinc borders (`#27272a` / `#3f3f46`) creating structured instrument panels without heavy bevels or drop-shadow clutter.
-- **Auditory & Tactile Resonance**: Instant micro-feedback with subtle pop/chime SFX, confetti on exact solutions, and smooth timeline scrubbing.
+Anagram Lab is constructed around a high-density, scientific darkroom studio aesthetic. Letters are treated not as plain text strings, but as physical tiles with mass, frequency, and flight trajectories.
 
 ---
 
-# Colors
+## 1. Color Palette & Functional Roles
 
-Colors follow a strict functional hierarchy: obsidian neutrals provide stable grounding, while strategic semaphores communicate mathematical exactness, warnings, and active states.
-
-### Palette Roles & Values
-- **Canvas Base (Obsidian)**: `#09090b` (zinc-950) — Used for global background and embedded canvas containers.
-- **Surface Elevation (Zinc Dark)**: `#18181b` (zinc-900) / `#27272a` (zinc-800) — Used for instrument panels, control decks, and interactive cards.
-- **Borders & Dividers**: `#27272a` (zinc-800) / `#3f3f46` (zinc-700) — Hairline structural definitions.
-- **Primary Text & Highlights**: `#f4f4f5` (zinc-100) / `#ffffff` — Crisp legibility for solution phrases and dominant headers.
-- **Secondary / Telemetry Text**: `#a1a1aa` (zinc-400) / `#71717a` (zinc-500) — Used for letter counters, word scores, and metadata.
-- **Exact Truth Emerald**: `#10b981` (emerald-500) / `#059669` — Verification badges, exact anagram indicators, and positive state confirmation.
-- **Warning & Highlight Amber**: `#f59e0b` (amber-500) — Streaks, unsolved anagram reminders, and high scores.
-- **Action Sky**: `#38bdf8` (sky-400) — Branch navigation, interactive sliders, and focus rings.
-
-**The Semantic Semaphore Rule.** Color is never applied purely for ornamental decoration; emerald is reserved exclusively for validated mathematical truth, amber for warnings/streaks, and sky/cyan for active tools.
-
----
-
-# Typography
-
-The typographic system emphasizes monospace clarity for letter multisets and numerical statistics, paired with clean geometric sans-serif for interface controls.
-
-### Font Roles & Hierarchy
-- **Letter Multisets & Formulae**: Monospace (`ui-monospace`, `Menlo`, `Monaco`) in medium/bold weights. Ensures consistent letter-width alignment when comparing source and target phrases.
-- **Headings & Primary Labels**: Clean geometric sans or monospace uppercase (`tracking-wider`, `text-[11px]`).
-- **Body & Explanations**: Sans-serif (`text-xs` to `text-sm`, `text-zinc-300`, `leading-relaxed`).
-
-**The Alignment Tabular Rule.** Any count, frequency chip, time counter, or Scrabble value must render in a monospace tabular typeface to prevent jitter during real-time typing and solver execution.
+| Token | Hex Value | Tailwind Class | Semantic Usage |
+|---|---|---|---|
+| **Canvas Base** | `#09090b` | `bg-zinc-950` / `#09090b` | Global background canvas & viewport bezels |
+| **Surface Panel** | `#18181b` | `bg-zinc-900/60` | Instrument cards, tab panels, and control decks |
+| **Input / Inset** | `#09090b` | `bg-zinc-950` | Embedded text inputs, tile rack bays, and dropzones |
+| **Structural Border** | `#27272a` | `border-zinc-800` | 1px hairline dividers and container boundaries |
+| **Hover Border** | `#3f3f46` | `border-zinc-700` | Interactive card and button focus/hover outlines |
+| **Primary Text** | `#f4f4f5` | `text-zinc-100` | High-contrast headers, active titles, and tile glyphs |
+| **Muted Text** | `#a1a1aa` | `text-zinc-400` | Field labels, descriptive copy, and inactive state |
+| **Telemetry Mono** | `#71717a` | `text-zinc-500` | Character counters, letter indices, and timestamps |
+| **Exact Emerald** | `#10b981` | `text-emerald-400` | 100% exact anagram verification badges |
+| **Discrepancy Amber** | `#f59e0b` | `text-amber-400` | Missing letter tags, partial progress bars |
+| **Surplus Rose** | `#ef4444` | `text-rose-400` | Surplus/invalid character indicators |
 
 ---
 
-# Layout
+## 2. Typographic Scale & Rules
 
-The layout uses a responsive single-column workbench model flanked by contextual tool panels and a unified sticky navigation toolbar.
+```
+Level             Font Family       Size        Weight    Tracking
+────────────────────────────────────────────────────────────────────
+Heading 1         System Sans       20px (xl)   600 (sb)  tight (-0.02em)
+Heading 2         System Sans       16px (base) 600 (sb)  tight (-0.01em)
+Body Copy         System Sans       13-14px     400-500   normal
+Letter Glyphs     Monospace         14-16px     700 (b)   normal
+Telemetry Chips   Monospace         10-11px     500 (m)   wide (+0.03em)
+```
 
-### Spatial Rhythm
-- **Global Container**: Max width 1280px (`max-w-7xl`), centered with fluid responsive gutters (`px-4 sm:px-6`).
-- **Card Spacing**: 16px to 24px vertical separation between workbench sections.
-- **Dense Control Grids**: 2-column on mobile, expanding to 4 or 6-column parameter decks on desktop (`gap-3`).
-
-**The Compact Command Deck Rule.** Controls and filter options must be consolidated into structured grid decks rather than sprawling multi-page forms, ensuring the primary input and output viewports remain visible simultaneously.
-
----
-
-# Elevation & Depth
-
-Surfaces rely on tonal layering and crisp 1px borders rather than heavy blur shadows, reinforcing the hardware instrument feel.
-
-- **Level 0 (Canvas)**: `#09090b` flat backdrop.
-- **Level 1 (Panels & Cards)**: `#18181b` with 1px `#27272a` borders.
-- **Level 2 (Interactive Tiles & Chips)**: `#27272a` hoverable chips with `#3f3f46` active borders.
-- **Floating Modals / Dropdowns**: `#09090b` with `#27272a` perimeter and 24px soft ambient shadow (`shadow-2xl`).
+### Key Typographic Rules
+1. **Monospace Letter Alignment**: All tile glyphs, multiset arithmetic (`×2`), and character counts use tabular monospace fonts (`ui-monospace`, `Menlo`) to prevent layout shifting during real-time typing.
+2. **Compact Labels**: Field labels use uppercase or sentence case in `text-xs font-semibold text-zinc-400` with comfortable line height (`1.5`).
 
 ---
 
-# Shapes
+## 3. Spatial System & Layout Hierarchy
 
-Form language is modern, understated, and functional.
-
-- **Tiles & Chips**: Slightly rounded rectangles (`rounded-md` 6px or `rounded-lg` 8px).
-- **Control Buttons**: 6px (`rounded-md`) for secondary micro-actions; 8px (`rounded-lg`) for primary triggers.
-- **Pills & Badges**: Fully rounded (`rounded-full`) for count badges, or 4px (`rounded`) for compact letter tags.
+- **Main Container**: Centered column constrained to `max-w-5xl` (1024px) with responsive horizontal padding (`px-4 sm:px-6`).
+- **Section Rhythm**: Generous `space-y-6` to `space-y-8` rhythm with subtle 1px dividers (`border-zinc-800/80`).
+- **Control Decks**: Responsive grid layouts (`grid-cols-2 sm:grid-cols-3 lg:grid-cols-4`) for physics, theme, and font selectors to maintain single-view ergonomics.
 
 ---
 
-# Components
+## 4. Component Design Patterns
 
-### Primary Interactive Primitives
-1. **Letter Chip**: A compact monospace tile displaying a single glyph and count multiplier (e.g. `[ A ×2 ]`).
-2. **Solver Result Card**: High-contrast card featuring the rearranged phrase, thematic rating, copy/save/animate quick actions, and letter breakdown telemetry.
-3. **Motion Canvas Frame**: An HTML5 interactive viewport with integrated scrubber timeline, loop controls, FPS selector, and direct GIF/PNG export.
-4. **Partition Node (Word Chain)**: Branching pathway nodes that visually depict remaining multiset inventory after each lexical subtraction.
+### 4.1 Interactive Letter Tile
+- **Bank Tile (Unplaced)**: `w-8 h-10 bg-zinc-900 border border-zinc-700 text-zinc-100 rounded font-mono font-bold text-sm shadow-xs hover:bg-zinc-800 active:scale-90`.
+- **Bank Tile (Placed)**: `opacity-20 bg-zinc-900 border border-zinc-800 text-zinc-600 cursor-not-allowed`.
+- **Rack Tile (Arranged)**: `w-8 h-10 bg-zinc-100 text-zinc-950 font-mono font-bold text-sm rounded shadow-xs hover:bg-white active:scale-90`.
+
+### 4.2 Solution Result Card
+- Compact card with primary solution text, word token badges, one-click "Animate in Studio" trigger, "Rack" transfer button, and copy action.
+
+### 4.3 Motion Canvas Viewport
+- Dark inset screen with 60fps HTML5 Canvas rendering, integrated scrubber timeline, loop mode selector, and export controls.
 
 ---
 
-# Do's and Don'ts
+## 5. Interaction & Feedback
 
-### Do's
-- Always display letter counts and multiset verification chips alongside candidate phrases.
-- Provide instant one-click pathways between tools (e.g., "Animate in Motion Studio", "Verify in Lie Detector").
-- Keep SFX subtle, non-intrusive, and easily toggleable from the global toolbar.
-- Maintain strict 100% letter conservation across all solver operations.
-
-### Don'ts
-- Do not introduce low-contrast text that compromises legibility on dark backgrounds.
-- Do not use arbitrary floating pastel gradients or decorative blobs that clash with the precision laboratory aesthetic.
-- Do not hide validation errors or silently drop extra characters.
+- **Instant Visual State**: Verification badges update synchronously on every keystroke.
+- **Micro Toast Notifications**: Subtle, non-blocking toast notifications appear at bottom-right for copy operations, rack transfers, and file exports.
+- **Accessible Touch Targets**: All buttons adhere to minimum 36px desktop / 44px mobile touch dimensions.
