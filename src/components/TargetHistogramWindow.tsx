@@ -93,7 +93,7 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full flex flex-col items-stretch p-2 text-zinc-200 select-none"
+      className="w-full h-full flex flex-col items-stretch p-0 text-zinc-200 select-none"
     >
       {/* Unified Input Pair with draggable divider */}
       <div className="w-full h-full flex flex-row items-stretch min-w-0">
@@ -127,17 +127,17 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
         <div
           role="separator"
           onPointerDown={startDrag}
-          className={`w-1.5 shrink-0 z-30 cursor-col-resize hover:bg-black active:bg-black relative transition-all ${
-            isDragging ? 'bg-black' : 'bg-transparent'
+          className={`w-2.5 shrink-0 z-30 cursor-col-resize hover:bg-black/10 active:bg-black/20 relative transition-all ${
+            isDragging ? 'bg-black/15' : 'bg-transparent'
           }`}
           style={{ touchAction: 'none' }}
           title="Drag to resize input widths"
         >
-          {/* Subtle grabber line inside inputs separator */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5">
-            <div className="w-0.5 h-1 bg-zinc-600" />
-            <div className="w-0.5 h-1 bg-zinc-600" />
-            <div className="w-0.5 h-1 bg-zinc-600" />
+          {/* Grabber indicator inside divider */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5 pointer-events-none">
+            <div className="w-0.5 h-1 bg-zinc-500" />
+            <div className="w-0.5 h-1 bg-zinc-500" />
+            <div className="w-0.5 h-1 bg-zinc-500" />
           </div>
         </div>
 

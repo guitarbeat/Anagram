@@ -20,7 +20,7 @@ interface ToastMessage {
 }
 
 export function App() {
-  const [sourceName, setSourceName] = useState<string>('Aaron Lorenzo Woods');
+  const [sourceName, setSourceName] = useState<string>('');
   const [filterText, setFilterText] = useState<string>('');
   const [isAnchorPinned, setIsAnchorPinned] = useState<boolean>(false);
   const [allowSpicy] = useState<boolean>(true);
@@ -28,7 +28,7 @@ export function App() {
   const [results, setResults] = useState<AnagramResult[]>([]);
   const [metrics, setMetrics] = useState<SolveMetrics | null>(null);
   const [isSolving, setIsSolving] = useState<boolean>(false);
-  const [targetPhrase, setTargetPhrase] = useState<string>('zoolander owns a roo');
+  const [targetPhrase, setTargetPhrase] = useState<string>('');
 
   // Stage animation state (strictly user-controlled via divider slider, no auto-moving)
   const progressBus = useProgressBus(0);

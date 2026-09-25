@@ -110,7 +110,9 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
         tabIndex={0}
         onPointerDown={startDrag1}
         onDoubleClick={resetRatios}
-        className="relative w-full h-2.5 sm:h-3 flex items-center justify-between gap-1.5 px-2.5 z-30 bg-transparent border-0 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar"
+        className={`relative w-full h-2.5 sm:h-3 flex items-center justify-between gap-1.5 px-2.5 z-30 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar hover:bg-black/10 active:bg-black/20 ${
+          activeDrag === 1 ? 'bg-black/15' : 'bg-transparent'
+        }`}
         style={{ touchAction: 'none' }}
         title="Drag to resize Window 1 & 2 (Double-click to reset)"
       >
@@ -133,14 +135,10 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             {divider1Accessories.center}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center px-1 py-0.5 shrink-0">
-            <div
-              className={`w-6 h-0.5 rounded-full transition-all duration-150 ${
-                activeDrag === 1
-                  ? 'bg-emerald-400 w-10'
-                  : 'bg-zinc-600 hover:bg-zinc-400'
-              }`}
-            />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-row gap-0.5 pointer-events-none">
+            <div className="w-1.5 h-0.5 bg-zinc-500" />
+            <div className="w-1.5 h-0.5 bg-zinc-500" />
+            <div className="w-1.5 h-0.5 bg-zinc-500" />
           </div>
         )}
 
@@ -176,7 +174,9 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
         tabIndex={0}
         onPointerDown={startDrag2}
         onDoubleClick={resetRatios}
-        className="relative w-full h-2.5 sm:h-3 flex items-center justify-between gap-1.5 px-2.5 z-30 bg-transparent border-0 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar"
+        className={`relative w-full h-2.5 sm:h-3 flex items-center justify-between gap-1.5 px-2.5 z-30 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar hover:bg-black/10 active:bg-black/20 ${
+          activeDrag === 2 ? 'bg-black/15' : 'bg-transparent'
+        }`}
         style={{ touchAction: 'none' }}
         title="Drag to resize Window 2 & 3 (Double-click to reset)"
       >
@@ -199,14 +199,10 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             {divider2Accessories.center}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center px-1 py-0.5 shrink-0">
-            <div
-              className={`w-6 h-0.5 rounded-full transition-all duration-150 ${
-                activeDrag === 2
-                  ? 'bg-emerald-400 w-10'
-                  : 'bg-zinc-600 hover:bg-zinc-400'
-              }`}
-            />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-row gap-0.5 pointer-events-none">
+            <div className="w-1.5 h-0.5 bg-zinc-500" />
+            <div className="w-1.5 h-0.5 bg-zinc-500" />
+            <div className="w-1.5 h-0.5 bg-zinc-500" />
           </div>
         )}
 
