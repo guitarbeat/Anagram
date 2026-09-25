@@ -11,8 +11,8 @@ export interface CandidateWordItem {
 export interface CandidateWordsListProps {
   sourceText: string;
   candidateWords: CandidateWordItem[];
-  selectedLengthFilter: number | null;
-  onSelectLengthFilter: (length: number | null) => void;
+  selectedLengthFilter: number[] | number | null;
+  onSelectLengthFilter: (lengths: number[] | null) => void;
   onClearLengthFilter: () => void;
   histogramData: { length: number; count: number }[];
   onAddWordToTarget: (word: string) => void;
@@ -45,6 +45,133 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
 
   const [splitRatio, setSplitRatio] = useState<number>(getAdaptiveSplit);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+
+  // Range Drag and Multi-select state
+  const rangeDragStartRef = useRef<number | null>(null);
+  const rangeDragCurrentRef = useRef<number | null>(null);
+  const isRangeDraggingRef = useRef<boolean>(false);
+  const dragMovedRef = useRef<boolean>(false);
+  const [dragPreview, setDragPreview] = useState<{ start: number; current: number } | null>(null);
+
+  // Set of currently active/selected lengths
+  const activeLengthsSet = useMemo(() => {
+    if (dragPreview) {
+      const minL = Math.min(dragPreview.start, dragPreview.current);
+      const maxL = Math.max(dragPreview.start, dragPreview.current);
+      const set = new Set<number>();
+      for (let l = minL; l <= maxL; l++) set.add(l);
+      return set;
+    }
+    if (selectedLengthFilter === null || selectedLengthFilter === undefined) {
+      return new Set<number>();
+    }
+    if (Array.isArray(selectedLengthFilter)) {
+      return new Set(selectedLengthFilter);
+    }
+    return new Set([selectedLengthFilter]);
+  }, [dragPreview, selectedLengthFilter]);
+
+  // Handle pointer down on a histogram bar to initiate range drag or click
+  const handleBarPointerDown = useCallback((e: React.PointerEvent, len: number) => {
+    if (e.button !== 0) return;
+    if (isDragging) return;
+
+    isRangeDraggingRef.current = true;
+    dragMovedRef.current = false;
+    rangeDragStartRef.current = len;
+    rangeDragCurrentRef.current = len;
+    setDragPreview({ start: len, current: len });
+  }, [isDragging]);
+
+  // Global pointer listeners for range drag across histogram bars
+  useEffect(() => {
+    const handleGlobalPointerMove = (e: PointerEvent) => {
+      if (!isRangeDraggingRef.current) return;
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const barEl = el?.closest('[data-bar-length]');
+      if (barEl) {
+        const len = Number(barEl.getAttribute('data-bar-length'));
+        if (!isNaN(len) && len !== rangeDragCurrentRef.current) {
+          dragMovedRef.current = true;
+          rangeDragCurrentRef.current = len;
+          setDragPreview({ start: rangeDragStartRef.current!, current: len });
+        }
+      }
+    };
+
+    const handleGlobalPointerUp = (e: PointerEvent) => {
+      if (!isRangeDraggingRef.current) return;
+      isRangeDraggingRef.current = false;
+
+      const start = rangeDragStartRef.current;
+      const curr = rangeDragCurrentRef.current;
+      const hasMoved = dragMovedRef.current;
+
+      rangeDragStartRef.current = null;
+      rangeDragCurrentRef.current = null;
+      setDragPreview(null);
+
+      if (start === null) return;
+      const end = curr !== null ? curr : start;
+      const minL = Math.min(start, end);
+      const maxL = Math.max(start, end);
+
+      if (!hasMoved || minL === maxL) {
+        // Single bar click / toggle
+        const currentArray = Array.isArray(selectedLengthFilter)
+          ? selectedLengthFilter
+          : selectedLengthFilter !== null
+          ? [selectedLengthFilter]
+          : [];
+
+        if (e.shiftKey || e.metaKey || e.ctrlKey) {
+          if (currentArray.includes(minL)) {
+            const filtered = currentArray.filter(l => l !== minL);
+            onSelectLengthFilter(filtered.length > 0 ? filtered : null);
+          } else {
+            onSelectLengthFilter([...currentArray, minL].sort((a, b) => a - b));
+          }
+        } else {
+          // If only this single bar is currently selected, toggle it off!
+          if (currentArray.length === 1 && currentArray[0] === minL) {
+            onSelectLengthFilter(null);
+          } else {
+            onSelectLengthFilter([minL]);
+          }
+        }
+      } else {
+        // Range dragged across minL..maxL
+        const range: number[] = [];
+        for (let l = minL; l <= maxL; l++) {
+          range.push(l);
+        }
+
+        if (e.shiftKey || e.metaKey || e.ctrlKey) {
+          const currentSet = new Set(
+            Array.isArray(selectedLengthFilter)
+              ? selectedLengthFilter
+              : selectedLengthFilter !== null
+              ? [selectedLengthFilter]
+              : []
+          );
+          range.forEach(l => currentSet.add(l));
+          onSelectLengthFilter(Array.from(currentSet).sort((a, b) => a - b));
+        } else {
+          onSelectLengthFilter(range);
+        }
+      }
+    };
+
+    window.addEventListener('pointermove', handleGlobalPointerMove);
+    window.addEventListener('pointerup', handleGlobalPointerUp);
+    window.addEventListener('pointercancel', handleGlobalPointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handleGlobalPointerMove);
+      window.removeEventListener('pointerup', handleGlobalPointerUp);
+      window.removeEventListener('pointercancel', handleGlobalPointerUp);
+    };
+  }, [selectedLengthFilter, onSelectLengthFilter]);
 
   // Adaptively adjust on window resize if user hasn't manually customized
   useEffect(() => {
@@ -149,27 +276,35 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
           }}
         >
           {/* Vertical Histogram Bars */}
-          <div className="flex-1 min-h-0 flex items-end justify-between gap-1 pt-2 pb-1">
+          <div
+            className="flex-1 min-h-0 flex items-end justify-between gap-1 pt-2 pb-1 select-none touch-none"
+            onDoubleClick={onClearLengthFilter}
+            title="Click or drag across to select length range • Double-click empty area to clear"
+          >
             {histogramData.map(item => {
-              const isSelected = selectedLengthFilter === item.length;
+              const isSelected = activeLengthsSet.has(item.length);
               const heightPercent = item.count > 0 ? Math.max(14, (item.count / maxHistogramCount) * 100) : 0;
 
               return (
                 <div
                   key={item.length}
-                  onClick={() => {
-                    if (isSelected) {
-                      onSelectLengthFilter(null);
-                    } else {
-                      onSelectLengthFilter(item.length);
+                  data-bar-length={item.length}
+                  onPointerDown={(e) => handleBarPointerDown(e, item.length)}
+                  onPointerEnter={() => {
+                    if (isRangeDraggingRef.current && rangeDragStartRef.current !== null) {
+                      if (rangeDragCurrentRef.current !== item.length) {
+                        dragMovedRef.current = true;
+                        rangeDragCurrentRef.current = item.length;
+                        setDragPreview({ start: rangeDragStartRef.current, current: item.length });
+                      }
                     }
                   }}
-                  className={`flex-1 flex flex-col items-center justify-end h-full group cursor-pointer transition-all rounded py-1 ${
+                  className={`flex-1 flex flex-col items-center justify-end h-full group cursor-pointer transition-all rounded py-1 select-none ${
                     isSelected
                       ? 'bg-emerald-100/90 ring-1 ring-emerald-500 shadow-sm'
                       : 'hover:bg-zinc-200/60'
                   }`}
-                  title={`${item.length}-letter words (${item.count} words)`}
+                  title={`${item.length}-letter words (${item.count} words) • Drag across to select range`}
                 >
                   {/* Count Label */}
                   <span

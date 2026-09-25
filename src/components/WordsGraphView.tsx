@@ -6,7 +6,7 @@ import { LETTER_COUNTS, LETTER_MASKS, WORDS } from '../engine/lexicon';
 export interface WordsGraphViewProps {
   sourceText: string;
   candidateWords: CandidateWordItem[];
-  selectedLengthFilter: number | null;
+  selectedLengthFilter: number[] | number | null;
   onAddWordToTarget: (word: string) => void;
   onSetWordAsTarget: (word: string) => void;
   activeTargetPhrase?: string;
@@ -145,8 +145,15 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
   // Filter words
   const activeWords = useMemo(() => {
     let list = candidateWords;
-    if (selectedLengthFilter !== null) {
-      list = list.filter(w => w.length === selectedLengthFilter);
+    if (selectedLengthFilter !== null && selectedLengthFilter !== undefined) {
+      if (Array.isArray(selectedLengthFilter)) {
+        if (selectedLengthFilter.length > 0) {
+          const filterSet = new Set(selectedLengthFilter);
+          list = list.filter(w => filterSet.has(w.length));
+        }
+      } else {
+        list = list.filter(w => w.length === selectedLengthFilter);
+      }
     }
     // Limit to top 90 most relevant/longest words for butter-smooth physics
     return list.slice(0, 90);
@@ -624,12 +631,7 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
         ) : !activeTargetPhrase.trim() ? (
           <div className="w-full h-full bg-white" />
         ) : remainingLetters.length === 0 ? (
-          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center z-10 space-y-2 bg-white">
-            <CheckCircle2 className="w-7 h-7 text-emerald-500" />
-            <div className="font-bold text-zinc-900 uppercase tracking-wide unified-app-text">
-               Perfect Match
-            </div>
-          </div>
+          <div className="w-full h-full bg-white" />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center z-10 space-y-3 bg-white">
             <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-300 flex items-center justify-center text-amber-600 shadow-sm font-mono font-extrabold text-lg">

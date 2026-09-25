@@ -117,6 +117,7 @@ export function App() {
 
   const handleSourceNameChange = useCallback((name: string) => {
     setSourceName(name);
+    setSelectedLengthFilter(null);
     if (!name.trim()) {
       setTargetPhrase('');
     }
@@ -175,7 +176,7 @@ export function App() {
     }
   }, [isAnchorPinned, filterText, showToast]);
 
-  const [selectedLengthFilter, setSelectedLengthFilter] = useState<number | null>(null);
+  const [selectedLengthFilter, setSelectedLengthFilter] = useState<number[] | null>(null);
 
   // Compute remaining letters between source text and active target phrase
   const { remainingLetters, isExactMatch, isSurplus } = useMemo(() => {
@@ -290,7 +291,7 @@ export function App() {
     const lengths = Array.from(countsMap.keys());
     if (lengths.length === 0) return [];
 
-    const minL = Math.max(2, Math.min(...lengths));
+    const minL = Math.max(1, Math.min(...lengths));
     const maxL = Math.max(...lengths);
 
     const hist: { length: number; count: number }[] = [];
@@ -349,7 +350,7 @@ export function App() {
         }
         /* WINDOW 3: BOTTOM GRAPH VIEW + HISTOGRAM SIDEBAR */
         card3={
-          sourceName.trim() ? (
+          sourceName.trim() && !isExactMatch ? (
             <CandidateWordsList
               sourceText={sourceName}
               candidateWords={candidateWords}
