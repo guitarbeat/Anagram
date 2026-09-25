@@ -86,14 +86,6 @@ export function App() {
       if (data.results) {
         setResults(data.results);
         setMetrics(data.metrics);
-
-        const currentTarget = targetPhraseRef.current;
-        const exists = data.results.some(r => r.phrase === currentTarget);
-        if (!exists && data.results.length > 0) {
-          setTargetPhrase(data.results[0].phrase);
-        } else if (data.results.length === 0) {
-          setTargetPhrase('');
-        }
       }
     };
 

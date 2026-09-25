@@ -107,14 +107,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
           }`}
           style={{ touchAction: 'none' }}
           title="Drag to resize left/right panels"
-        >
-          {/* Grabber indicator inside divider */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5 pointer-events-none">
-            <div className="w-0.5 h-1 bg-zinc-500" />
-            <div className="w-0.5 h-1 bg-zinc-500" />
-            <div className="w-0.5 h-1 bg-zinc-500" />
-          </div>
-        </div>
+        />
       )}
 
       {/* RIGHT: Histogram Panel (Separate Panel) */}

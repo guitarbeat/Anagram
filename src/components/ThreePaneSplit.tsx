@@ -134,13 +134,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           >
             {divider1Accessories.center}
           </div>
-        ) : (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-row gap-0.5 pointer-events-none">
-            <div className="w-1.5 h-0.5 bg-zinc-500" />
-            <div className="w-1.5 h-0.5 bg-zinc-500" />
-            <div className="w-1.5 h-0.5 bg-zinc-500" />
-          </div>
-        )}
+        ) : null}
 
         {/* Trailing Accessories */}
         <div
@@ -198,13 +192,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           >
             {divider2Accessories.center}
           </div>
-        ) : (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-row gap-0.5 pointer-events-none">
-            <div className="w-1.5 h-0.5 bg-zinc-500" />
-            <div className="w-1.5 h-0.5 bg-zinc-500" />
-            <div className="w-1.5 h-0.5 bg-zinc-500" />
-          </div>
-        )}
+        ) : null}
 
         {/* Trailing Accessories */}
         <div
