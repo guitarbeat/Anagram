@@ -1,10 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, X, Pin, ChevronDown, CheckCircle2, AlertCircle } from 'lucide-react';
-import type { AnagramResult, SolveMetrics } from './engine/solver';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import {
+  X,
+  CheckCircle2,
+  AlertCircle,
+} from 'lucide-react';
+import type { AnagramResult, SolveMetrics } from './engine/types';
 import type { WorkerResponse, WorkerRequest } from './engine/solver.worker';
+import { WORDS, LETTER_COUNTS, LETTER_MASKS, FREQ } from './engine/lexicon';
 import { NameAnagramStage } from './components/NameAnagramStage';
-import { SolverSection } from './components/SolverSection';
-import { useProgressBus } from './hooks/useProgressBus';
+import { TargetHistogramWindow } from './components/TargetHistogramWindow';
+import { CandidateWordsList, type CandidateWordItem } from './components/CandidateWordsList';
+import { ThreePaneSplit } from './components/ThreePaneSplit';
+import { useProgressBus, type ProgressBus } from './hooks/useProgressBus';
 
 interface ToastMessage {
   id: string;
@@ -12,30 +19,18 @@ interface ToastMessage {
   type?: 'success' | 'info' | 'error';
 }
 
-const PRESET_EXAMPLES = [
-  'William Shakespeare',
-  'Aaron Lorenzo Woods',
-  'Clint Eastwood',
-  'Mother-in-law',
-  'The Morse Code',
-  'Eleven plus two',
-  'Dormitory',
-];
-
 export function App() {
   const [sourceName, setSourceName] = useState<string>('Aaron Lorenzo Woods');
-  const [anchorText, setAnchorText] = useState<string>('');
-  const [anchorPlacement, setAnchorPlacement] = useState<'start' | 'end' | 'natural'>('natural');
-  const [allowSpicy, setAllowSpicy] = useState<boolean>(false);
+  const [filterText, setFilterText] = useState<string>('');
+  const [isAnchorPinned, setIsAnchorPinned] = useState<boolean>(false);
+  const [allowSpicy] = useState<boolean>(true);
 
   const [results, setResults] = useState<AnagramResult[]>([]);
   const [metrics, setMetrics] = useState<SolveMetrics | null>(null);
   const [isSolving, setIsSolving] = useState<boolean>(false);
-  const [targetPhrase, setTargetPhrase] = useState<string>('');
+  const [targetPhrase, setTargetPhrase] = useState<string>('zoolander owns a roo');
 
-  // Stage animation state
-  const [isPlaying, setIsPlaying] = useState<boolean>(true);
-  const [speed, setSpeed] = useState<number>(1);
+  // Stage animation state (strictly user-controlled via divider slider, no auto-moving)
   const progressBus = useProgressBus(0);
 
   // Toasts
@@ -60,7 +55,6 @@ export function App() {
     toastTimersRef.current.set(id, timer);
   }, []);
 
-  // Cleanup all toast timers on unmount
   useEffect(() => {
     return () => {
       toastTimersRef.current.forEach(timer => window.clearTimeout(timer));
@@ -78,7 +72,6 @@ export function App() {
 
     worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const data = e.data;
-      // Ignore responses that are not for the latest request
       if (data.id !== requestIdRef.current) return;
 
       setIsSolving(false);
@@ -94,7 +87,6 @@ export function App() {
         setResults(data.results);
         setMetrics(data.metrics);
 
-        // Update target phrase if previous target is missing from new results
         const currentTarget = targetPhraseRef.current;
         const exists = data.results.some(r => r.phrase === currentTarget);
         if (!exists && data.results.length > 0) {
@@ -111,7 +103,8 @@ export function App() {
     };
   }, [showToast]);
 
-  // Debounced solving trigger (250ms debounce)
+  // Debounced solving trigger (200ms debounce)
+  // When isAnchorPinned is true, filterText (comma-separated words) is passed as the strict solver anchor
   useEffect(() => {
     const clean = sourceName.trim();
     if (!clean) {
@@ -128,43 +121,225 @@ export function App() {
     const debounceTimer = window.setTimeout(() => {
       if (!workerRef.current) return;
 
+      const activeAnchor = isAnchorPinned ? filterText.trim() : undefined;
+
       const msg: WorkerRequest = {
         id: reqId,
         opts: {
           source: clean,
-          maxWords: 4,
-          resultLimit: 80,
+          maxWords: clean.replace(/[^a-z]/gi, '').length >= 16 ? 5 : 4,
+          resultLimit: 5000,
           allowSpicy,
-          anchorText: anchorText.trim() || undefined,
-          anchorPlacement,
+          anchorText: activeAnchor || undefined,
+          anchorPlacement: 'natural',
         },
       };
 
       workerRef.current.postMessage(msg);
-    }, 250);
+    }, 200);
 
     return () => {
       window.clearTimeout(debounceTimer);
     };
-  }, [sourceName, anchorText, anchorPlacement, allowSpicy]);
+  }, [sourceName, isAnchorPinned, filterText, allowSpicy]);
 
-  // Animate a specific phrase clicked from results
   const handleAnimatePhrase = useCallback((phrase: string) => {
     setTargetPhrase(phrase);
-    setIsPlaying(true);
     progressBus.set(0);
-
-    // Smooth scroll to stage
-    const stageEl = document.getElementById('anagram-stage');
-    if (stageEl) {
-      stageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
   }, [progressBus]);
 
-  const top5Available = results.slice(0, 5).map(r => r.phrase);
+  // Handle reordering or editing phrases from cards
+  const handleUpdatePhrase = useCallback((oldPhrase: string, newPhrase: string) => {
+    const trimmed = newPhrase.trim();
+    setResults(prev => prev.map(item => {
+      if (item.phrase === oldPhrase) {
+        const words = trimmed.split(/\s+/).filter(Boolean);
+        return {
+          ...item,
+          phrase: trimmed,
+          words,
+        };
+      }
+      return item;
+    }));
+    setTargetPhrase(trimmed);
+    progressBus.set(0);
+  }, [progressBus]);
+
+  // Handle locking/pinning a word directly from cards
+  const handleTogglePinWord = useCallback((word: string) => {
+    const cleanWord = word.trim();
+    if (!cleanWord) return;
+
+    const currentPinnedWords = (isAnchorPinned && filterText.trim())
+      ? filterText.split(/[\s,]+/).map(w => w.trim()).filter(Boolean)
+      : [];
+
+    const wordLower = cleanWord.toLowerCase();
+    const exists = currentPinnedWords.some(w => w.toLowerCase() === wordLower);
+
+    let newPinnedWords: string[];
+    if (exists) {
+      newPinnedWords = currentPinnedWords.filter(w => w.toLowerCase() !== wordLower);
+    } else {
+      newPinnedWords = [...currentPinnedWords, cleanWord];
+    }
+
+    if (newPinnedWords.length === 0) {
+      setFilterText('');
+      setIsAnchorPinned(false);
+      showToast(`Unlocked "${cleanWord}"`, 'info');
+    } else {
+      setFilterText(newPinnedWords.join(', '));
+      setIsAnchorPinned(true);
+      showToast(exists ? `Unlocked "${cleanWord}"` : `Locked in "${cleanWord}"`, 'success');
+    }
+  }, [isAnchorPinned, filterText, showToast]);
+
+  const [selectedLengthFilter, setSelectedLengthFilter] = useState<number | null>(null);
+
+  // Compute remaining letters between source text and active target phrase
+  const { remainingLetters, isExactMatch, isSurplus } = useMemo(() => {
+    const sourceLetters = sourceName.toLowerCase().replace(/[^a-z]/g, '').split('');
+    const targetLetters = targetPhrase.toLowerCase().replace(/[^a-z]/g, '').split('');
+
+    const sourceCounts = new Map<string, number>();
+    for (const char of sourceLetters) {
+      sourceCounts.set(char, (sourceCounts.get(char) || 0) + 1);
+    }
+
+    const targetCounts = new Map<string, number>();
+    for (const char of targetLetters) {
+      targetCounts.set(char, (targetCounts.get(char) || 0) + 1);
+    }
+
+    const remaining: string[] = [];
+    let surplus = false;
+
+    for (const [char, count] of sourceCounts.entries()) {
+      const used = targetCounts.get(char) || 0;
+      if (used < count) {
+        for (let i = 0; i < count - used; i++) {
+          remaining.push(char);
+        }
+      } else if (used > count) {
+        surplus = true;
+      }
+    }
+
+    for (const [char, count] of targetCounts.entries()) {
+      if ((sourceCounts.get(char) || 0) < count) {
+        surplus = true;
+      }
+    }
+
+    const exact = remaining.length === 0 && !surplus && sourceLetters.length > 0 && targetLetters.length > 0;
+    return {
+      remainingLetters: remaining.sort(),
+      isExactMatch: exact,
+      isSurplus: surplus,
+    };
+  }, [sourceName, targetPhrase]);
+
+  // Active letter pool for candidate words and histogram:
+  // If words are chosen in the target phrase and letters remain, use leftover letters!
+  // If target phrase is empty, use full source letters.
+  const activeLetterPool = useMemo(() => {
+    const targetClean = targetPhrase.toLowerCase().replace(/[^a-z]/g, '');
+    if (!targetClean) {
+      return sourceName.toLowerCase().replace(/[^a-z]/g, '');
+    }
+    return remainingLetters.join('');
+  }, [targetPhrase, sourceName, remainingLetters]);
+
+  // Compute all dictionary words that fit inside the active leftover letter pool
+  const candidateWords = useMemo<CandidateWordItem[]>(() => {
+    const clean = activeLetterPool;
+    if (!clean) return [];
+
+    const poolCounts = new Array(26).fill(0);
+    let poolMask = 0;
+    for (let i = 0; i < clean.length; i++) {
+      const code = clean.charCodeAt(i) - 97;
+      poolCounts[code]++;
+      poolMask |= 1 << code;
+    }
+
+    const matches: CandidateWordItem[] = [];
+    const numWords = WORDS.length;
+
+    for (let i = 0; i < numWords; i++) {
+      const mask = LETTER_MASKS[i];
+      if ((mask & ~poolMask) !== 0) continue;
+
+      const offset = i * 26;
+      let fits = true;
+      for (let j = 0; j < 26; j++) {
+        if (LETTER_COUNTS[offset + j] > poolCounts[j]) {
+          fits = false;
+          break;
+        }
+      }
+
+      if (fits) {
+        const w = WORDS[i];
+        matches.push({
+          word: w,
+          length: w.length,
+          freq: FREQ.get(w) || 0,
+        });
+      }
+    }
+
+    // Sort strictly from longest to shortest, then by frequency
+    matches.sort((a, b) => {
+      if (b.length !== a.length) return b.length - a.length;
+      return b.freq - a.freq;
+    });
+
+    return matches;
+  }, [activeLetterPool]);
+
+  // Compute histogram of words grouped by letter length from leftover letters
+  const histogramData = useMemo(() => {
+    const countsMap = new Map<number, number>();
+    for (const item of candidateWords) {
+      countsMap.set(item.length, (countsMap.get(item.length) || 0) + 1);
+    }
+
+    // Find min and max length
+    const lengths = Array.from(countsMap.keys());
+    if (lengths.length === 0) return [];
+
+    const minL = Math.max(2, Math.min(...lengths));
+    const maxL = Math.max(...lengths);
+
+    const hist: { length: number; count: number }[] = [];
+    for (let l = minL; l <= maxL; l++) {
+      hist.push({
+        length: l,
+        count: countsMap.get(l) || 0,
+      });
+    }
+
+    return hist;
+  }, [candidateWords]);
+
+  const handleAddWordToTarget = useCallback((word: string) => {
+    setTargetPhrase(prev => {
+      const trimmed = prev.trim();
+      return trimmed ? `${trimmed} ${word}` : word;
+    });
+    progressBus.set(0);
+  }, [progressBus]);
+
+  const handleSetWordAsTarget = useCallback((word: string) => {
+    setTargetPhrase(word);
+    progressBus.set(0);
+  }, [progressBus]);
 
   return (
-    <div className="min-h-screen bg-[#0f0f11] text-[#f4f4f5] flex flex-col selection:bg-emerald-900 selection:text-emerald-200">
+    <div className="h-[100dvh] w-screen max-h-[100dvh] bg-[#09090b] text-[#f4f4f5] flex flex-col overflow-hidden p-1 selection:bg-emerald-900 selection:text-emerald-200">
       {/* Toast Notifications */}
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm pointer-events-none">
         {toasts.map(t => (
@@ -188,157 +363,53 @@ export function App() {
         ))}
       </div>
 
-      {/* Header */}
-      <header className="border-b border-[#27272a] bg-[#121214]/80 backdrop-blur sticky top-0 z-40">
-        <div className="max-w-4xl w-full mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-emerald-950/80 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div>
-              <h1 className="text-sm sm:text-base font-semibold text-[#f4f4f5] tracking-tight flex items-center gap-2">
-                Funny Exact Anagram Lab
-                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/40 hidden sm:inline-block">
-                  Exact Letters
-                </span>
-              </h1>
-            </div>
-          </div>
-
-          {/* Preset Examples Dropdown */}
-          <div className="flex items-center gap-2">
-            <div className="relative group">
-              <select
-                onChange={e => {
-                  if (e.target.value) {
-                    setSourceName(e.target.value);
-                    e.target.value = '';
-                  }
-                }}
-                defaultValue=""
-                className="bg-[#18181b] border border-[#27272a] text-[#a1a1aa] hover:text-[#f4f4f5] hover:border-[#3f3f46] rounded-lg px-2.5 py-1.5 text-xs font-mono transition-colors cursor-pointer appearance-none pr-7 focus:outline-none"
-                aria-label="Preset name examples"
-              >
-                <option value="" disabled>
-                  Try Examples...
-                </option>
-                {PRESET_EXAMPLES.map(name => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-[#71717a] absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Input & Search Section */}
-        <section aria-label="Input search" className="space-y-3">
-          {/* Main Input Box */}
-          <div className="relative">
-            <input
-              id="source-input"
-              type="text"
-              value={sourceName}
-              onChange={e => setSourceName(e.target.value)}
-              placeholder="Enter name or phrase to solve (e.g. William Shakespeare)..."
-              className="w-full bg-[#121214] border border-[#27272a] focus:border-emerald-500/60 rounded-xl px-4 py-3 text-sm sm:text-base font-mono text-[#f4f4f5] placeholder-[#52525b] focus:outline-none transition-colors shadow-inner"
-            />
-            {sourceName && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSourceName('');
-                  setTargetPhrase('');
-                }}
-                aria-label="Clear input"
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#71717a] hover:text-[#f4f4f5] p-1 rounded-md hover:bg-[#27272a] cursor-pointer transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Optional Anchor / "Must Include" Bar */}
-          <div className="flex items-center gap-2 flex-wrap text-xs font-mono bg-[#141417] p-2.5 rounded-lg border border-[#232326]">
-            <div className="flex items-center gap-1.5 text-[#a1a1aa] shrink-0">
-              <Pin className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Must include:</span>
-            </div>
-
-            <input
-              type="text"
-              value={anchorText}
-              onChange={e => setAnchorText(e.target.value)}
-              placeholder="e.g. zoolander or roo"
-              className="flex-1 min-w-[140px] bg-[#18181b] border border-[#27272a] focus:border-[#52525b] rounded px-2.5 py-1 text-xs font-mono text-[#f4f4f5] placeholder-[#52525b] focus:outline-none"
-            />
-
-            {anchorText && (
-              <button
-                type="button"
-                onClick={() => setAnchorText('')}
-                aria-label="Clear must include input"
-                className="text-[#71717a] hover:text-[#f4f4f5] p-0.5"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[#71717a]">Placement:</span>
-              <select
-                value={anchorPlacement}
-                onChange={e =>
-                  setAnchorPlacement(e.target.value as 'start' | 'end' | 'natural')
-                }
-                className="bg-[#18181b] border border-[#27272a] text-[#a1a1aa] rounded px-2 py-1 text-xs font-mono focus:outline-none cursor-pointer"
-              >
-                <option value="natural">Natural (anywhere)</option>
-                <option value="start">Start of phrase</option>
-                <option value="end">End of phrase</option>
-              </select>
-            </div>
-          </div>
-        </section>
-
-        {/* Kinetic Rearrangement Stage (Rendered above results) */}
-        {sourceName.trim() && targetPhrase && (
-          <section aria-label="Kinetic Rearrangement Stage">
+      {/* Unified 3-Pane Window Split */}
+      <ThreePaneSplit
+        className="flex-1 w-full h-full"
+        /* WINDOW 1: TOP KINETIC ANAGRAM STAGE */
+        card1={
+          sourceName.trim() && targetPhrase ? (
             <NameAnagramStage
               sourceName={sourceName}
               targetPhrase={targetPhrase}
-              availableAnagrams={top5Available}
-              isPlaying={isPlaying}
-              onPlayingChange={setIsPlaying}
-              speed={speed}
-              onSpeedChange={setSpeed}
               progressBus={progressBus}
               onShowToast={showToast}
             />
-          </section>
-        )}
-
-        {/* Discovered Anagrams Section */}
-        <section aria-label="Anagram Results Grid">
-          <SolverSection
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-zinc-600 font-mono text-sm p-4">
+              Enter text in the middle window to preview kinetic letter rearrangements
+            </div>
+          )
+        }
+        /* WINDOW 2: MIDDLE TARGET WORD, CONTROLS & STATUS */
+        card2={
+          <TargetHistogramWindow
             sourceText={sourceName}
-            results={results}
-            isSolving={isSolving}
-            metrics={metrics}
-            activeTargetPhrase={targetPhrase}
+            onSourceNameChange={setSourceName}
+            targetPhrase={targetPhrase}
+            onTargetPhraseChange={setTargetPhrase}
             progressBus={progressBus}
-            allowSpicy={allowSpicy}
-            onToggleSpicy={setAllowSpicy}
-            onAnimatePhrase={handleAnimatePhrase}
+            remainingLetters={remainingLetters}
+            isExactMatch={isExactMatch}
             onShowToast={showToast}
           />
-        </section>
-      </main>
+        }
+        /* WINDOW 3: BOTTOM GRAPH VIEW + HISTOGRAM SIDEBAR */
+        card3={
+          <CandidateWordsList
+            sourceText={sourceName}
+            candidateWords={candidateWords}
+            selectedLengthFilter={selectedLengthFilter}
+            onSelectLengthFilter={setSelectedLengthFilter}
+            onClearLengthFilter={() => setSelectedLengthFilter(null)}
+            histogramData={histogramData}
+            onAddWordToTarget={handleAddWordToTarget}
+            onSetWordAsTarget={handleSetWordAsTarget}
+            activeTargetPhrase={targetPhrase}
+            onShowToast={showToast}
+          />
+        }
+      />
     </div>
   );
 }

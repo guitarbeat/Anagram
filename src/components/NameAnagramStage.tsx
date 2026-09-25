@@ -1,18 +1,10 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Play, Pause, RotateCcw, Layers, Eye } from 'lucide-react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { renderRearrangementCanvas } from '../render/stage';
-import { renderMultiAnagramCanvas } from '../render/multi';
 import type { ProgressBus } from '../hooks/useProgressBus';
 
 export interface NameAnagramStageProps {
   sourceName: string;
   targetPhrase: string;
-  onSelectPhrase?: (phrase: string) => void;
-  availableAnagrams?: string[];
-  isPlaying: boolean;
-  onPlayingChange: (isPlaying: boolean) => void;
-  speed: number;
-  onSpeedChange: (speed: number) => void;
   progressBus: ProgressBus;
   onShowToast: (text: string) => void;
 }
@@ -20,35 +12,39 @@ export interface NameAnagramStageProps {
 export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
   sourceName,
   targetPhrase,
-  availableAnagrams = [],
-  isPlaying,
-  onPlayingChange,
-  speed,
-  onSpeedChange,
   progressBus,
   onShowToast,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const rafHandleRef = useRef<number>(0);
-  const lastTimeRef = useRef<number>(0);
-  const [viewMode, setViewMode] = useState<'single' | 'all'>('single');
+  const [progress, setProgress] = useState<number>(() => progressBus.get());
 
-  // Throttled progress for UI slider & readout (~10 updates/sec)
-  const [displayProgress, setDisplayProgress] = useState<number>(0);
-  const lastThrottleUpdateRef = useRef<number>(0);
+  useEffect(() => {
+    return progressBus.subscribe(p => {
+      setProgress(p);
+    });
+  }, [progressBus]);
 
-  // Resize canvas according to container and DPR
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    progressBus.set(val);
+  };
+
+  // Resize canvas according to exact container client rect and device pixel ratio (1:1 pixel ratio, zero distortion)
   const resizeCanvasToDPR = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    const w = Math.max(300, Math.floor(rect.width || 720));
-    const h = 200;
+    const w = Math.round(rect.width);
+    const h = Math.round(rect.height);
 
-    if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
-      canvas.width = Math.floor(w * dpr);
-      canvas.height = Math.floor(h * dpr);
+    if (w > 0 && h > 0) {
+      const targetW = Math.round(w * dpr);
+      const targetH = Math.round(h * dpr);
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
     }
   }, []);
 
@@ -59,19 +55,7 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
     const draw = (p: number) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
-
-      if (viewMode === 'all') {
-        renderMultiAnagramCanvas(p, canvas, sourceName, availableAnagrams);
-      } else {
-        renderRearrangementCanvas(p, canvas, sourceName, targetPhrase, 'arc');
-      }
-
-      // Throttled UI state update for slider (~100ms)
-      const now = performance.now();
-      if (now - lastThrottleUpdateRef.current > 100) {
-        lastThrottleUpdateRef.current = now;
-        setDisplayProgress(p);
-      }
+      renderRearrangementCanvas(p, canvas, sourceName, targetPhrase, 'arc');
     };
 
     const unsubscribe = progressBus.subscribe(draw);
@@ -82,47 +66,24 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
     };
     window.addEventListener('resize', handleResize);
 
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && canvasRef.current) {
+      ro = new ResizeObserver(() => {
+        handleResize();
+      });
+      ro.observe(canvasRef.current);
+    }
+
     return () => {
       unsubscribe();
       window.removeEventListener('resize', handleResize);
-    };
-  }, [sourceName, targetPhrase, availableAnagrams, viewMode, progressBus, resizeCanvasToDPR]);
-
-  // Main animation loop: runs when isPlaying is true
-  useEffect(() => {
-    if (!isPlaying) {
-      cancelAnimationFrame(rafHandleRef.current);
-      lastTimeRef.current = 0;
-      return;
-    }
-
-    lastTimeRef.current = performance.now();
-
-    const step = (now: number) => {
-      const dt = lastTimeRef.current ? Math.min(now - lastTimeRef.current, 100) : 16.6;
-      lastTimeRef.current = now;
-
-      // Full cycle takes ~2.6 seconds at 1x speed
-      const delta = (dt / 2600) * speed;
-      const currentP = progressBus.get();
-      let nextP = currentP + delta;
-      if (nextP > 1) {
-        nextP = 0; // loop
+      if (ro) {
+        ro.disconnect();
       }
-
-      progressBus.notify(nextP);
-      rafHandleRef.current = requestAnimationFrame(step);
     };
+  }, [sourceName, targetPhrase, progressBus, resizeCanvasToDPR]);
 
-    rafHandleRef.current = requestAnimationFrame(step);
-
-    return () => {
-      cancelAnimationFrame(rafHandleRef.current);
-    };
-  }, [isPlaying, speed, progressBus]);
-
-  // Keyboard shortcuts: Space = play/pause, R = restart
-  // Ignored while focus is in an input/select/textarea
+  // Keyboard shortcut: KeyR = reset rearrangement to 0%
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -136,14 +97,10 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
         return;
       }
 
-      if (e.code === 'Space') {
-        e.preventDefault();
-        onPlayingChange(!isPlaying);
-      } else if (e.code === 'KeyR') {
+      if (e.code === 'KeyR') {
         e.preventDefault();
         progressBus.set(0);
-        setDisplayProgress(0);
-        onShowToast('Animation restarted');
+        onShowToast('Rearrangement reset to 0%');
       }
     };
 
@@ -151,135 +108,26 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isPlaying, onPlayingChange, progressBus, onShowToast]);
-
-  const handleSliderChange = (val: number) => {
-    setDisplayProgress(val);
-    progressBus.set(val);
-  };
-
-  const handleRestart = () => {
-    progressBus.set(0);
-    setDisplayProgress(0);
-    onShowToast('Animation restarted');
-  };
+  }, [progressBus, onShowToast]);
 
   return (
     <div
       id="anagram-stage"
-      className="border border-[#27272a] rounded-xl bg-[#121214] overflow-hidden shadow-2xl space-y-3 p-4 sm:p-5"
+      className="relative w-full h-full flex items-center justify-center overflow-hidden bg-white"
     >
-      {/* Header bar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xs font-semibold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Kinetic Rearrangement Stage
-          </span>
-          {targetPhrase && (
-            <span className="text-xs text-[#71717a] font-mono truncate max-w-[200px] sm:max-w-xs">
-              &ldquo;{targetPhrase}&rdquo;
-            </span>
-          )}
-        </div>
+      <canvas ref={canvasRef} className="w-full h-full block bg-white" />
 
-        <div className="flex items-center gap-2">
-          {/* View mode toggle */}
-          {availableAnagrams.length > 1 && (
-            <div className="flex items-center bg-[#18181b] p-0.5 rounded border border-[#27272a]">
-              <button
-                type="button"
-                onClick={() => setViewMode('single')}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono transition-colors cursor-pointer ${
-                  viewMode === 'single'
-                    ? 'bg-[#27272a] text-[#f4f4f5] font-medium'
-                    : 'text-[#71717a] hover:text-[#f4f4f5]'
-                }`}
-                title="Single anagram rearrangement"
-              >
-                <Eye className="w-3 h-3" />
-                <span>Single</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('all')}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono transition-colors cursor-pointer ${
-                  viewMode === 'all'
-                    ? 'bg-[#27272a] text-[#f4f4f5] font-medium'
-                    : 'text-[#71717a] hover:text-[#f4f4f5]'
-                }`}
-                title="Multi-anagram arrangement (top 5)"
-              >
-                <Layers className="w-3 h-3" />
-                <span>Multi (5)</span>
-              </button>
-            </div>
-          )}
-
-          {/* Speed selector */}
-          <div className="flex items-center bg-[#18181b] p-0.5 rounded border border-[#27272a]">
-            {[0.5, 1, 1.5, 2].map(s => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => onSpeedChange(s)}
-                className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer ${
-                  speed === s
-                    ? 'bg-[#27272a] text-[#f4f4f5] font-medium'
-                    : 'text-[#71717a] hover:text-[#f4f4f5]'
-                }`}
-              >
-                {s}x
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Canvas viewport */}
-      <div className="relative w-full h-[200px] rounded-lg bg-[#09090b] border border-[#27272a] overflow-hidden flex items-center justify-center">
-        <canvas ref={canvasRef} className="w-full h-full block" />
-      </div>
-
-      {/* Playback Controls and Scrubber */}
-      <div className="flex items-center gap-3 pt-1">
-        <button
-          type="button"
-          onClick={() => onPlayingChange(!isPlaying)}
-          aria-label={isPlaying ? 'Pause animation (Space)' : 'Play animation (Space)'}
-          className="p-2 rounded-lg bg-[#18181b] hover:bg-[#27272a] border border-[#27272a] text-[#f4f4f5] transition-colors cursor-pointer"
-          title="Play/Pause (Space)"
-        >
-          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
-        </button>
-
-        <button
-          type="button"
-          onClick={handleRestart}
-          aria-label="Restart animation (R)"
-          className="p-2 rounded-lg bg-[#18181b] hover:bg-[#27272a] border border-[#27272a] text-[#a1a1aa] hover:text-[#f4f4f5] transition-colors cursor-pointer"
-          title="Restart (R)"
-        >
-          <RotateCcw className="w-4 h-4" />
-        </button>
-
-        {/* Progress Scrubber */}
-        <div className="flex-1 flex items-center gap-3">
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.005"
-            value={displayProgress}
-            onChange={e => handleSliderChange(parseFloat(e.target.value))}
-            className="w-full h-1.5 bg-[#27272a] rounded-lg appearance-none cursor-pointer accent-emerald-500"
-            aria-label="Rearrangement progress scrubber"
-          />
-          <span className="text-[11px] font-mono text-[#71717a] w-10 text-right tabular-nums">
-            {Math.round(displayProgress * 100)}%
-          </span>
-        </div>
-      </div>
+      {/* Floating Slider Control inside Top Stage Panel */}
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.001}
+        value={progress}
+        onChange={handleSliderChange}
+        aria-label="Kinetic rearrangement animation progress"
+        className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[90%] sm:w-[65%] md:w-[50%] max-w-md h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-black focus:outline-none z-30 transition-all"
+      />
     </div>
   );
 };

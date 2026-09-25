@@ -1,4 +1,18 @@
 import { solveAnagrams, type SolveOptions, type AnagramResult, type SolveMetrics } from './solver';
+import { FREQ } from './lexicon';
+import { wordScore } from './scoring';
+
+console.log(
+  FREQ.size,
+  FREQ.get('the'),
+  FREQ.get('house'),
+  FREQ.get('sorrow'),
+  FREQ.get('adoze'),
+  FREQ.get('airwise'),
+  FREQ.get('st'),
+  FREQ.get('roo')
+);
+console.log("wordScore('sorrow'):", wordScore('sorrow'), "wordScore('adoze'):", wordScore('adoze'));
 
 export interface WorkerRequest {
   id: number;

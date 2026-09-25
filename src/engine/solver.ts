@@ -1,34 +1,16 @@
-import { WORDS, LETTER_COUNTS, LETTER_MASKS, isSpicy, type POS } from './lexicon';
-import { scorePhrase, bestOrder } from './scoring';
+import nlp from 'compromise';
+import {
+  WORDS,
+  LETTER_COUNTS,
+  LETTER_MASKS,
+  isSpicy,
+  FREQ,
+  hasInvalidArticle,
+} from './lexicon';
+import { scorePhrase, bestOrder, funniness } from './scoring';
+import type { POS, AnagramResult, SolveMetrics, SolveOptions } from './types';
 
-export interface AnagramResult {
-  phrase: string;
-  words: string[];
-  posTags: POS[];
-  score: number;
-  wordScoreTotal: number;
-  grammarScore: number;
-  funninessScore: number;
-  isExact: boolean;
-}
-
-export interface SolveMetrics {
-  elapsedMs: number;
-  candidatesCount: number;
-  nodesVisited: number;
-  solutionsFound: number;
-}
-
-export interface SolveOptions {
-  source: string;
-  maxWords?: number;
-  resultLimit?: number;
-  allowSpicy?: boolean;
-  anchorText?: string;
-  customWordsText?: string;
-  anchorPlacement?: 'start' | 'end' | 'natural';
-  onProgress?: (percent: number) => void;
-}
+export type { POS, AnagramResult, SolveMetrics, SolveOptions };
 
 /**
  * Normalizes string: lowercase, accents stripped, a-z only.
@@ -148,6 +130,14 @@ export function buildCandidates(
     // Only run isSpicy on words that pass mask and letter count checks
     if (!allowSpicy && isSpicy(w)) continue;
 
+    // Drop obscure proper names (freq > 50 per million, ~2500 count in 51M corpus)
+    if (!customSet.has(w) && (FREQ.get(w) || 0) < 2500) {
+      const doc = nlp(w);
+      if (doc.has('#Person') && !doc.has('#Noun') && !doc.has('#Verb') && !doc.has('#Adjective')) {
+        continue;
+      }
+    }
+
     const cnt = new Uint8Array(26);
     for (let c = 0; c < 26; c++) {
       cnt[c] = LETTER_COUNTS[offset + c];
@@ -157,10 +147,23 @@ export function buildCandidates(
     candMasks.push(wordMask);
   }
 
+  // Sort candidate pool so longer, higher-frequency, funnier, and custom words are explored first
+  const order = candidates.map((w, idx) => {
+    const freq = FREQ.get(w) || 0;
+    const isCust = customSet.has(w);
+    const score =
+      (isCust ? 5000 : 0) +
+      w.length * 150 +
+      Math.log10(freq + 1) * 30 +
+      funniness(w) * 50;
+    return { w, count: candCounts[idx], mask: candMasks[idx], score };
+  });
+  order.sort((a, b) => b.score - a.score);
+
   return {
-    words: candidates,
-    counts: candCounts,
-    masks: candMasks,
+    words: order.map(o => o.w),
+    counts: order.map(o => o.count),
+    masks: order.map(o => o.mask),
     customSet,
   };
 }
@@ -188,8 +191,8 @@ export function solveAnagrams(opts: SolveOptions): {
     };
   }
 
-  const maxWords = opts.maxWords || 4;
-  const resultLimit = opts.resultLimit || 80;
+  const maxWords = opts.maxWords || (cleanSource.length >= 16 ? 5 : 4);
+  const resultLimit = opts.resultLimit || 5000;
   const allowSpicy = !!opts.allowSpicy;
   const anchorPlacement = opts.anchorPlacement || 'natural';
 
@@ -208,7 +211,7 @@ export function solveAnagrams(opts: SolveOptions): {
   let anchorLetterCount = 0;
 
   if (opts.anchorText && opts.anchorText.trim()) {
-    const rawAnchors = opts.anchorText.trim().split(/\s+/);
+    const rawAnchors = opts.anchorText.trim().split(/[\s,]+/);
     for (const raw of rawAnchors) {
       const cleanAnchor = normalize(raw);
       if (cleanAnchor) {
@@ -252,7 +255,7 @@ export function solveAnagrams(opts: SolveOptions): {
     const scored = scorePhrase(ordered, new Set(anchorWords));
     const isEx = exact(source, scored.phrase);
     return {
-      results: [{ ...scored, isExact: isEx }],
+      results: [{ ...scored, wordScore: scored.wordScoreTotal, isExact: isEx }],
       metrics: {
         elapsedMs: Date.now() - startTime,
         candidatesCount: anchorWords.length,
@@ -299,9 +302,9 @@ export function solveAnagrams(opts: SolveOptions): {
   const rawSolutions: string[][] = [];
   const seenCombos = new Set<string>();
   let nodesVisited = 0;
-  const MAX_NODES = 120_000;
-  const TIME_BUDGET_MS = 1500;
-  const MAX_SOLUTIONS = 400;
+  const MAX_NODES = 400_000;
+  const TIME_BUDGET_MS = 3500;
+  const MAX_SOLUTIONS = Math.max(2500, resultLimit);
 
   function dfs(remainingLen: number): void {
     nodesVisited++;
@@ -353,6 +356,8 @@ export function solveAnagrams(opts: SolveOptions): {
     const validCandIndices = letterToCandIndices[bestLetter];
     for (let k = 0; k < validCandIndices.length; k++) {
       const idx = validCandIndices[k];
+      const candWord = candidates[idx];
+
       const wCounts = candCounts[idx];
       let canUse = true;
       for (let c = 0; c < 26; c++) {
@@ -363,11 +368,11 @@ export function solveAnagrams(opts: SolveOptions): {
       }
       if (!canUse) continue;
 
-      const wLen = candidates[idx].length;
+      const wLen = candWord.length;
       for (let c = 0; c < 26; c++) {
         remainingCounts[c] -= wCounts[c];
       }
-      currentWords.push(candidates[idx]);
+      currentWords.push(candWord);
 
       dfs(remainingLen - wLen);
 
@@ -398,47 +403,38 @@ export function solveAnagrams(opts: SolveOptions): {
     const scored = scorePhrase(ordered, customSet);
     const isEx = exact(source, scored.phrase);
     if (!isEx) continue; // Hard rule: Every result must remain an EXACT anagram
+    if (hasInvalidArticle(ordered)) continue; // Discard invalid article usage
 
     scoredList.push({
       ...scored,
+      wordScore: scored.wordScoreTotal,
       isExact: isEx,
     });
   }
 
-  // Sort by base score descending
+  // Sort by base score descending (highest quality and funniest at the top)
   scoredList.sort((a, b) => b.score - a.score);
 
-  // Diversity filtering:
-  // Subtract 1.5 * (number of earlier results containing that word) for each repeated word
-  const finalResults: AnagramResult[] = [];
-  const wordSeenCount = new Map<string, number>();
+  // Show all discovered possibilities up to resultLimit
+  let finalResults = scoredList.slice(0, resultLimit);
 
-  const remainingToSelect = [...scoredList];
+  if (finalResults.length === 0 && scoredList.length > 0) {
+    finalResults = [scoredList[0]];
+  }
 
-  while (finalResults.length < resultLimit && remainingToSelect.length > 0) {
-    let bestIndex = 0;
-    let bestAdjustedScore = -99999;
+  // Ensure at least one result with a funny-sounding word appears in the top 5 when one exists
+  if (finalResults.length > 1) {
+    const isFunnyResult = (r: AnagramResult) =>
+      r.funninessScore >= 3.5 || r.words.some(w => funniness(w) >= 3.5);
 
-    for (let i = 0; i < remainingToSelect.length; i++) {
-      const item = remainingToSelect[i];
-      let penalty = 0;
-      for (const w of item.words) {
-        const count = wordSeenCount.get(w.toLowerCase()) || 0;
-        penalty += count * 1.5;
+    const top5HasFunny = finalResults.slice(0, 5).some(isFunnyResult);
+    if (!top5HasFunny) {
+      const funnyIdx = finalResults.findIndex((r, idx) => idx >= 5 && isFunnyResult(r));
+      if (funnyIdx !== -1) {
+        const [funnyItem] = finalResults.splice(funnyIdx, 1);
+        const insertPos = Math.min(3, finalResults.length);
+        finalResults.splice(insertPos, 0, funnyItem);
       }
-      const adjusted = item.score - penalty;
-      if (adjusted > bestAdjustedScore) {
-        bestAdjustedScore = adjusted;
-        bestIndex = i;
-      }
-    }
-
-    const chosen = remainingToSelect.splice(bestIndex, 1)[0];
-    finalResults.push(chosen);
-
-    for (const w of chosen.words) {
-      const lower = w.toLowerCase();
-      wordSeenCount.set(lower, (wordSeenCount.get(lower) || 0) + 1);
     }
   }
 

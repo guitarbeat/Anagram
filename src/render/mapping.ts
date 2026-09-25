@@ -44,10 +44,12 @@ export function computeLetterTransform(
   const scale = 1;
 
   const dir = seed01(m.order * 19) > 0.5 ? 1 : -1;
-  const height = h * 0.22 + seed01(m.order * 37) * (h * 0.28);
-  y -= Math.sin(normT * Math.PI) * height;
-  x += Math.sin(normT * Math.PI) * dir * (12 + seed01(m.order * 7) * 26);
-  const rotation = Math.sin(normT * Math.PI) * (dir * 0.35);
+  const archHeight = Math.min(h * 0.35, Math.max(10, 8 + seed01(m.order * 37) * 16));
+  
+  // Natural curved trajectory across canvas
+  y -= Math.sin(normT * Math.PI) * archHeight * (m.from.y === m.to.y ? (dir * 0.8) : 1);
+  x += Math.sin(normT * Math.PI) * dir * (3 + seed01(m.order * 7) * 8);
+  const rotation = Math.sin(normT * Math.PI) * (dir * 0.12);
 
   return { x, y, rotation, scale, local };
 }
@@ -56,37 +58,38 @@ export function fitFontSize(
   ctx: CanvasRenderingContext2D,
   text: string,
   maxWidth: number,
-  start = 54
+  start = 42
 ): number {
   let size = start;
-  while (size > 14) {
+  while (size > 11) {
     ctx.font = `bold ${size}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
     if (ctx.measureText(text).width <= maxWidth) break;
-    size -= 2;
+    size -= 1;
   }
   return size;
 }
 
-export function computeGlyphLayout(
+export function computeGlyphLayoutAtCenter(
   ctx: CanvasRenderingContext2D,
   text: string,
   y: number,
   fontSize: number,
-  canvasWidth: number
+  centerX: number
 ): Glyph[] {
+  const upperText = text.toUpperCase();
   ctx.font = `bold ${fontSize}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
-  const chars = [...text];
+  const chars = [...upperText];
   const widths = chars.map(ch => ctx.measureText(ch).width);
   const totalWidth = widths.reduce((a, b) => a + b, 0);
 
-  let cursor = canvasWidth / 2 - totalWidth / 2;
+  let cursor = centerX - totalWidth / 2;
   const glyphs: Glyph[] = [];
 
   chars.forEach((ch, i) => {
     const w = widths[i];
     glyphs.push({
       char: ch,
-      letter: /[A-Za-z]/.test(ch),
+      letter: /[A-Z]/.test(ch),
       x: cursor + w / 2,
       y,
       w,
@@ -98,6 +101,16 @@ export function computeGlyphLayout(
   return glyphs;
 }
 
+export function computeGlyphLayout(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  y: number,
+  fontSize: number,
+  canvasWidth: number
+): Glyph[] {
+  return computeGlyphLayoutAtCenter(ctx, text, y, fontSize, canvasWidth / 2);
+}
+
 export function mapGlyphs(
   srcGlyphs: Glyph[],
   dstGlyphs: Glyph[]
@@ -105,7 +118,7 @@ export function mapGlyphs(
   const buckets: Record<string, Glyph[]> = {};
   srcGlyphs.forEach(g => {
     if (!g.letter) return;
-    const k = g.char.toLowerCase();
+    const k = g.char.toUpperCase();
     if (!buckets[k]) buckets[k] = [];
     buckets[k].push(g);
   });
@@ -115,15 +128,15 @@ export function mapGlyphs(
 
   dstGlyphs.forEach(g => {
     if (!g.letter) return;
-    const k = g.char.toLowerCase();
+    const k = g.char.toUpperCase();
     const n = used[k] || 0;
     const s = (buckets[k] || [])[n];
     used[k] = n + 1;
     if (s) {
       mapping.push({
-        char: g.char,
-        from: { x: s.x, y: s.y, char: s.char, index: s.index },
-        to: { x: g.x, y: g.y, char: g.char, index: g.index },
+        char: g.char.toUpperCase(),
+        from: { x: s.x, y: s.y, char: s.char.toUpperCase(), index: s.index },
+        to: { x: g.x, y: g.y, char: g.char.toUpperCase(), index: g.index },
         order: mapping.length,
       });
     }
@@ -138,16 +151,67 @@ export function buildLetterMapping(
   to: string,
   canvasWidth: number,
   canvasHeight: number
-): { mapping: RenderLetterMapping[]; src: Glyph[]; dst: Glyph[]; fontSize: number } {
-  const maxW = canvasWidth - 80;
-  const sizeFrom = fitFontSize(ctx, from, maxW, Math.min(54, Math.floor(canvasHeight * 0.16)));
-  const sizeTo = fitFontSize(ctx, to, maxW, Math.min(54, Math.floor(canvasHeight * 0.16)));
-  const fontSize = Math.min(sizeFrom, sizeTo);
+): {
+  mapping: RenderLetterMapping[];
+  src: Glyph[];
+  dst: Glyph[];
+  fontSize: number;
+  srcY: number;
+  dstY: number;
+  isSideBySide: boolean;
+  arrowPos?: { x: number; y: number };
+} {
+  const upperFrom = from.toUpperCase();
+  const upperTo = to.toUpperCase();
 
-  const centerY = canvasHeight / 2;
-  const src = computeGlyphLayout(ctx, from, centerY, fontSize, canvasWidth);
-  const dst = computeGlyphLayout(ctx, to, centerY, fontSize, canvasWidth);
-  const mapping = mapGlyphs(src, dst);
+  // Decide if shrunk / wide aspect ratio calls for Side-by-Side layout
+  const isSideBySide = canvasHeight <= 115 || (canvasWidth / Math.max(1, canvasHeight) >= 3.0 && canvasWidth >= 380);
 
-  return { mapping, src, dst, fontSize };
+  if (isSideBySide) {
+    // Side by Side: Source on Left, Target on Right
+    const gap = Math.max(36, Math.min(80, canvasWidth * 0.08));
+    const halfWidth = (canvasWidth - gap - 40) / 2;
+    const maxHalfW = Math.max(120, halfWidth);
+
+    const targetMaxFont = Math.min(110, Math.max(13, Math.floor(canvasHeight * 0.65)));
+    const sizeFrom = fitFontSize(ctx, upperFrom, maxHalfW, targetMaxFont);
+    const sizeTo = fitFontSize(ctx, upperTo, maxHalfW, targetMaxFont);
+    const fontSize = Math.max(11, Math.min(sizeFrom, sizeTo));
+
+    const leftCenterX = (canvasWidth - gap) / 4 + 10;
+    const rightCenterX = canvasWidth - (canvasWidth - gap) / 4 - 10;
+    const midY = canvasHeight / 2;
+
+    const src = computeGlyphLayoutAtCenter(ctx, upperFrom, midY, fontSize, leftCenterX);
+    const dst = computeGlyphLayoutAtCenter(ctx, upperTo, midY, fontSize, rightCenterX);
+    const mapping = mapGlyphs(src, dst);
+
+    return {
+      mapping,
+      src,
+      dst,
+      fontSize,
+      srcY: midY,
+      dstY: midY,
+      isSideBySide: true,
+      arrowPos: { x: canvasWidth / 2, y: midY },
+    };
+  } else {
+    // Two-line stacked: Source on Line 1 (Top), Target on Line 2 (Bottom)
+    const maxW = Math.max(200, canvasWidth - 48);
+    const targetMaxFont = Math.min(130, Math.max(16, Math.floor(canvasHeight * 0.38)));
+    const sizeFrom = fitFontSize(ctx, upperFrom, maxW, targetMaxFont);
+    const sizeTo = fitFontSize(ctx, upperTo, maxW, targetMaxFont);
+    const fontSize = Math.max(13, Math.min(sizeFrom, sizeTo));
+
+    const lineSpacing = Math.max(40, fontSize * 1.45);
+    const srcY = canvasHeight / 2 - lineSpacing / 2;
+    const dstY = canvasHeight / 2 + lineSpacing / 2;
+
+    const src = computeGlyphLayout(ctx, upperFrom, srcY, fontSize, canvasWidth);
+    const dst = computeGlyphLayout(ctx, upperTo, dstY, fontSize, canvasWidth);
+    const mapping = mapGlyphs(src, dst);
+
+    return { mapping, src, dst, fontSize, srcY, dstY, isSideBySide: false };
+  }
 }

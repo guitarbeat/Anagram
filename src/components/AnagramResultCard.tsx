@@ -1,179 +1,251 @@
-import React, { useRef, useEffect, useCallback } from 'react';
-import { Play, Copy, Check } from 'lucide-react';
-import type { AnagramResult } from '../engine/solver';
-import type { POS } from '../engine/lexicon';
-import { renderMiniCardCanvas } from '../render/mini';
-import type { ProgressBus } from '../hooks/useProgressBus';
-
-export const POS_BADGES: Record<
-  POS,
-  { label: string; bg: string; text: string; border: string }
-> = {
-  noun: { label: 'noun', bg: 'bg-blue-950/40', text: 'text-blue-300', border: 'border-blue-800/40' },
-  verb: { label: 'verb', bg: 'bg-emerald-950/40', text: 'text-emerald-300', border: 'border-emerald-800/40' },
-  adj: { label: 'adj', bg: 'bg-amber-950/40', text: 'text-amber-300', border: 'border-amber-800/40' },
-  adv: { label: 'adv', bg: 'bg-purple-950/40', text: 'text-purple-300', border: 'border-purple-800/40' },
-  art: { label: 'art', bg: 'bg-zinc-800/60', text: 'text-zinc-400', border: 'border-zinc-700/40' },
-  prep: { label: 'prep', bg: 'bg-rose-950/40', text: 'text-rose-300', border: 'border-rose-800/40' },
-  pron: { label: 'pron', bg: 'bg-cyan-950/40', text: 'text-cyan-300', border: 'border-cyan-800/40' },
-  conj: { label: 'conj', bg: 'bg-orange-950/40', text: 'text-orange-300', border: 'border-orange-800/40' },
-  other: { label: 'word', bg: 'bg-zinc-800/40', text: 'text-zinc-400', border: 'border-zinc-700/40' },
-};
+import React, { useState, useEffect, useRef } from 'react';
+import { Edit2, Check, X, ChevronLeft, ChevronRight, Pin } from 'lucide-react';
+import type { AnagramResult } from '../engine/types';
 
 export interface AnagramResultCardProps {
   item: AnagramResult;
   isActive?: boolean;
-  sourceText?: string;
-  showMiniPath?: boolean;
-  progressBus: ProgressBus;
+  pinnedWordsSet?: Set<string>;
   onAnimatePhrase: (phrase: string) => void;
-  onCopy: (phrase: string) => void;
-  isCopied: boolean;
+  onUpdatePhrase?: (oldPhrase: string, newPhrase: string) => void;
+  onTogglePinWord?: (word: string) => void;
+  onCopy?: (phrase: string) => void;
+  isCopied?: boolean;
 }
 
 export const AnagramResultCard: React.FC<AnagramResultCardProps> = React.memo(({
   item,
   isActive,
-  sourceText = '',
-  showMiniPath = false,
-  progressBus,
+  pinnedWordsSet,
   onAnimatePhrase,
-  onCopy,
-  isCopied,
+  onUpdatePhrase,
+  onTogglePinWord,
 }) => {
-  const phrase = item.phrase;
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(item.phrase);
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const resizeCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    const w = Math.max(180, Math.floor(rect.width || 240));
-    const h = 64;
-    if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
-      canvas.width = Math.floor(w * dpr);
-      canvas.height = Math.floor(h * dpr);
-    }
-  }, []);
+  const words = item.words && item.words.length > 0 ? item.words : item.phrase.split(/\s+/);
 
-  // Single unified subscription to progressBus ONLY while visible on screen
   useEffect(() => {
-    if (!showMiniPath || !sourceText) return;
+    setEditText(item.phrase);
+  }, [item.phrase]);
 
-    const el = containerRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
 
-    let unsubscribeBus: (() => void) | null = null;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          resizeCanvas();
-          if (!unsubscribeBus) {
-            unsubscribeBus = progressBus.subscribe((p: number) => {
-              if (canvasRef.current) {
-                renderMiniCardCanvas(p, canvasRef.current, sourceText, phrase, 'arc');
-              }
-            });
-          }
-        } else {
-          if (unsubscribeBus) {
-            unsubscribeBus();
-            unsubscribeBus = null;
-          }
-        }
-      },
-      { threshold: 0.05 }
-    );
-
-    observer.observe(el);
-
-    return () => {
-      observer.disconnect();
-      if (unsubscribeBus) {
-        unsubscribeBus();
+  const handleSaveEdit = () => {
+    const trimmed = editText.trim();
+    if (trimmed && trimmed !== item.phrase) {
+      if (onUpdatePhrase) {
+        onUpdatePhrase(item.phrase, trimmed);
+      } else {
+        onAnimatePhrase(trimmed);
       }
-    };
-  }, [showMiniPath, sourceText, phrase, progressBus, resizeCanvas]);
+    }
+    setIsEditing(false);
+  };
+
+  const handleMoveWord = (index: number, direction: 'left' | 'right', e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newWords = [...words];
+    const targetIdx = direction === 'left' ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= newWords.length) return;
+
+    const [moved] = newWords.splice(index, 1);
+    newWords.splice(targetIdx, 0, moved);
+    const newPhrase = newWords.join(' ');
+
+    if (onUpdatePhrase) {
+      onUpdatePhrase(item.phrase, newPhrase);
+    } else {
+      onAnimatePhrase(newPhrase);
+    }
+  };
+
+  const handleDragStart = (idx: number, e: React.DragEvent) => {
+    e.stopPropagation();
+    setDraggedIdx(idx);
+    e.dataTransfer.setData('text/plain', String(idx));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (idx: number, e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedIdx !== null && draggedIdx !== idx) {
+      setDragOverIdx(idx);
+    }
+  };
+
+  const handleDrop = (idx: number, e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedIdx === null || draggedIdx === idx) {
+      setDraggedIdx(null);
+      setDragOverIdx(null);
+      return;
+    }
+
+    const newWords = [...words];
+    const [moved] = newWords.splice(draggedIdx, 1);
+    newWords.splice(idx, 0, moved);
+    const newPhrase = newWords.join(' ');
+
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+
+    if (onUpdatePhrase) {
+      onUpdatePhrase(item.phrase, newPhrase);
+    } else {
+      onAnimatePhrase(newPhrase);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleWordClick = (word: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onTogglePinWord) {
+      onTogglePinWord(word);
+    }
+  };
 
   return (
     <div
-      ref={containerRef}
-      className={`border rounded-lg p-3.5 transition-all flex flex-col justify-between space-y-3 group cursor-pointer ${
+      className={`relative border rounded-xl px-3 py-2 sm:px-3.5 sm:py-2.5 min-h-[42px] transition-all duration-150 flex items-center justify-center text-center group touch-manipulation select-none cursor-pointer ${
         isActive
-          ? 'bg-[#18181b] border-emerald-500/70 shadow-lg shadow-emerald-950/20 ring-1 ring-emerald-500/40'
-          : 'bg-[#121214] border-[#27272a] hover:border-[#3f3f46] hover:bg-[#151518]'
+          ? 'bg-[#18181b] border-emerald-500/70 shadow-lg shadow-emerald-950/20 ring-1 ring-emerald-500/40 text-emerald-300'
+          : 'bg-[#121214] border-[#27272a] hover:border-[#3f3f46] hover:bg-[#161619] text-[#f4f4f5]'
       }`}
-      onClick={() => onAnimatePhrase(phrase)}
+      onClick={() => {
+        if (!isEditing) onAnimatePhrase(item.phrase);
+      }}
     >
-      <div className="space-y-2.5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="text-sm font-medium text-[#f4f4f5] select-text break-words leading-snug group-hover:text-emerald-300 transition-colors">
-            &ldquo;{phrase}&rdquo;
+      <div className="flex items-center justify-center min-w-0 w-full">
+        {isEditing ? (
+          <div
+            className="flex items-center gap-1.5 w-full"
+            onClick={e => e.stopPropagation()}
+          >
+            <input
+              ref={inputRef}
+              type="text"
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleSaveEdit();
+                if (e.key === 'Escape') {
+                  setEditText(item.phrase);
+                  setIsEditing(false);
+                }
+              }}
+              className="flex-1 h-7 bg-black/70 border border-emerald-500/50 rounded-lg px-2 text-xs font-mono text-white text-center focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={handleSaveEdit}
+              title="Save phrase"
+              className="p-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditText(item.phrase);
+                setIsEditing(false);
+              }}
+              title="Cancel"
+              className="p-1 text-zinc-400 hover:text-zinc-200 hover:bg-white/10 rounded cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-center min-w-0 flex-1">
+              {/* Interactive Word Chips (draggable, reorderable, clickable to lock/pin) */}
+              <div className="flex items-center justify-center gap-1 sm:gap-1.5 flex-wrap w-full">
+                {words.map((word, idx) => {
+                  const isPinned = pinnedWordsSet?.has(word.toLowerCase());
+                  return (
+                    <span
+                      key={`${word}-${idx}`}
+                      draggable
+                      onDragStart={e => handleDragStart(idx, e)}
+                      onDragOver={e => handleDragOver(idx, e)}
+                      onDrop={e => handleDrop(idx, e)}
+                      onDragEnd={handleDragEnd}
+                      onClick={e => handleWordClick(word, e)}
+                      className={`inline-flex items-center gap-0.5 text-xs font-mono px-2 py-0.5 rounded-md transition-all cursor-pointer select-none group/word ${
+                        dragOverIdx === idx
+                          ? 'bg-emerald-500/30 ring-1 ring-emerald-400 text-white'
+                          : isPinned
+                          ? 'bg-emerald-500/20 ring-1 ring-emerald-400/60 text-emerald-200 shadow-sm font-semibold'
+                          : isActive
+                          ? 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/30 hover:ring-1 hover:ring-emerald-500/50'
+                          : 'bg-white/[0.05] hover:bg-white/[0.12] hover:text-white text-zinc-200 hover:ring-1 hover:ring-white/15'
+                      }`}
+                      title={isPinned ? `Locked word (click to unlock "${word}")` : `Click to lock in "${word}" in solver`}
+                    >
+                      {idx > 0 && (
+                        <button
+                          type="button"
+                          onClick={e => handleMoveWord(idx, 'left', e)}
+                          className="opacity-0 group-hover/word:opacity-100 hover:text-emerald-400 transition-opacity p-0.5 -ml-1"
+                          title="Move left"
+                        >
+                          <ChevronLeft className="w-2.5 h-2.5" />
+                        </button>
+                      )}
 
-        {/* Word Tokens with POS Badges */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {item.words.map((word, wIdx) => {
-            const p = item.posTags?.[wIdx] || 'other';
-            const badge = POS_BADGES[p] || POS_BADGES.other;
-            return (
-              <span
-                key={`${word}_${wIdx}`}
-                className="inline-flex items-center gap-1 font-mono text-[11px] text-[#e4e4e7] bg-[#1a1a1e] px-2 py-0.5 rounded border border-[#27272a]"
+                      {isPinned && (
+                        <Pin className="w-2.5 h-2.5 text-emerald-400 shrink-0 rotate-45 mr-0.5" />
+                      )}
+                      
+                      <span>{word}</span>
+
+                      {idx < words.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={e => handleMoveWord(idx, 'right', e)}
+                          className="opacity-0 group-hover/word:opacity-100 hover:text-emerald-400 transition-opacity p-0.5 -mr-1"
+                          title="Move right"
+                        >
+                          <ChevronRight className="w-2.5 h-2.5" />
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  setIsEditing(true);
+                }}
+                title="Edit phrase text"
+                className="p-1 text-zinc-400 hover:text-zinc-200 hover:bg-white/10 rounded-md cursor-pointer touch-manipulation"
               >
-                <span>{word}</span>
-                <span
-                  className={`text-[9px] px-1 py-0.2 rounded font-semibold uppercase tracking-wider ${badge.bg} ${badge.text} border ${badge.border}`}
-                >
-                  {badge.label}
-                </span>
-              </span>
-            );
-          })}
-          <span className="text-[10px] text-[#52525b] font-mono">
-            {item.words.length} words
-          </span>
-        </div>
-
-        {/* Optional Mini Path Canvas */}
-        {showMiniPath && (
-          <div className="relative w-full h-[64px] rounded bg-[#09090b] border border-[#27272a] overflow-hidden flex items-center justify-center">
-            <canvas ref={canvasRef} className="w-full h-full block" />
-          </div>
+                <Edit2 className="w-3 h-3" />
+              </button>
+            </div>
+          </>
         )}
-      </div>
-
-      {/* Action footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-[#232326]">
-        <span
-          className={`text-[11px] font-mono flex items-center gap-1.5 ${
-            isActive ? 'text-emerald-400 font-medium' : 'text-[#71717a] group-hover:text-[#f4f4f5]'
-          }`}
-        >
-          <Play className="w-2.5 h-2.5 fill-current" />
-          <span>{isActive ? 'Active on Stage' : 'Animate'}</span>
-        </span>
-
-        <button
-          type="button"
-          onClick={e => {
-            e.stopPropagation();
-            onCopy(phrase);
-          }}
-          aria-label={`Copy "${phrase}"`}
-          className="p-1.5 text-[#71717a] hover:text-[#f4f4f5] hover:bg-[#27272a] rounded transition-colors cursor-pointer"
-          title="Copy phrase to clipboard"
-        >
-          {isCopied ? (
-            <Check className="w-3.5 h-3.5 text-emerald-400" />
-          ) : (
-            <Copy className="w-3.5 h-3.5" />
-          )}
-        </button>
       </div>
     </div>
   );
