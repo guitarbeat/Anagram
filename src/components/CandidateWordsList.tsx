@@ -292,47 +292,8 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
         >
           {/* TOP CARD (Red Box 1): Solved Anagrams & Suggestions */}
           <div className="flex-1 min-h-0 bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2.5 shadow-sm">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-1.5 border-b border-zinc-200 shrink-0">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="text-[10px] font-mono font-bold tracking-wider text-zinc-800 uppercase">
-                  {topTab === 'anagrams' ? 'Anagrams' : 'Words'}
-                </span>
-                {results && results.length > 0 && topTab === 'anagrams' && (
-                  <span className="text-[9px] font-mono bg-zinc-100 text-zinc-600 px-1 rounded font-semibold">
-                    {results.length}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1 bg-zinc-100 p-0.5 rounded-md">
-                <button
-                  type="button"
-                  onClick={() => setTopTab('anagrams')}
-                  className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-bold transition-all cursor-pointer ${
-                    topTab === 'anagrams'
-                      ? 'bg-white text-zinc-900 shadow-xs'
-                      : 'text-zinc-500 hover:text-zinc-800'
-                  }`}
-                >
-                  Anagrams
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTopTab('words')}
-                  className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-bold transition-all cursor-pointer ${
-                    topTab === 'words'
-                      ? 'bg-white text-zinc-900 shadow-xs'
-                      : 'text-zinc-500 hover:text-zinc-800'
-                  }`}
-                >
-                  Words
-                </button>
-              </div>
-            </div>
-
             {/* Body */}
-            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar pt-1.5 space-y-1">
+            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar space-y-1">
               {topTab === 'anagrams' ? (
                 isSolving ? (
                   <div className="h-full flex flex-col items-center justify-center p-3 text-center">
@@ -395,32 +356,6 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
 
           {/* BOTTOM CARD (Red Box 2): Word Length Histogram */}
           <div className="flex-1 min-h-0 bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2.5 shadow-sm">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-1.5 border-b border-zinc-200 shrink-0">
-              <div className="flex items-center gap-1.5">
-                <BarChart3 className="w-3.5 h-3.5 text-zinc-600" />
-                <span className="text-[10px] font-mono font-bold tracking-wider text-zinc-800 uppercase">
-                  Lengths
-                </span>
-                {activeLengthsSet.size > 0 && (
-                  <span className="text-[9px] font-mono bg-emerald-100 text-emerald-800 px-1 rounded font-bold">
-                    {Array.from(activeLengthsSet).sort((a,b)=>a-b).map(l => `${l}L`).join(', ')}
-                  </span>
-                )}
-              </div>
-              {activeLengthsSet.size > 0 && (
-                <button
-                  type="button"
-                  onClick={onClearLengthFilter}
-                  className="text-[9px] font-mono text-zinc-400 hover:text-zinc-700 flex items-center gap-0.5 cursor-pointer"
-                  title="Clear filter"
-                >
-                  <X className="w-2.5 h-2.5" />
-                  <span>Clear</span>
-                </button>
-              )}
-            </div>
-
             {/* Vertical Histogram Bars */}
             <div
               className="flex-1 min-h-0 flex items-end justify-between gap-1 pt-2 pb-1 select-none touch-none"
