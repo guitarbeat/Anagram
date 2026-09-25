@@ -33,34 +33,14 @@ export function App() {
   // Stage animation state (strictly user-controlled via divider slider, no auto-moving)
   const progressBus = useProgressBus(0);
 
-  // Toasts
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const toastTimersRef = useRef<Map<string, number>>(new Map());
+  // Toasts disabled
+  const showToast = useCallback((_text: string, _type: 'success' | 'info' | 'error' = 'info') => {
+    // Toast notifications have been disabled
+  }, []);
 
   // Web worker reference and request tracking
   const workerRef = useRef<Worker | null>(null);
   const requestIdRef = useRef<number>(0);
-  const targetPhraseRef = useRef<string>(targetPhrase);
-  targetPhraseRef.current = targetPhrase;
-
-  const showToast = useCallback((text: string, type: 'success' | 'info' | 'error' = 'info') => {
-    const id = `${Date.now()}_${Math.random()}`;
-    setToasts(prev => [...prev, { id, text, type }]);
-
-    const timer = window.setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-      toastTimersRef.current.delete(id);
-    }, 3200);
-
-    toastTimersRef.current.set(id, timer);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      toastTimersRef.current.forEach(timer => window.clearTimeout(timer));
-      toastTimersRef.current.clear();
-    };
-  }, []);
 
   // Initialize Web Worker
   useEffect(() => {
@@ -332,29 +312,6 @@ export function App() {
 
   return (
     <div className="h-[100dvh] w-screen max-h-[100dvh] bg-[#09090b] text-[#f4f4f5] flex flex-col overflow-hidden p-1 selection:bg-emerald-900 selection:text-emerald-200">
-      {/* Toast Notifications */}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm pointer-events-none">
-        {toasts.map(t => (
-          <div
-            key={t.id}
-            className={`pointer-events-auto flex items-center gap-2 px-3.5 py-2.5 rounded-lg border text-xs font-mono shadow-2xl backdrop-blur-md transition-all animate-in fade-in slide-in-from-bottom-2 ${
-              t.type === 'error'
-                ? 'bg-[#181113]/95 border-rose-600/50 text-rose-200'
-                : t.type === 'success'
-                ? 'bg-[#101814]/95 border-emerald-600/50 text-emerald-200'
-                : 'bg-[#18181b]/95 border-[#27272a] text-[#f4f4f5]'
-            }`}
-          >
-            {t.type === 'error' ? (
-              <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-            ) : (
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            )}
-            <span>{t.text}</span>
-          </div>
-        ))}
-      </div>
-
       {/* Unified 3-Pane Window Split */}
       <ThreePaneSplit
         className="flex-1 w-full h-full"

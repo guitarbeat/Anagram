@@ -30,7 +30,7 @@ const EditableBox: React.FC<EditableBoxProps> = ({ value, onChange, placeholder,
   }, [value]);
 
   return (
-    <div className="relative w-full h-full flex items-stretch">
+    <div className="relative w-full h-full flex items-center justify-center bg-white border-2 border-black focus-within:border-emerald-500 rounded-[18px] sm:rounded-[22px] px-12 transition-all overflow-hidden">
       <div
         ref={ref}
         id={id}
@@ -40,10 +40,10 @@ const EditableBox: React.FC<EditableBoxProps> = ({ value, onChange, placeholder,
           const text = e.currentTarget.innerText.replace(/\n/g, ' ');
           onChange(text);
         }}
-        className="w-full h-full min-h-[44px] bg-white text-zinc-900 font-bold uppercase tracking-wider text-center flex items-center justify-center px-12 outline-none border-2 border-black focus:border-emerald-500 rounded-[18px] sm:rounded-[22px] select-text break-words overflow-y-auto text-sm sm:text-base md:text-lg cursor-text transition-all no-scrollbar"
+        className="w-full text-center bg-transparent text-zinc-900 font-bold uppercase tracking-wider outline-none select-text break-words text-sm sm:text-base md:text-lg cursor-text py-2 max-h-full overflow-y-auto no-scrollbar leading-relaxed"
       />
       {!value && (
-        <span className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-400 font-bold uppercase tracking-wider text-center text-sm sm:text-base md:text-lg px-12">
+        <span className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-400 font-bold uppercase tracking-wider text-center text-sm sm:text-base md:text-lg px-12 select-none">
           {placeholder}
         </span>
       )}
