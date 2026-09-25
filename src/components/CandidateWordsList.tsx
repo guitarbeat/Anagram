@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { WordsGraphView } from './WordsGraphView';
-import { BarChart3, X } from 'lucide-react';
+import { BarChart3, X, Sparkles, Copy, Check, ArrowUpRight } from 'lucide-react';
+import type { AnagramResult } from '../engine/types';
 
 export interface CandidateWordItem {
   word: string;
@@ -19,6 +20,8 @@ export interface CandidateWordsListProps {
   onSetWordAsTarget: (word: string) => void;
   activeTargetPhrase?: string;
   onShowToast: (text: string, type?: 'success' | 'info' | 'error') => void;
+  results?: AnagramResult[];
+  isSolving?: boolean;
 }
 
 export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
@@ -32,15 +35,19 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   onSetWordAsTarget,
   activeTargetPhrase = '',
   onShowToast,
+  results = [],
+  isSolving = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hasUserCustomizedSplit, setHasUserCustomizedSplit] = useState<boolean>(false);
+  const [topTab, setTopTab] = useState<'anagrams' | 'words'>('anagrams');
+  const [copiedPhrase, setCopiedPhrase] = useState<string | null>(null);
 
   const getAdaptiveSplit = () => {
     if (typeof window !== 'undefined' && window.innerWidth < 640) {
-      return 0.76; // Mobile: allocate 76% to word cloud
+      return 0.72; // Mobile
     }
-    return 0.68; // Desktop: allocate 68% to word cloud
+    return 0.65; // Desktop
   };
 
   const [splitRatio, setSplitRatio] = useState<number>(getAdaptiveSplit);
@@ -52,6 +59,14 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   const isRangeDraggingRef = useRef<boolean>(false);
   const dragMovedRef = useRef<boolean>(false);
   const [dragPreview, setDragPreview] = useState<{ start: number; current: number } | null>(null);
+
+  const handleCopyPhrase = (phrase: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard?.writeText(phrase);
+    setCopiedPhrase(phrase);
+    setTimeout(() => setCopiedPhrase(null), 1500);
+    onShowToast(`Copied "${phrase}"`, 'success');
+  };
 
   // Set of currently active/selected lengths
   const activeLengthsSet = useMemo(() => {
@@ -265,85 +280,217 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
         />
       )}
 
-      {/* RIGHT: Histogram Panel (Separate Panel) */}
+      {/* RIGHT: Dual Card Column (Top Card & Bottom Card matching red boxes) */}
       {totalWords > 0 && (
         <div
-          className={`h-full shrink-0 bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2.5 justify-between min-w-[120px] sm:min-w-[140px] shadow-sm transition-all ${
+          className={`h-full shrink-0 flex flex-col gap-2 min-w-[140px] sm:min-w-[170px] transition-all ${
             isDragging ? 'duration-0' : 'duration-300 ease-out'
           }`}
           style={{
             width: `calc(${(1 - splitRatio) * 100}% - 10px)`,
           }}
         >
-          {/* Vertical Histogram Bars */}
-          <div
-            className="flex-1 min-h-0 flex items-end justify-between gap-1 pt-2 pb-1 select-none touch-none"
-            onDoubleClick={onClearLengthFilter}
-            title="Click or drag across to select length range • Double-click empty area to clear"
-          >
-            {histogramData.map(item => {
-              const isSelected = activeLengthsSet.has(item.length);
-              const heightPercent = item.count > 0 ? Math.max(14, (item.count / maxHistogramCount) * 100) : 0;
-
-              return (
-                <div
-                  key={item.length}
-                  data-bar-length={item.length}
-                  onPointerDown={(e) => handleBarPointerDown(e, item.length)}
-                  onPointerEnter={() => {
-                    if (isRangeDraggingRef.current && rangeDragStartRef.current !== null) {
-                      if (rangeDragCurrentRef.current !== item.length) {
-                        dragMovedRef.current = true;
-                        rangeDragCurrentRef.current = item.length;
-                        setDragPreview({ start: rangeDragStartRef.current, current: item.length });
-                      }
-                    }
-                  }}
-                  className={`flex-1 flex flex-col items-center justify-end h-full group cursor-pointer transition-all rounded py-1 select-none ${
-                    isSelected
-                      ? 'bg-emerald-100/90 ring-1 ring-emerald-500 shadow-sm'
-                      : 'hover:bg-zinc-200/60'
+          {/* TOP CARD (Red Box 1): Solved Anagrams & Suggestions */}
+          <div className="flex-1 min-h-0 bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2.5 shadow-sm">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-1.5 border-b border-zinc-200 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-[10px] font-mono font-bold tracking-wider text-zinc-800 uppercase">
+                  {topTab === 'anagrams' ? 'Anagrams' : 'Words'}
+                </span>
+                {results && results.length > 0 && topTab === 'anagrams' && (
+                  <span className="text-[9px] font-mono bg-zinc-100 text-zinc-600 px-1 rounded font-semibold">
+                    {results.length}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1 bg-zinc-100 p-0.5 rounded-md">
+                <button
+                  type="button"
+                  onClick={() => setTopTab('anagrams')}
+                  className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                    topTab === 'anagrams'
+                      ? 'bg-white text-zinc-900 shadow-xs'
+                      : 'text-zinc-500 hover:text-zinc-800'
                   }`}
-                  title={`${item.length}-letter words (${item.count} words) • Drag across to select range`}
                 >
-                  {/* Count Label */}
-                  <span
-                    className={`text-[9px] font-mono mb-1 transition-colors ${
-                      isSelected
-                        ? 'text-emerald-950 font-bold'
-                        : item.count > 0
-                        ? 'text-zinc-700 group-hover:text-zinc-950 font-semibold'
-                        : 'text-zinc-400'
-                    }`}
-                  >
-                    {item.count}
-                  </span>
+                  Anagrams
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTopTab('words')}
+                  className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                    topTab === 'words'
+                      ? 'bg-white text-zinc-900 shadow-xs'
+                      : 'text-zinc-500 hover:text-zinc-800'
+                  }`}
+                >
+                  Words
+                </button>
+              </div>
+            </div>
 
-                  {/* Vertical Bar */}
+            {/* Body */}
+            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar pt-1.5 space-y-1">
+              {topTab === 'anagrams' ? (
+                isSolving ? (
+                  <div className="h-full flex flex-col items-center justify-center p-3 text-center">
+                    <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mb-1" />
+                    <span className="text-[10px] font-mono text-zinc-400">Solving...</span>
+                  </div>
+                ) : results && results.length > 0 ? (
+                  results.slice(0, 50).map((r, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => onSetWordAsTarget(r.phrase)}
+                      className="group flex items-center justify-between p-1.5 rounded-lg hover:bg-emerald-50/80 border border-transparent hover:border-emerald-200 transition-all cursor-pointer select-none"
+                      title="Click to remix this anagram"
+                    >
+                      <span className="text-[11px] font-mono font-bold text-zinc-800 group-hover:text-emerald-950 uppercase truncate pr-1">
+                        {r.phrase}
+                      </span>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyPhrase(r.phrase, e)}
+                          className="p-1 text-zinc-400 hover:text-zinc-700 transition-colors"
+                          title="Copy"
+                        >
+                          {copiedPhrase === r.phrase ? (
+                            <Check className="w-3 h-3 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                        <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="h-full flex items-center justify-center text-center p-3">
+                    <span className="text-[10px] font-mono text-zinc-400">No anagrams found</span>
+                  </div>
+                )
+              ) : (
+                /* Words tab */
+                candidateWords.slice(0, 60).map((w, idx) => (
                   <div
-                    className={`w-full max-w-[18px] rounded-t-sm transition-all duration-300 ease-out ${
-                      isSelected
-                        ? 'bg-emerald-600 shadow-[0_0_10px_rgba(5,150,105,0.45)]'
-                        : item.count > 0
-                        ? 'bg-zinc-400 group-hover:bg-zinc-600 group-hover:shadow-sm'
-                        : 'bg-zinc-200'
-                    }`}
-                    style={{ height: `${heightPercent}%` }}
-                  />
-
-                  {/* Length Label */}
-                  <span
-                    className={`text-[9.5px] font-mono mt-1 ${
-                      isSelected
-                        ? 'text-emerald-950 font-bold'
-                        : 'text-zinc-600 group-hover:text-zinc-900 font-medium'
-                    }`}
+                    key={idx}
+                    onClick={() => onAddWordToTarget(w.word)}
+                    className="group flex items-center justify-between p-1 rounded hover:bg-zinc-100 transition-colors cursor-pointer select-none"
+                    title="Click to add word to remix"
                   >
-                    {item.length}L
+                    <span className="text-[11px] font-mono font-semibold text-zinc-700 group-hover:text-zinc-950 uppercase">
+                      {w.word}
+                    </span>
+                    <span className="text-[9px] font-mono text-zinc-400">
+                      {w.length}L
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* BOTTOM CARD (Red Box 2): Word Length Histogram */}
+          <div className="flex-1 min-h-0 bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2.5 shadow-sm">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-1.5 border-b border-zinc-200 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <BarChart3 className="w-3.5 h-3.5 text-zinc-600" />
+                <span className="text-[10px] font-mono font-bold tracking-wider text-zinc-800 uppercase">
+                  Lengths
+                </span>
+                {activeLengthsSet.size > 0 && (
+                  <span className="text-[9px] font-mono bg-emerald-100 text-emerald-800 px-1 rounded font-bold">
+                    {Array.from(activeLengthsSet).sort((a,b)=>a-b).map(l => `${l}L`).join(', ')}
                   </span>
-                </div>
-              );
-            })}
+                )}
+              </div>
+              {activeLengthsSet.size > 0 && (
+                <button
+                  type="button"
+                  onClick={onClearLengthFilter}
+                  className="text-[9px] font-mono text-zinc-400 hover:text-zinc-700 flex items-center gap-0.5 cursor-pointer"
+                  title="Clear filter"
+                >
+                  <X className="w-2.5 h-2.5" />
+                  <span>Clear</span>
+                </button>
+              )}
+            </div>
+
+            {/* Vertical Histogram Bars */}
+            <div
+              className="flex-1 min-h-0 flex items-end justify-between gap-1 pt-2 pb-1 select-none touch-none"
+              onDoubleClick={onClearLengthFilter}
+              title="Click or drag across to select length range • Double-click empty area to clear"
+            >
+              {histogramData.map(item => {
+                const isSelected = activeLengthsSet.has(item.length);
+                const heightPercent = item.count > 0 ? Math.max(14, (item.count / maxHistogramCount) * 100) : 0;
+
+                return (
+                  <div
+                    key={item.length}
+                    data-bar-length={item.length}
+                    onPointerDown={(e) => handleBarPointerDown(e, item.length)}
+                    onPointerEnter={() => {
+                      if (isRangeDraggingRef.current && rangeDragStartRef.current !== null) {
+                        if (rangeDragCurrentRef.current !== item.length) {
+                          dragMovedRef.current = true;
+                          rangeDragCurrentRef.current = item.length;
+                          setDragPreview({ start: rangeDragStartRef.current, current: item.length });
+                        }
+                      }
+                    }}
+                    className={`flex-1 flex flex-col items-center justify-end h-full group cursor-pointer transition-all rounded py-1 select-none ${
+                      isSelected
+                        ? 'bg-emerald-100/90 ring-1 ring-emerald-500 shadow-sm'
+                        : 'hover:bg-zinc-200/60'
+                    }`}
+                    title={`${item.length}-letter words (${item.count} words) • Drag across to select range`}
+                  >
+                    {/* Count Label */}
+                    <span
+                      className={`text-[9px] font-mono mb-1 transition-colors ${
+                        isSelected
+                          ? 'text-emerald-950 font-bold'
+                          : item.count > 0
+                          ? 'text-zinc-700 group-hover:text-zinc-950 font-semibold'
+                          : 'text-zinc-400'
+                      }`}
+                    >
+                      {item.count}
+                    </span>
+
+                    {/* Vertical Bar */}
+                    <div
+                      className={`w-full max-w-[18px] rounded-t-sm transition-all duration-300 ease-out ${
+                        isSelected
+                          ? 'bg-emerald-600 shadow-[0_0_10px_rgba(5,150,105,0.45)]'
+                          : item.count > 0
+                          ? 'bg-zinc-400 group-hover:bg-zinc-600 group-hover:shadow-sm'
+                          : 'bg-zinc-200'
+                      }`}
+                      style={{ height: `${heightPercent}%` }}
+                    />
+
+                    {/* Length Label */}
+                    <span
+                      className={`text-[9.5px] font-mono mt-1 ${
+                        isSelected
+                          ? 'text-emerald-950 font-bold'
+                          : 'text-zinc-600 group-hover:text-zinc-900 font-medium'
+                      }`}
+                    >
+                      {item.length}L
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

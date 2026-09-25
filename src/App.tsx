@@ -362,6 +362,8 @@ export function App() {
               onSetWordAsTarget={handleSetWordAsTarget}
               activeTargetPhrase={targetPhrase}
               onShowToast={showToast}
+              results={results}
+              isSolving={isSolving}
             />
           ) : null
         }
