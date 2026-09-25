@@ -315,6 +315,7 @@ export function App() {
       {/* Unified 3-Pane Window Split */}
       <ThreePaneSplit
         className="flex-1 w-full h-full"
+        isStageActive={Boolean(sourceName.trim() && targetPhrase.trim())}
         /* WINDOW 1: TOP KINETIC ANAGRAM STAGE */
         card1={
           sourceName.trim() && targetPhrase ? (
@@ -325,9 +326,7 @@ export function App() {
               onShowToast={showToast}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-zinc-600 font-mono text-sm p-4">
-              Enter text in the middle window to preview kinetic letter rearrangements
-            </div>
+            <div className="w-full h-full bg-white" />
           )
         }
         /* WINDOW 2: MIDDLE TARGET WORD, CONTROLS & STATUS */

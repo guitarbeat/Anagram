@@ -428,18 +428,14 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
       {/* If no leftover candidate words exist */}
       {candidateWords.length === 0 ? (
         !sourceText.trim() ? (
-          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center z-10 space-y-2 bg-white text-zinc-400 font-mono text-xs">
-            Enter a source name or phrase above to get started.
-          </div>
+          <div className="w-full h-full bg-white" />
         ) : !activeTargetPhrase.trim() ? (
-          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center z-10 space-y-2 bg-white text-zinc-400 font-mono text-xs">
-            Start typing or select words to build your target phrase.
-          </div>
+          <div className="w-full h-full bg-white" />
         ) : remainingLetters.length === 0 ? (
           <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center z-10 space-y-2 bg-white">
             <CheckCircle2 className="w-7 h-7 text-emerald-500" />
-            <div className="text-sm font-mono font-bold text-zinc-900 uppercase tracking-wide">
-              Perfect Anagram Match!
+            <div className="font-bold text-zinc-900 uppercase tracking-wide unified-app-text">
+               Perfect Match
             </div>
           </div>
         ) : (
@@ -447,10 +443,10 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
             <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-300 flex items-center justify-center text-amber-600 shadow-sm font-mono font-extrabold text-lg">
               !
             </div>
-            <div className="text-sm font-mono font-bold text-amber-950 uppercase tracking-wide">
+            <div className="font-bold text-amber-950 uppercase tracking-wide unified-app-text">
               Leftover Letters Remain!
             </div>
-            <p className="text-xs font-mono text-zinc-600 max-w-sm leading-relaxed font-semibold">
+            <p className="text-zinc-600 max-w-sm font-semibold unified-app-text">
               The letters <span className="text-rose-600 font-extrabold uppercase tracking-widest">{remainingLetters.join(', ').toUpperCase()}</span> are not accounted for, and cannot form any other dictionary words.
             </p>
           </div>

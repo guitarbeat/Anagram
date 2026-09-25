@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap');
 
 @layer base {
   :root {
@@ -16,20 +17,25 @@
     --accent-emerald-glow: rgba(16, 185, 129, 0.15);
   }
 
-  html {
+  html, body {
     color-scheme: dark;
-    scroll-behavior: smooth;
+    overflow: hidden;
+    height: 100%;
+    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    overscroll-behavior: none;
+    touch-action: manipulation;
   }
 
   body {
     background-color: var(--bg-canvas);
     color: var(--text-main);
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    min-height: 100vh;
   }
 
   code, pre, kbd, samp, .font-mono {
@@ -133,4 +139,23 @@
 
 .pb-safe {
   padding-bottom: max(1rem, env(safe-area-inset-bottom, 1rem));
+}
+
+/* Fluid, unified typography system using clamp(), rem, and em */
+.fluid-input-text {
+  font-size: clamp(0.75rem, 0.65rem + 0.6vw, 1.25rem); /* Scaled via rem and viewport vw */
+  line-height: 1.4em; /* Scale proportionally using relative em */
+  letter-spacing: 0.05em;
+}
+
+.fluid-body-text {
+  font-size: clamp(0.65rem, 0.58rem + 0.4vw, 1rem); /* Unified responsive text size */
+  line-height: 1.5em; /* Scale line-height using relative em */
+}
+
+.unified-app-text {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  font-size: clamp(0.7rem, 0.62rem + 0.5vw, 1.02rem) !important; /* Unified responsive text size using rem and viewport vw */
+  line-height: 1.5em !important; /* Scale line-height using relative em */
+  letter-spacing: 0.03em !important;
 }

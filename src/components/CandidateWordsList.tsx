@@ -34,19 +34,44 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   onShowToast,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [splitRatio, setSplitRatio] = useState<number>(0.68); // 68% left, 32% right
+  const [hasUserCustomizedSplit, setHasUserCustomizedSplit] = useState<boolean>(false);
+
+  const getAdaptiveSplit = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 640) {
+      return 0.76; // Mobile: allocate 76% to word cloud
+    }
+    return 0.68; // Desktop: allocate 68% to word cloud
+  };
+
+  const [splitRatio, setSplitRatio] = useState<number>(getAdaptiveSplit);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+
+  // Adaptively adjust on window resize if user hasn't manually customized
+  useEffect(() => {
+    if (hasUserCustomizedSplit) return;
+    const handleResize = () => {
+      setSplitRatio(getAdaptiveSplit());
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [hasUserCustomizedSplit]);
 
   const startDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    setHasUserCustomizedSplit(true);
     setIsDragging(true);
+  }, []);
+
+  const resetAdaptiveSplit = useCallback(() => {
+    setHasUserCustomizedSplit(false);
+    setSplitRatio(getAdaptiveSplit());
   }, []);
 
   const handlePointerMove = useCallback((e: PointerEvent) => {
     if (!isDragging || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const relativeX = (e.clientX - rect.left) / rect.width;
-    const clampedX = Math.max(0.25, Math.min(0.82, relativeX));
+    const clampedX = Math.max(0.25, Math.min(0.85, relativeX));
     setSplitRatio(clampedX);
   }, [isDragging]);
 
@@ -81,7 +106,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     >
       {/* LEFT: Constellation Graph View (Separate Panel) */}
       <div
-        className="h-full relative min-w-[120px] bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden"
+        className={`h-full relative min-w-[120px] bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden transition-all ${
+          isDragging ? 'duration-0' : 'duration-300 ease-out'
+        }`}
         style={{
           width: totalWords > 0 ? `${splitRatio * 100}%` : '100%',
         }}
@@ -102,18 +129,21 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
         <div
           role="separator"
           onPointerDown={startDrag}
+          onDoubleClick={resetAdaptiveSplit}
           className={`w-2.5 shrink-0 z-30 cursor-col-resize hover:bg-black/10 active:bg-black/20 relative transition-colors ${
             isDragging ? 'bg-black/15' : 'bg-transparent'
           }`}
           style={{ touchAction: 'none' }}
-          title="Drag to resize left/right panels"
+          title="Drag to resize left/right panels (Double-click to reset adaptive sizing)"
         />
       )}
 
       {/* RIGHT: Histogram Panel (Separate Panel) */}
       {totalWords > 0 && (
         <div
-          className="h-full shrink-0 bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2.5 justify-between min-w-[140px] shadow-sm"
+          className={`h-full shrink-0 bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2.5 justify-between min-w-[120px] sm:min-w-[140px] shadow-sm transition-all ${
+            isDragging ? 'duration-0' : 'duration-300 ease-out'
+          }`}
           style={{
             width: `calc(${(1 - splitRatio) * 100}% - 10px)`,
           }}

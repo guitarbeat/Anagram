@@ -54,14 +54,14 @@ export function renderRearrangementCanvas(
     h
   );
 
-  ctx.font = `bold ${fontSize}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.font = `bold ${fontSize}px 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
   // 1. In Side-by-Side mode, draw subtle transition arrow in the center
   if (isSideBySide && arrowPos) {
     ctx.save();
-    ctx.font = `bold ${Math.max(12, fontSize * 0.9)}px Inter, sans-serif`;
+    ctx.font = `bold ${Math.max(12, fontSize * 0.9)}px 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
     ctx.fillText('→', arrowPos.x, arrowPos.y);
     ctx.restore();

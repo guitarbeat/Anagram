@@ -4,6 +4,7 @@ export interface ThreePaneSplitProps {
   card1: React.ReactNode;
   card2: React.ReactNode;
   card3: React.ReactNode;
+  isStageActive?: boolean;
   divider1Accessories?: {
     leading?: React.ReactNode[];
     center?: React.ReactNode;
@@ -21,24 +22,41 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   card1,
   card2,
   card3,
+  isStageActive = false,
   divider1Accessories,
   divider2Accessories,
   className = '',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Ratios for Card 1, Card 2, Card 3
-  const [ratio1, setRatio1] = useState<number>(0.48);
+  // Track if user manually customized ratios via drag
+  const [hasUserCustomized, setHasUserCustomized] = useState<boolean>(false);
+
+  // Default ratios:
+  // When stage is active (animating): Card 1 gets 48%, Card 2 gets 11%, Card 3 gets remaining 41%
+  // When stage is inactive: Card 1 adaptively shrinks to 24%, Card 2 gets 11%, Card 3 expands to 65% for word discovery
+  const getAdaptiveRatio1 = (active: boolean) => (active ? 0.48 : 0.24);
+
+  const [ratio1, setRatio1] = useState<number>(() => getAdaptiveRatio1(isStageActive));
   const [ratio2, setRatio2] = useState<number>(0.11);
   const [activeDrag, setActiveDrag] = useState<1 | 2 | null>(null);
 
+  // Adapt panel ratios dynamically when stage state toggles unless user manually adjusted
+  useEffect(() => {
+    if (!hasUserCustomized) {
+      setRatio1(getAdaptiveRatio1(isStageActive));
+    }
+  }, [isStageActive, hasUserCustomized]);
+
   const startDrag1 = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    setHasUserCustomized(true);
     setActiveDrag(1);
   };
 
   const startDrag2 = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    setHasUserCustomized(true);
     setActiveDrag(2);
   };
 
@@ -49,14 +67,14 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
       const relativeY = (e.clientY - rect.top) / rect.height;
 
       if (activeDrag === 1) {
-        const clamped1 = Math.max(0.12, Math.min(0.60, relativeY));
-        const maxCard2 = Math.max(0.12, 0.86 - clamped1);
+        const clamped1 = Math.max(0.12, Math.min(0.65, relativeY));
+        const maxCard2 = Math.max(0.10, 0.86 - clamped1);
         const newRatio2 = Math.min(ratio2, maxCard2);
         setRatio1(clamped1);
         setRatio2(newRatio2);
       } else if (activeDrag === 2) {
         const clampedBottom = Math.max(0.18, Math.min(0.88, relativeY));
-        const newRatio2 = Math.max(0.12, clampedBottom - ratio1);
+        const newRatio2 = Math.max(0.09, clampedBottom - ratio1);
         setRatio2(newRatio2);
       }
     },
@@ -80,7 +98,8 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   }, [activeDrag, handlePointerMove, handlePointerUp]);
 
   const resetRatios = () => {
-    setRatio1(0.48);
+    setHasUserCustomized(false);
+    setRatio1(getAdaptiveRatio1(isStageActive));
     setRatio2(0.11);
   };
 
@@ -92,7 +111,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
       {/* WINDOW CARD 1: TOP KINETIC STAGE */}
       <div
         className={`w-full rounded-[18px] sm:rounded-[22px] bg-white border border-white/[0.12] shadow-2xl relative overflow-hidden transition-all flex flex-col min-h-0 shrink-0 ${
-          activeDrag ? 'duration-0' : 'duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]'
+          activeDrag ? 'duration-0' : 'duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]'
         }`}
         style={{
           height: `calc(${ratio1 * 100}% - 14px)`,

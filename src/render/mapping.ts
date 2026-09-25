@@ -62,7 +62,7 @@ export function fitFontSize(
 ): number {
   let size = start;
   while (size > 11) {
-    ctx.font = `bold ${size}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+    ctx.font = `bold ${size}px 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
     if (ctx.measureText(text).width <= maxWidth) break;
     size -= 1;
   }
@@ -77,7 +77,7 @@ export function computeGlyphLayoutAtCenter(
   centerX: number
 ): Glyph[] {
   const upperText = text.toUpperCase();
-  ctx.font = `bold ${fontSize}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.font = `bold ${fontSize}px 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
   const chars = [...upperText];
   const widths = chars.map(ch => ctx.measureText(ch).width);
   const totalWidth = widths.reduce((a, b) => a + b, 0);
