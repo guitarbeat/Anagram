@@ -110,7 +110,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
         tabIndex={0}
         onPointerDown={startDrag1}
         onDoubleClick={resetRatios}
-        className="relative w-full h-5 sm:h-6 flex items-center justify-between gap-1.5 px-2.5 z-30 bg-transparent border-0 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar"
+        className="relative w-full h-2.5 sm:h-3 flex items-center justify-between gap-1.5 px-2.5 z-30 bg-transparent border-0 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar"
         style={{ touchAction: 'none' }}
         title="Drag to resize Window 1 & 2 (Double-click to reset)"
       >
@@ -176,7 +176,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
         tabIndex={0}
         onPointerDown={startDrag2}
         onDoubleClick={resetRatios}
-        className="relative w-full h-5 sm:h-6 flex items-center justify-between gap-1.5 px-2.5 z-30 bg-transparent border-0 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar"
+        className="relative w-full h-2.5 sm:h-3 flex items-center justify-between gap-1.5 px-2.5 z-30 bg-transparent border-0 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar"
         style={{ touchAction: 'none' }}
         title="Drag to resize Window 2 & 3 (Double-click to reset)"
       >
@@ -223,7 +223,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
 
       {/* WINDOW CARD 3: BOTTOM WORDS THAT FIT (LONGEST TO SHORTEST) */}
       <div
-        className={`w-full rounded-[18px] sm:rounded-[22px] bg-[#121215] border border-white/[0.08] shadow-2xl relative overflow-hidden transition-all flex flex-col flex-1 min-h-0 ${
+        className={`w-full relative overflow-hidden transition-all flex flex-col flex-1 min-h-0 ${
           activeDrag ? 'duration-0' : 'duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]'
         }`}
         style={{

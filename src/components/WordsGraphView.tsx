@@ -398,17 +398,11 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
     <div className="w-full h-full relative overflow-hidden bg-white flex flex-col select-none">
       {/* If no leftover candidate words exist */}
       {candidateWords.length === 0 ? (
-        <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center z-10 bg-white">
-          {sourceText.trim() && activeTargetPhrase.trim() ? (
-            <>
-              <div className="text-xs font-mono font-bold text-zinc-900 uppercase tracking-wider">
-                All leftover letters used!
-              </div>
-              <div className="text-[11px] font-mono text-zinc-500 mt-1">
-                Exact anagram match complete.
-              </div>
-            </>
-          ) : null}
+        <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center z-10 space-y-2 bg-white">
+          <CheckCircle2 className="w-7 h-7 text-emerald-500" />
+          <div className="text-sm font-mono font-bold text-zinc-900 uppercase tracking-wide">
+            Perfect Anagram Match!
+          </div>
         </div>
       ) : (
         /* Canvas */

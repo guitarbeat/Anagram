@@ -40,10 +40,10 @@ const EditableBox: React.FC<EditableBoxProps> = ({ value, onChange, placeholder,
           const text = e.currentTarget.innerText.replace(/\n/g, ' ');
           onChange(text);
         }}
-        className="w-full h-full min-h-[44px] bg-white text-zinc-900 font-bold uppercase tracking-wider text-center flex items-center justify-center px-10 outline-none border-2 border-black focus:border-emerald-500 rounded select-text break-words overflow-y-auto text-sm sm:text-base md:text-lg cursor-text transition-all no-scrollbar"
+        className="w-full h-full min-h-[44px] bg-white text-zinc-900 font-bold uppercase tracking-wider text-center flex items-center justify-center px-12 outline-none border-2 border-black focus:border-emerald-500 rounded-[18px] sm:rounded-[22px] select-text break-words overflow-y-auto text-sm sm:text-base md:text-lg cursor-text transition-all no-scrollbar"
       />
       {!value && (
-        <span className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-400 font-bold uppercase tracking-wider text-center text-sm sm:text-base md:text-lg px-10">
+        <span className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-400 font-bold uppercase tracking-wider text-center text-sm sm:text-base md:text-lg px-12">
           {placeholder}
         </span>
       )}
@@ -116,7 +116,7 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
                 onTargetPhraseChange('');
               }}
               aria-label="Clear source input"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-900 p-0.5 rounded cursor-pointer transition-colors z-10"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-900 p-0.5 rounded cursor-pointer transition-colors z-10"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -157,7 +157,7 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
               type="button"
               onClick={() => onTargetPhraseChange('')}
               aria-label="Clear target input"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-900 p-0.5 rounded cursor-pointer transition-colors z-10"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-900 p-0.5 rounded cursor-pointer transition-colors z-10"
             >
               <X className="w-3.5 h-3.5" />
             </button>

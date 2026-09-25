@@ -77,11 +77,11 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full relative flex flex-row items-stretch min-h-0 text-zinc-900 select-none overflow-hidden bg-white"
+      className="w-full h-full relative flex flex-row items-stretch min-h-0 text-zinc-900 select-none overflow-hidden bg-transparent"
     >
-      {/* LEFT: Constellation Graph View */}
+      {/* LEFT: Constellation Graph View (Separate Panel) */}
       <div
-        className="h-full relative min-w-[120px]"
+        className="h-full relative min-w-[120px] bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden"
         style={{
           width: totalWords > 0 ? `${splitRatio * 100}%` : '100%',
         }}
@@ -102,54 +102,43 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
         <div
           role="separator"
           onPointerDown={startDrag}
-          className={`w-1 shrink-0 z-30 cursor-col-resize hover:bg-black active:bg-black relative transition-colors ${
-            isDragging ? 'bg-black' : 'bg-black'
+          className={`w-2.5 shrink-0 z-30 cursor-col-resize hover:bg-black/10 active:bg-black/20 relative transition-colors ${
+            isDragging ? 'bg-black/15' : 'bg-transparent'
           }`}
           style={{ touchAction: 'none' }}
           title="Drag to resize left/right panels"
         >
           {/* Grabber indicator inside divider */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5">
-            <div className="w-0.5 h-1 bg-zinc-600" />
-            <div className="w-0.5 h-1 bg-zinc-600" />
-            <div className="w-0.5 h-1 bg-zinc-600" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-0.5 pointer-events-none">
+            <div className="w-0.5 h-1 bg-zinc-500" />
+            <div className="w-0.5 h-1 bg-zinc-500" />
+            <div className="w-0.5 h-1 bg-zinc-500" />
           </div>
         </div>
       )}
 
-      {/* RIGHT: Histogram Panel */}
+      {/* RIGHT: Histogram Panel (Separate Panel) */}
       {totalWords > 0 && (
         <div
-          className="h-full shrink-0 border-l border-zinc-200 bg-zinc-50/80 flex flex-col p-2.5 justify-between min-w-[140px]"
+          className="h-full shrink-0 bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2.5 justify-between min-w-[140px] shadow-sm"
           style={{
-            width: `calc(${(1 - splitRatio) * 100}% - 4px)`,
+            width: `calc(${(1 - splitRatio) * 100}% - 10px)`,
           }}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-zinc-200">
-            <div className="flex items-center gap-1.5">
-              <BarChart3 className="w-3.5 h-3.5 text-zinc-700" />
-              <span className="text-[11px] font-mono font-bold text-zinc-900 uppercase tracking-tight">
-                Length Distribution
-              </span>
-            </div>
-
-            {selectedLengthFilter !== null ? (
+          {/* Minimal Floating Clear Badge when Filter is Active */}
+          {selectedLengthFilter !== null && (
+            <div className="flex justify-end pb-1.5 border-b border-zinc-200/60">
               <button
                 type="button"
                 onClick={onClearLengthFilter}
                 className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-mono font-bold hover:bg-emerald-200 transition-colors cursor-pointer"
                 title="Clear length filter"
               >
-                <span>{selectedLengthFilter}L</span>
+                <span>{selectedLengthFilter}L Filter Active</span>
                 <X className="w-2.5 h-2.5" />
               </button>
-            ) : (
-              <span className="text-[10px] font-mono text-zinc-500 font-medium">
-                {totalWords} words
-              </span>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Vertical Histogram Bars */}
           <div className="flex-1 min-h-0 flex items-end justify-between gap-1 pt-2 pb-1">
