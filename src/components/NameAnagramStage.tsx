@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
+import { Play, Pause, RotateCcw } from 'lucide-react';
 import { renderRearrangementCanvas } from '../render/stage';
 import type { ProgressBus } from '../hooks/useProgressBus';
 
@@ -17,6 +18,9 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [progress, setProgress] = useState<number>(() => progressBus.get());
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const animFrameRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     return progressBus.subscribe(p => {
@@ -24,12 +28,63 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
     });
   }, [progressBus]);
 
+  // Smooth auto-play loop with requestAnimationFrame
+  useEffect(() => {
+    if (!isPlaying) {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      lastTimeRef.current = null;
+      return;
+    }
+
+    const animate = (now: number) => {
+      if (lastTimeRef.current !== null) {
+        const delta = (now - lastTimeRef.current) / 1000;
+        let currentP = progressBus.get();
+        if (currentP >= 0.999) {
+          currentP = 0; // loop back to start smoothly
+        }
+        const nextP = Math.min(1, currentP + delta * 0.38); // 2.6 second full animation loop
+        progressBus.set(nextP);
+        if (nextP >= 0.999) {
+          setIsPlaying(false); // finish one cycle cleanly or pause
+        }
+      }
+      lastTimeRef.current = now;
+      animFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    animFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      lastTimeRef.current = null;
+    };
+  }, [isPlaying, progressBus]);
+
+  const togglePlay = () => {
+    if (isPlaying) {
+      setIsPlaying(false);
+    } else {
+      if (progressBus.get() >= 0.99) {
+        progressBus.set(0);
+      }
+      setIsPlaying(true);
+    }
+  };
+
+  const handleReset = () => {
+    setIsPlaying(false);
+    progressBus.set(0);
+    onShowToast('Rearrangement reset to 0%');
+  };
+
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setIsPlaying(false);
     const val = parseFloat(e.target.value);
     progressBus.set(val);
   };
 
-  // Resize canvas according to exact container client rect and device pixel ratio (1:1 pixel ratio, zero distortion)
+  // Resize canvas according to exact container client rect and device pixel ratio
   const resizeCanvasToDPR = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -83,7 +138,7 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
     };
   }, [sourceName, targetPhrase, progressBus, resizeCanvasToDPR]);
 
-  // Keyboard shortcut: KeyR = reset rearrangement to 0%
+  // Keyboard shortcut: KeyR = reset, Space = toggle play
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -99,8 +154,10 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
 
       if (e.code === 'KeyR') {
         e.preventDefault();
-        progressBus.set(0);
-        onShowToast('Rearrangement reset to 0%');
+        handleReset();
+      } else if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
       }
     };
 
@@ -108,26 +165,52 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [progressBus, onShowToast]);
+  }, [progressBus, onShowToast, isPlaying]);
 
   return (
     <div
       id="anagram-stage"
-      className="relative w-full h-full flex items-center justify-center overflow-hidden bg-white"
+      className="relative w-full h-full flex items-center justify-center overflow-hidden bg-white group select-none"
     >
       <canvas ref={canvasRef} className="w-full h-full block bg-white" />
 
-      {/* Floating Slider Control inside Top Stage Panel */}
-      <input
-        type="range"
-        min={0}
-        max={1}
-        step={0.001}
-        value={progress}
-        onChange={handleSliderChange}
-        aria-label="Kinetic rearrangement animation progress"
-        className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[90%] sm:w-[65%] md:w-[50%] max-w-md h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-black focus:outline-none z-30 transition-all"
-      />
+      {/* Floating Control Bar for Kinetic Animation */}
+      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-black/90 text-white px-3 py-1.5 rounded-full shadow-xl border border-white/20 backdrop-blur-md transition-all">
+        <button
+          type="button"
+          onClick={togglePlay}
+          aria-label={isPlaying ? 'Pause animation' : 'Play animation'}
+          className="p-1 hover:bg-white/20 rounded-full transition-colors cursor-pointer text-white"
+        >
+          {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleReset}
+          aria-label="Reset animation"
+          className="p-1 hover:bg-white/20 rounded-full transition-colors cursor-pointer text-white/80 hover:text-white"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+        </button>
+
+        <div className="w-24 sm:w-36 md:w-48 flex items-center px-1">
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.001}
+            value={progress}
+            onChange={handleSliderChange}
+            aria-label="Kinetic rearrangement animation progress"
+            className="w-full h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-white focus:outline-none transition-all"
+          />
+        </div>
+
+        <span className="text-[10px] font-mono text-white/80 min-w-[32px] text-right font-medium">
+          {Math.round(progress * 100)}%
+        </span>
+      </div>
     </div>
   );
 };

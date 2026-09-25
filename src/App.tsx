@@ -115,6 +115,13 @@ export function App() {
     };
   }, [sourceName, isAnchorPinned, filterText, allowSpicy]);
 
+  const handleSourceNameChange = useCallback((name: string) => {
+    setSourceName(name);
+    if (!name.trim()) {
+      setTargetPhrase('');
+    }
+  }, []);
+
   const handleAnimatePhrase = useCallback((phrase: string) => {
     setTargetPhrase(phrase);
     progressBus.set(0);
@@ -318,22 +325,20 @@ export function App() {
         isStageActive={Boolean(sourceName.trim() && targetPhrase.trim())}
         /* WINDOW 1: TOP KINETIC ANAGRAM STAGE */
         card1={
-          sourceName.trim() && targetPhrase ? (
+          sourceName.trim() && targetPhrase.trim() ? (
             <NameAnagramStage
               sourceName={sourceName}
               targetPhrase={targetPhrase}
               progressBus={progressBus}
               onShowToast={showToast}
             />
-          ) : (
-            <div className="w-full h-full bg-white" />
-          )
+          ) : null
         }
         /* WINDOW 2: MIDDLE TARGET WORD, CONTROLS & STATUS */
         card2={
           <TargetHistogramWindow
             sourceText={sourceName}
-            onSourceNameChange={setSourceName}
+            onSourceNameChange={handleSourceNameChange}
             targetPhrase={targetPhrase}
             onTargetPhraseChange={setTargetPhrase}
             progressBus={progressBus}
@@ -344,18 +349,20 @@ export function App() {
         }
         /* WINDOW 3: BOTTOM GRAPH VIEW + HISTOGRAM SIDEBAR */
         card3={
-          <CandidateWordsList
-            sourceText={sourceName}
-            candidateWords={candidateWords}
-            selectedLengthFilter={selectedLengthFilter}
-            onSelectLengthFilter={setSelectedLengthFilter}
-            onClearLengthFilter={() => setSelectedLengthFilter(null)}
-            histogramData={histogramData}
-            onAddWordToTarget={handleAddWordToTarget}
-            onSetWordAsTarget={handleSetWordAsTarget}
-            activeTargetPhrase={targetPhrase}
-            onShowToast={showToast}
-          />
+          sourceName.trim() ? (
+            <CandidateWordsList
+              sourceText={sourceName}
+              candidateWords={candidateWords}
+              selectedLengthFilter={selectedLengthFilter}
+              onSelectLengthFilter={setSelectedLengthFilter}
+              onClearLengthFilter={() => setSelectedLengthFilter(null)}
+              histogramData={histogramData}
+              onAddWordToTarget={handleAddWordToTarget}
+              onSetWordAsTarget={handleSetWordAsTarget}
+              activeTargetPhrase={targetPhrase}
+              onShowToast={showToast}
+            />
+          ) : null
         }
       />
     </div>

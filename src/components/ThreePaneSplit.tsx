@@ -32,21 +32,14 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   // Track if user manually customized ratios via drag
   const [hasUserCustomized, setHasUserCustomized] = useState<boolean>(false);
 
-  // Default ratios:
-  // When stage is active (animating): Card 1 gets 48%, Card 2 gets 11%, Card 3 gets remaining 41%
-  // When stage is inactive: Card 1 adaptively shrinks to 24%, Card 2 gets 11%, Card 3 expands to 65% for word discovery
-  const getAdaptiveRatio1 = (active: boolean) => (active ? 0.48 : 0.24);
+  const hasStage = Boolean(isStageActive && card1);
+  const hasCard3 = Boolean(card3);
 
-  const [ratio1, setRatio1] = useState<number>(() => getAdaptiveRatio1(isStageActive));
+  // Default ratios:
+  // When stage is active: Card 1 gets 48%, Card 2 gets 11%, Card 3 gets remaining 41%
+  const [ratio1, setRatio1] = useState<number>(0.48);
   const [ratio2, setRatio2] = useState<number>(0.11);
   const [activeDrag, setActiveDrag] = useState<1 | 2 | null>(null);
-
-  // Adapt panel ratios dynamically when stage state toggles unless user manually adjusted
-  useEffect(() => {
-    if (!hasUserCustomized) {
-      setRatio1(getAdaptiveRatio1(isStageActive));
-    }
-  }, [isStageActive, hasUserCustomized]);
 
   const startDrag1 = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -66,19 +59,24 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
       const rect = containerRef.current.getBoundingClientRect();
       const relativeY = (e.clientY - rect.top) / rect.height;
 
-      if (activeDrag === 1) {
+      if (activeDrag === 1 && hasStage) {
         const clamped1 = Math.max(0.12, Math.min(0.65, relativeY));
         const maxCard2 = Math.max(0.10, 0.86 - clamped1);
         const newRatio2 = Math.min(ratio2, maxCard2);
         setRatio1(clamped1);
         setRatio2(newRatio2);
-      } else if (activeDrag === 2) {
-        const clampedBottom = Math.max(0.18, Math.min(0.88, relativeY));
-        const newRatio2 = Math.max(0.09, clampedBottom - ratio1);
-        setRatio2(newRatio2);
+      } else if (activeDrag === 2 && hasCard3) {
+        if (hasStage) {
+          const clampedBottom = Math.max(0.18, Math.min(0.88, relativeY));
+          const newRatio2 = Math.max(0.09, clampedBottom - ratio1);
+          setRatio2(newRatio2);
+        } else {
+          const clamped2 = Math.max(0.08, Math.min(0.45, relativeY));
+          setRatio2(clamped2);
+        }
       }
     },
-    [activeDrag, ratio1, ratio2]
+    [activeDrag, hasStage, hasCard3, ratio1, ratio2]
   );
 
   const handlePointerUp = useCallback(() => {
@@ -99,7 +97,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
 
   const resetRatios = () => {
     setHasUserCustomized(false);
-    setRatio1(getAdaptiveRatio1(isStageActive));
+    setRatio1(0.48);
     setRatio2(0.11);
   };
 
@@ -108,72 +106,82 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
       ref={containerRef}
       className={`ThreePaneSplit relative flex flex-col w-full h-full min-h-0 select-none overflow-hidden bg-[#09090b] gap-0.5 ${className}`}
     >
-      {/* WINDOW CARD 1: TOP KINETIC STAGE */}
-      <div
-        className={`w-full rounded-[18px] sm:rounded-[22px] bg-white border border-white/[0.12] shadow-2xl relative overflow-hidden transition-all flex flex-col min-h-0 shrink-0 ${
-          activeDrag ? 'duration-0' : 'duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]'
-        }`}
-        style={{
-          height: `calc(${ratio1 * 100}% - 14px)`,
-          minHeight: '80px',
-        }}
-      >
-        <div className="w-full h-full overflow-y-auto no-scrollbar flex flex-col min-h-0">
-          {card1}
-        </div>
-      </div>
-
-      {/* DIVIDER BAR 1 */}
-      <div
-        role="separator"
-        tabIndex={0}
-        onPointerDown={startDrag1}
-        onDoubleClick={resetRatios}
-        className={`relative w-full h-2.5 sm:h-3 flex items-center justify-between gap-1.5 px-2.5 z-30 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar hover:bg-black/10 active:bg-black/20 ${
-          activeDrag === 1 ? 'bg-black/15' : 'bg-transparent'
-        }`}
-        style={{ touchAction: 'none' }}
-        title="Drag to resize Window 1 & 2 (Double-click to reset)"
-      >
-        {/* Leading Accessories */}
-        <div
-          className="flex items-center gap-1 pointer-events-auto shrink-0"
-          onPointerDown={e => e.stopPropagation()}
-        >
-          {divider1Accessories?.leading?.map((acc, idx) => (
-            <React.Fragment key={idx}>{acc}</React.Fragment>
-          ))}
-        </div>
-
-        {/* Center Accessory or Grabber */}
-        {divider1Accessories?.center ? (
+      {/* WINDOW CARD 1: TOP KINETIC STAGE (Only exists when not empty) */}
+      {hasStage && (
+        <>
           <div
-            className="flex items-center gap-1 pointer-events-auto shrink-0"
-            onPointerDown={e => e.stopPropagation()}
+            className={`w-full rounded-[18px] sm:rounded-[22px] bg-white border border-white/[0.12] shadow-2xl relative overflow-hidden transition-all flex flex-col min-h-0 shrink-0 ${
+              activeDrag ? 'duration-0' : 'duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]'
+            }`}
+            style={{
+              height: `calc(${ratio1 * 100}% - 14px)`,
+              minHeight: '80px',
+            }}
           >
-            {divider1Accessories.center}
+            <div className="w-full h-full overflow-y-auto no-scrollbar flex flex-col min-h-0">
+              {card1}
+            </div>
           </div>
-        ) : null}
 
-        {/* Trailing Accessories */}
-        <div
-          className="flex items-center gap-1 pointer-events-auto shrink-0"
-          onPointerDown={e => e.stopPropagation()}
-        >
-          {divider1Accessories?.trailing?.map((acc, idx) => (
-            <React.Fragment key={idx}>{acc}</React.Fragment>
-          ))}
-        </div>
-      </div>
+          {/* DIVIDER BAR 1 */}
+          <div
+            role="separator"
+            tabIndex={0}
+            onPointerDown={startDrag1}
+            onDoubleClick={resetRatios}
+            className={`relative w-full h-2.5 sm:h-3 flex items-center justify-between gap-1.5 px-2.5 z-30 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar hover:bg-black/10 active:bg-black/20 ${
+              activeDrag === 1 ? 'bg-black/15' : 'bg-transparent'
+            }`}
+            style={{ touchAction: 'none' }}
+            title="Drag to resize Window 1 & 2 (Double-click to reset)"
+          >
+            {/* Leading Accessories */}
+            <div
+              className="flex items-center gap-1 pointer-events-auto shrink-0"
+              onPointerDown={e => e.stopPropagation()}
+            >
+              {divider1Accessories?.leading?.map((acc, idx) => (
+                <React.Fragment key={idx}>{acc}</React.Fragment>
+              ))}
+            </div>
+
+            {/* Center Accessory or Grabber */}
+            {divider1Accessories?.center ? (
+              <div
+                className="flex items-center gap-1 pointer-events-auto shrink-0"
+                onPointerDown={e => e.stopPropagation()}
+              >
+                {divider1Accessories.center}
+              </div>
+            ) : null}
+
+            {/* Trailing Accessories */}
+            <div
+              className="flex items-center gap-1 pointer-events-auto shrink-0"
+              onPointerDown={e => e.stopPropagation()}
+            >
+              {divider1Accessories?.trailing?.map((acc, idx) => (
+                <React.Fragment key={idx}>{acc}</React.Fragment>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* WINDOW CARD 2: MIDDLE TARGET WORD & HISTOGRAM FILTER */}
       <div
-        className={`w-full relative overflow-hidden transition-all flex flex-col min-h-0 shrink-0 ${
-          activeDrag ? 'duration-0' : 'duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]'
-        }`}
+        className={`w-full relative overflow-hidden transition-all flex flex-col min-h-0 ${
+          !hasCard3 ? 'flex-1 justify-center' : 'shrink-0'
+        } ${activeDrag ? 'duration-0' : 'duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]'}`}
         style={{
-          height: `calc(${ratio2 * 100}% - 14px)`,
-          minHeight: '44px',
+          height: hasCard3
+            ? hasStage
+              ? `calc(${ratio2 * 100}% - 14px)`
+              : hasUserCustomized
+              ? `${ratio2 * 100}%`
+              : 'auto'
+            : 'auto',
+          minHeight: hasStage ? '44px' : '56px',
         }}
       >
         <div className="w-full h-full overflow-y-auto min-h-0">
@@ -181,62 +189,67 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
         </div>
       </div>
 
-      {/* DIVIDER BAR 2 */}
-      <div
-        role="separator"
-        tabIndex={0}
-        onPointerDown={startDrag2}
-        onDoubleClick={resetRatios}
-        className={`relative w-full h-2.5 sm:h-3 flex items-center justify-between gap-1.5 px-2.5 z-30 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar hover:bg-black/10 active:bg-black/20 ${
-          activeDrag === 2 ? 'bg-black/15' : 'bg-transparent'
-        }`}
-        style={{ touchAction: 'none' }}
-        title="Drag to resize Window 2 & 3 (Double-click to reset)"
-      >
-        {/* Leading Accessories */}
-        <div
-          className="flex items-center gap-1 pointer-events-auto shrink-0"
-          onPointerDown={e => e.stopPropagation()}
-        >
-          {divider2Accessories?.leading?.map((acc, idx) => (
-            <React.Fragment key={idx}>{acc}</React.Fragment>
-          ))}
-        </div>
-
-        {/* Center Accessory or Grabber */}
-        {divider2Accessories?.center ? (
+      {/* DIVIDER BAR 2 & CARD 3 (Only exists when card3 is non-null) */}
+      {hasCard3 && (
+        <>
+          {/* DIVIDER BAR 2 */}
           <div
-            className="flex items-center gap-1 pointer-events-auto shrink-0"
-            onPointerDown={e => e.stopPropagation()}
+            role="separator"
+            tabIndex={0}
+            onPointerDown={startDrag2}
+            onDoubleClick={resetRatios}
+            className={`relative w-full h-2.5 sm:h-3 flex items-center justify-between gap-1.5 px-2.5 z-30 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar hover:bg-black/10 active:bg-black/20 ${
+              activeDrag === 2 ? 'bg-black/15' : 'bg-transparent'
+            }`}
+            style={{ touchAction: 'none' }}
+            title="Drag to resize Window 2 & 3 (Double-click to reset)"
           >
-            {divider2Accessories.center}
+            {/* Leading Accessories */}
+            <div
+              className="flex items-center gap-1 pointer-events-auto shrink-0"
+              onPointerDown={e => e.stopPropagation()}
+            >
+              {divider2Accessories?.leading?.map((acc, idx) => (
+                <React.Fragment key={idx}>{acc}</React.Fragment>
+              ))}
+            </div>
+
+            {/* Center Accessory or Grabber */}
+            {divider2Accessories?.center ? (
+              <div
+                className="flex items-center gap-1 pointer-events-auto shrink-0"
+                onPointerDown={e => e.stopPropagation()}
+              >
+                {divider2Accessories.center}
+              </div>
+            ) : null}
+
+            {/* Trailing Accessories */}
+            <div
+              className="flex items-center gap-1 pointer-events-auto shrink-0"
+              onPointerDown={e => e.stopPropagation()}
+            >
+              {divider2Accessories?.trailing?.map((acc, idx) => (
+                <React.Fragment key={idx}>{acc}</React.Fragment>
+              ))}
+            </div>
           </div>
-        ) : null}
 
-        {/* Trailing Accessories */}
-        <div
-          className="flex items-center gap-1 pointer-events-auto shrink-0"
-          onPointerDown={e => e.stopPropagation()}
-        >
-          {divider2Accessories?.trailing?.map((acc, idx) => (
-            <React.Fragment key={idx}>{acc}</React.Fragment>
-          ))}
-        </div>
-      </div>
-
-      {/* WINDOW CARD 3: BOTTOM WORDS THAT FIT (LONGEST TO SHORTEST) */}
-      <div
-        className={`w-full relative overflow-hidden transition-all flex flex-col flex-1 min-h-0 ${
-          activeDrag ? 'duration-0' : 'duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]'
-        }`}
-        style={{
-          minHeight: '100px',
-        }}
-      >
-        <div className="w-full h-full overflow-y-auto min-h-0">
-          {card3}
-        </div>
-      </div>
+          {/* WINDOW CARD 3: BOTTOM WORDS THAT FIT (LONGEST TO SHORTEST) */}
+          <div
+            className={`w-full relative overflow-hidden transition-all flex flex-col flex-1 min-h-0 ${
+              activeDrag ? 'duration-0' : 'duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]'
+            }`}
+            style={{
+              minHeight: '100px',
+            }}
+          >
+            <div className="w-full h-full overflow-y-auto min-h-0">
+              {card3}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

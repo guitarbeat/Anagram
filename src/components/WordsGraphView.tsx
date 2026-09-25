@@ -235,6 +235,7 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
 
       // Draw Edges
       const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      const now = performance.now();
       for (const edge of edges) {
         const s = nodeMap.get(edge.source);
         const t = nodeMap.get(edge.target);
@@ -242,18 +243,24 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
 
         const isConnectedToHover = hoveredNode && (hoveredNode.id === s.id || hoveredNode.id === t.id);
 
+        ctx.save();
         ctx.beginPath();
         ctx.moveTo(s.x, s.y);
         ctx.lineTo(t.x, t.y);
 
         if (isConnectedToHover) {
-          ctx.strokeStyle = 'rgba(5, 150, 105, 0.8)';
-          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = 'rgba(5, 150, 105, 0.85)';
+          ctx.lineWidth = 1.8;
+          ctx.setLineDash([5, 5]);
+          ctx.lineDashOffset = -now / 24;
+          ctx.shadowColor = 'rgba(16, 185, 129, 0.4)';
+          ctx.shadowBlur = 6;
         } else {
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.07)';
-          ctx.lineWidth = 0.75;
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+          ctx.lineWidth = 0.8;
         }
         ctx.stroke();
+        ctx.restore();
       }
 
       // Draw Word Tags
@@ -261,41 +268,52 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
         const isHovered = hoveredNode?.id === node.id;
         const isTarget = activeTargetPhrase.toLowerCase().includes(node.word.toLowerCase());
 
-        const rx = node.x - node.width / 2;
-        const ry = node.y - node.height / 2;
+        ctx.save();
+        const scale = isHovered ? 1.12 : 1.0;
+        const width = node.width * scale;
+        const height = node.height * scale;
+        const rx = node.x - width / 2;
+        const ry = node.y - height / 2;
 
         ctx.beginPath();
         if (ctx.roundRect) {
-          ctx.roundRect(rx, ry, node.width, node.height, 5);
+          ctx.roundRect(rx, ry, width, height, 6);
         } else {
-          ctx.rect(rx, ry, node.width, node.height);
+          ctx.rect(rx, ry, width, height);
         }
 
         if (isHovered) {
           ctx.fillStyle = '#059669';
+          ctx.shadowColor = 'rgba(5, 150, 105, 0.45)';
+          ctx.shadowBlur = 12;
           ctx.fill();
           ctx.strokeStyle = '#047857';
-          ctx.lineWidth = 1.6;
+          ctx.lineWidth = 1.8;
           ctx.stroke();
         } else if (isTarget) {
           ctx.fillStyle = '#ecfdf5';
+          ctx.shadowColor = 'rgba(16, 185, 129, 0.2)';
+          ctx.shadowBlur = 8;
           ctx.fill();
           ctx.strokeStyle = '#10b981';
-          ctx.lineWidth = 1.4;
+          ctx.lineWidth = 1.5;
           ctx.stroke();
         } else {
           ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.04)';
+          ctx.shadowBlur = 4;
           ctx.fill();
           ctx.strokeStyle = node.borderColor;
           ctx.lineWidth = 1;
           ctx.stroke();
         }
 
-        ctx.font = '500 11px monospace';
+        ctx.font = `${isHovered ? '600' : '500'} ${Math.round(11 * scale)}px monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = isHovered ? '#ffffff' : isTarget ? '#047857' : '#0f172a';
         ctx.fillText(node.word, node.x, node.y + 0.5);
+        ctx.restore();
       }
 
       ctx.restore();
@@ -466,36 +484,6 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
           onWheel={handleWheel}
           className="w-full h-full cursor-grab active:cursor-grabbing touch-none bg-white"
         />
-      )}
-
-      {/* Concise Floating Zoom/Reset Controls */}
-      {candidateWords.length > 0 && (
-        <div className="absolute bottom-1.5 right-1.5 z-20 flex items-center bg-white border border-zinc-300 rounded shadow-sm text-zinc-900">
-          <button
-            type="button"
-            onClick={() => setZoom(z => Math.min(2.5, z * 1.2))}
-            title="Zoom in"
-            className="px-1.5 py-0.5 text-zinc-800 hover:text-black hover:bg-zinc-100 text-[10px] font-mono font-bold cursor-pointer transition-colors"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            onClick={() => setZoom(z => Math.max(0.3, z * 0.8))}
-            title="Zoom out"
-            className="px-1.5 py-0.5 text-zinc-800 hover:text-black hover:bg-zinc-100 text-[10px] font-mono font-bold cursor-pointer border-x border-zinc-200 transition-colors"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={resetView}
-            title="Reset graph view"
-            className="px-1.5 py-0.5 text-zinc-800 hover:text-black hover:bg-zinc-100 text-[9px] font-mono font-semibold cursor-pointer transition-colors"
-          >
-            fit
-          </button>
-        </div>
       )}
 
       {/* Concise Hover Info Tooltip */}

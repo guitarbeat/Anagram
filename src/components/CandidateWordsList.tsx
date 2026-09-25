@@ -201,11 +201,11 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
 
                   {/* Vertical Bar */}
                   <div
-                    className={`w-full max-w-[18px] rounded-t-sm transition-all duration-150 ${
+                    className={`w-full max-w-[18px] rounded-t-sm transition-all duration-300 ease-out ${
                       isSelected
-                        ? 'bg-emerald-600 shadow-[0_0_8px_rgba(5,150,105,0.4)]'
+                        ? 'bg-emerald-600 shadow-[0_0_10px_rgba(5,150,105,0.45)]'
                         : item.count > 0
-                        ? 'bg-zinc-400 group-hover:bg-zinc-600'
+                        ? 'bg-zinc-400 group-hover:bg-zinc-600 group-hover:shadow-sm'
                         : 'bg-zinc-200'
                     }`}
                     style={{ height: `${heightPercent}%` }}

@@ -98,25 +98,25 @@ export function renderRearrangementCanvas(
   for (const m of mapping) {
     ctx.save();
     ctx.beginPath();
-    const steps = 18;
+    const steps = 24;
     for (let s = 0; s <= steps; s++) {
       const normT = s / steps;
       const pt = computeLetterTransform(m, normT, motionStyle, w, h, mapping.length);
       if (s === 0) ctx.moveTo(pt.x, pt.y);
       else ctx.lineTo(pt.x, pt.y);
     }
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+    ctx.lineWidth = 1.2;
     ctx.stroke();
     ctx.restore();
   }
 
-  // 6. Draw animated letters (Black text on white canvas)
+  // 6. Draw animated letters with 3D elevation shadows & scale dynamics
   mapping.forEach(m => {
     const stagger = (m.order / Math.max(1, mapping.length)) * 0.12;
     const normT = clamp((progress - 0.08 - stagger) / 0.82);
 
-    const { x, y, rotation, scale } = computeLetterTransform(
+    const { x, y, rotation, scale, shadowBlur, shadowY } = computeLetterTransform(
       m,
       normT,
       motionStyle,
@@ -135,15 +135,19 @@ export function renderRearrangementCanvas(
 
     if (isDone) {
       ctx.fillStyle = '#000000';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
-      ctx.shadowBlur = 3;
+      ctx.shadowColor = 'rgba(16, 185, 129, 0.25)'; // Gentle emerald glow on arrival
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetY = 1;
     } else if (isMoving) {
-      ctx.fillStyle = '#18181b';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
-      ctx.shadowBlur = 3;
+      ctx.fillStyle = '#09090b';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.22)';
+      ctx.shadowBlur = Math.max(4, shadowBlur);
+      ctx.shadowOffsetY = Math.max(2, shadowY);
     } else {
-      ctx.fillStyle = '#000000';
-      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#18181b';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.06)';
+      ctx.shadowBlur = 2;
+      ctx.shadowOffsetY = 1;
     }
 
     ctx.fillText(m.char, 0, 0);

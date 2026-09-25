@@ -37,21 +37,37 @@ export function computeLetterTransform(
   _w: number,
   h: number,
   _totalLetters = 16
-): { x: number; y: number; rotation: number; scale: number; local: number } {
+): { x: number; y: number; rotation: number; scale: number; local: number; shadowBlur: number; shadowY: number } {
   const local = smoother(normT);
   let x = m.from.x + (m.to.x - m.from.x) * local;
   let y = m.from.y + (m.to.y - m.from.y) * local;
-  const scale = 1;
 
   const dir = seed01(m.order * 19) > 0.5 ? 1 : -1;
-  const archHeight = Math.min(h * 0.35, Math.max(10, 8 + seed01(m.order * 37) * 16));
-  
-  // Natural curved trajectory across canvas
-  y -= Math.sin(normT * Math.PI) * archHeight * (m.from.y === m.to.y ? (dir * 0.8) : 1);
-  x += Math.sin(normT * Math.PI) * dir * (3 + seed01(m.order * 7) * 8);
-  const rotation = Math.sin(normT * Math.PI) * (dir * 0.12);
+  const arcPeak = Math.sin(normT * Math.PI);
+  const archHeight = Math.min(h * 0.42, Math.max(14, 12 + seed01(m.order * 37) * 22));
 
-  return { x, y, rotation, scale, local };
+  // Natural curved trajectory across canvas
+  y -= arcPeak * archHeight * (m.from.y === m.to.y ? (dir * 0.85) : 1);
+  x += arcPeak * dir * (4 + seed01(m.order * 7) * 12);
+
+  // Dynamic 3D depth scale: Letters lift closer to camera mid-flight
+  let scale = 1 + arcPeak * 0.28;
+
+  // Landing spring impact pop when letter arrives at target
+  if (normT >= 0.92) {
+    const landingProgress = (normT - 0.92) / 0.08;
+    const pop = Math.sin(landingProgress * Math.PI) * 0.12;
+    scale = 1 + pop;
+  }
+
+  // Tilt/rotate during arc movement
+  const rotation = arcPeak * (dir * 0.28);
+
+  // Shadow physics for 3D elevation feeling
+  const shadowBlur = arcPeak * 16;
+  const shadowY = arcPeak * 8;
+
+  return { x, y, rotation, scale, local, shadowBlur, shadowY };
 }
 
 export function fitFontSize(
