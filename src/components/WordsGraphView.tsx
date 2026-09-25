@@ -28,9 +28,86 @@ interface TagNode {
   borderColor: string;
 }
 
-interface TagEdge {
+export interface TagEdge {
   source: string;
   target: string;
+  isSentenceFlow?: boolean;
+  reason?: string;
+  directional?: boolean;
+  dirSource?: string;
+  dirTarget?: string;
+}
+
+export function getPOS(word: string): 'determiner' | 'pronoun' | 'verb' | 'adjective' | 'preposition' | 'conjunction' | 'noun' {
+  const w = word.toLowerCase();
+  
+  const pronouns = ['i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'its', 'our', 'their', 'who', 'whom', 'whose'];
+  if (pronouns.includes(w)) return 'pronoun';
+
+  const determiners = ['the', 'a', 'an', 'this', 'that', 'these', 'those', 'some', 'any', 'all', 'no', 'every', 'each', 'both', 'either', 'neither'];
+  if (determiners.includes(w)) return 'determiner';
+
+  const prepositions = ['to', 'in', 'on', 'at', 'by', 'for', 'with', 'about', 'of', 'from', 'into', 'through', 'after', 'before', 'under', 'over', 'up', 'down', 'out', 'off', 'over', 'under', 'with', 'without', 'like', 'as'];
+  if (prepositions.includes(w)) return 'preposition';
+
+  const conjunctions = ['and', 'but', 'or', 'so', 'for', 'yet', 'nor', 'because', 'although', 'if', 'since', 'unless', 'until', 'while'];
+  if (conjunctions.includes(w)) return 'conjunction';
+
+  const verbs = [
+    'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 
+    'can', 'could', 'will', 'would', 'shall', 'should', 'may', 'might', 'must', 'go', 'goes', 'went', 'gone',
+    'get', 'gets', 'got', 'make', 'makes', 'made', 'take', 'takes', 'took', 'see', 'sees', 'saw', 'seen',
+    'find', 'finds', 'found', 'keep', 'keeps', 'kept', 'know', 'knows', 'knew', 'known', 'say', 'says', 'said',
+    'think', 'thinks', 'thought', 'come', 'comes', 'came', 'give', 'gives', 'gave', 'given', 'use', 'uses', 'used',
+    'love', 'loves', 'loved', 'like', 'likes', 'liked', 'want', 'wants', 'wanted', 'run', 'runs', 'ran',
+    'tell', 'tells', 'told', 'play', 'plays', 'played', 'show', 'shows', 'showed', 'shown', 'call', 'calls', 'called',
+    'live', 'lives', 'lived', 'eat', 'eats', 'ate', 'eaten', 'drink', 'drinks', 'drank', 'drunk', 'write', 'writes', 'wrote', 'written'
+  ];
+  if (verbs.includes(w) || w.endsWith('ing') || (w.endsWith('ed') && w.length > 4)) return 'verb';
+
+  const adjectives = [
+    'good', 'bad', 'great', 'new', 'old', 'big', 'small', 'hot', 'cold', 'happy', 'sad', 'best', 'sweet', 'nice', 'real', 'free',
+    'high', 'low', 'early', 'late', 'hard', 'easy', 'young', 'old', 'right', 'wrong', 'true', 'false', 'beautiful', 'smart'
+  ];
+  if (adjectives.includes(w) || w.endsWith('ful') || w.endsWith('less') || w.endsWith('ous') || w.endsWith('ish') || w.endsWith('ive') || w.endsWith('al') || w.endsWith('ic') || w.endsWith('able') || w.endsWith('ible')) return 'adjective';
+
+  return 'noun';
+}
+
+export function getSentenceFlow(w1: string, w2: string): { flow: boolean; reason: string } {
+  const p1 = getPOS(w1);
+  const p2 = getPOS(w2);
+
+  // Subject/Pronoun -> Verb
+  if (p1 === 'pronoun' && p2 === 'verb') return { flow: true, reason: 'Subject → Verb' };
+  
+  // Noun -> Verb
+  if (p1 === 'noun' && p2 === 'verb') return { flow: true, reason: 'Subject → Verb' };
+
+  // Verb -> Object (Pronoun, Noun) or Preposition or Adjective
+  if (p1 === 'verb' && ['pronoun', 'noun', 'preposition', 'adjective'].includes(p2)) {
+    return { flow: true, reason: `Verb → ${p2.charAt(0).toUpperCase() + p2.slice(1)}` };
+  }
+
+  // Determiner -> Adjective or Noun
+  if (p1 === 'determiner' && ['adjective', 'noun'].includes(p2)) {
+    return { flow: true, reason: `Determiner → ${p2.charAt(0).toUpperCase() + p2.slice(1)}` };
+  }
+
+  // Adjective -> Noun
+  if (p1 === 'adjective' && p2 === 'noun') return { flow: true, reason: 'Adjective → Noun' };
+
+  // Preposition -> Determiner, Pronoun, Noun, Adjective
+  if (p1 === 'preposition' && ['determiner', 'pronoun', 'noun', 'adjective'].includes(p2)) {
+    return { flow: true, reason: `Preposition → ${p2.charAt(0).toUpperCase() + p2.slice(1)}` };
+  }
+
+  // Conjunction -> Subject/Determiner/Pronoun/Noun
+  if (p1 === 'conjunction' && ['pronoun', 'noun', 'determiner'].includes(p2)) {
+    return { flow: true, reason: `Conjunction → ${p2.charAt(0).toUpperCase() + p2.slice(1)}` };
+  }
+
+  return { flow: false, reason: '' };
 }
 
 export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
@@ -43,6 +120,11 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
   onShowToast,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const lastTargetWord = useMemo(() => {
+    const words = activeTargetPhrase.trim().split(/\s+/).filter(Boolean);
+    return words.length > 0 ? words[words.length - 1] : null;
+  }, [activeTargetPhrase]);
 
   // Pan and Zoom
   const [zoom, setZoom] = useState(1);
@@ -113,7 +195,7 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
       });
     });
 
-    // Compute compatibility edges
+    // Compute compatibility and sentence flow edges
     const sourceLetters = sourceText.toLowerCase().replace(/[^a-z]/g, '');
     const sourceCounts = new Array(26).fill(0);
     for (let i = 0; i < sourceLetters.length; i++) {
@@ -121,12 +203,12 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
     }
 
     const edges: TagEdge[] = [];
-    for (let i = 0; i < Math.min(nodes.length, 35); i++) {
+    for (let i = 0; i < Math.min(nodes.length, 40); i++) {
       const n1 = nodes[i];
       let edgeCount = 0;
 
-      for (let j = i + 1; j < Math.min(nodes.length, 50); j++) {
-        if (edgeCount >= 2) break;
+      for (let j = i + 1; j < Math.min(nodes.length, 60); j++) {
+        if (edgeCount >= 3) break;
         const n2 = nodes[j];
 
         const combined = (n1.word + n2.word).toLowerCase();
@@ -142,7 +224,32 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
             }
           }
           if (fits) {
-            edges.push({ source: n1.id, target: n2.id });
+            const forward = getSentenceFlow(n1.word, n2.word);
+            const backward = getSentenceFlow(n2.word, n1.word);
+
+            if (forward.flow) {
+              edges.push({
+                source: n1.id,
+                target: n2.id,
+                isSentenceFlow: true,
+                reason: forward.reason,
+                directional: true,
+                dirSource: n1.id,
+                dirTarget: n2.id,
+              });
+            } else if (backward.flow) {
+              edges.push({
+                source: n2.id,
+                target: n1.id,
+                isSentenceFlow: true,
+                reason: backward.reason,
+                directional: true,
+                dirSource: n2.id,
+                dirTarget: n1.id,
+              });
+            } else {
+              edges.push({ source: n1.id, target: n2.id });
+            }
             edgeCount++;
           }
         }
@@ -241,25 +348,77 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
         const t = nodeMap.get(edge.target);
         if (!s || !t) continue;
 
+        const isSentenceFlow = edge.isSentenceFlow;
         const isConnectedToHover = hoveredNode && (hoveredNode.id === s.id || hoveredNode.id === t.id);
 
         ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(s.x, s.y);
-        ctx.lineTo(t.x, t.y);
 
-        if (isConnectedToHover) {
-          ctx.strokeStyle = 'rgba(5, 150, 105, 0.85)';
-          ctx.lineWidth = 1.8;
-          ctx.setLineDash([5, 5]);
-          ctx.lineDashOffset = -now / 24;
-          ctx.shadowColor = 'rgba(16, 185, 129, 0.4)';
-          ctx.shadowBlur = 6;
+        if (isSentenceFlow) {
+          ctx.beginPath();
+          // Use dirSource and dirTarget for correct arrow direction
+          const fromNode = edge.directional ? nodeMap.get(edge.dirSource!) : s;
+          const toNode = edge.directional ? nodeMap.get(edge.dirTarget!) : t;
+
+          if (fromNode && toNode) {
+            const dirAngle = Math.atan2(toNode.y - fromNode.y, toNode.x - fromNode.x);
+            const cos = Math.abs(Math.cos(dirAngle));
+            const sin = Math.abs(Math.sin(dirAngle));
+
+            const sOffset = Math.min((fromNode.width / 2) / (cos || 0.001), (fromNode.height / 2) / (sin || 0.001)) + 4;
+            const tOffset = Math.min((toNode.width / 2) / (cos || 0.001), (toNode.height / 2) / (sin || 0.001)) + 6;
+
+            const startX = fromNode.x + Math.cos(dirAngle) * sOffset;
+            const startY = fromNode.y + Math.sin(dirAngle) * sOffset;
+            const endX = toNode.x - Math.cos(dirAngle) * tOffset;
+            const endY = toNode.y - Math.sin(dirAngle) * tOffset;
+
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+
+            if (isConnectedToHover) {
+              ctx.strokeStyle = '#10b981'; // Vibrant green
+              ctx.lineWidth = 1.8;
+              ctx.setLineDash([5, 4]);
+              ctx.lineDashOffset = -now / 18;
+              ctx.shadowColor = 'rgba(16, 185, 129, 0.45)';
+              ctx.shadowBlur = 6;
+            } else {
+              ctx.strokeStyle = 'rgba(16, 185, 129, 0.35)'; // Subtle translucent green
+              ctx.lineWidth = 1.0;
+              ctx.setLineDash([4, 4]);
+              ctx.lineDashOffset = -now / 45;
+            }
+            ctx.stroke();
+
+            // Draw an arrowhead pointing at the target word of the sentence flow
+            ctx.save();
+            ctx.fillStyle = isConnectedToHover ? '#10b981' : 'rgba(16, 185, 129, 0.4)';
+            ctx.translate(endX, endY);
+            ctx.rotate(dirAngle);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(-6, -3.5);
+            ctx.lineTo(-6, 3.5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
         } else {
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
-          ctx.lineWidth = 0.8;
+          // Ordinary compatibility line
+          ctx.beginPath();
+          ctx.moveTo(s.x, s.y);
+          ctx.lineTo(t.x, t.y);
+
+          if (isConnectedToHover) {
+            ctx.strokeStyle = 'rgba(5, 150, 105, 0.45)';
+            ctx.lineWidth = 1.2;
+          } else {
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.lineWidth = 0.6;
+          }
+          ctx.stroke();
         }
-        ctx.stroke();
+
         ctx.restore();
       }
 
@@ -267,6 +426,7 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
       for (const node of nodes) {
         const isHovered = hoveredNode?.id === node.id;
         const isTarget = activeTargetPhrase.toLowerCase().includes(node.word.toLowerCase());
+        const isRecommended = lastTargetWord && getSentenceFlow(lastTargetWord, node.word).flow;
 
         ctx.save();
         const scale = isHovered ? 1.12 : 1.0;
@@ -298,6 +458,14 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
           ctx.strokeStyle = '#10b981';
           ctx.lineWidth = 1.5;
           ctx.stroke();
+        } else if (isRecommended) {
+          ctx.fillStyle = '#f0fdf4';
+          ctx.shadowColor = 'rgba(34, 197, 94, 0.25)';
+          ctx.shadowBlur = 6;
+          ctx.fill();
+          ctx.strokeStyle = '#22c55e'; // Vibrant active green
+          ctx.lineWidth = 1.6;
+          ctx.stroke();
         } else {
           ctx.fillStyle = '#ffffff';
           ctx.shadowColor = 'rgba(0, 0, 0, 0.04)';
@@ -308,10 +476,16 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
           ctx.stroke();
         }
 
-        ctx.font = `${isHovered ? '600' : '500'} ${Math.round(11 * scale)}px monospace`;
+        ctx.font = `${(isHovered || isRecommended) ? '600' : '500'} ${Math.round(11 * scale)}px monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = isHovered ? '#ffffff' : isTarget ? '#047857' : '#0f172a';
+        ctx.fillStyle = isHovered 
+          ? '#ffffff' 
+          : isTarget 
+            ? '#047857' 
+            : isRecommended 
+              ? '#15803d' 
+              : '#0f172a';
         ctx.fillText(node.word, node.x, node.y + 0.5);
         ctx.restore();
       }
@@ -322,7 +496,7 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
 
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [pan, zoom, hoveredNode, activeTargetPhrase]);
+  }, [pan, zoom, hoveredNode, activeTargetPhrase, lastTargetWord]);
 
   const screenToWorld = useCallback((screenX: number, screenY: number) => {
     const canvas = canvasRef.current;
@@ -484,15 +658,6 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
           onWheel={handleWheel}
           className="w-full h-full cursor-grab active:cursor-grabbing touch-none bg-white"
         />
-      )}
-
-      {/* Concise Hover Info Tooltip */}
-      {hoveredNode && (
-        <div className="absolute top-1.5 left-1.5 z-20 pointer-events-none text-[10px] font-mono text-zinc-900 bg-white px-2 py-0.5 rounded border border-zinc-300 shadow-md flex items-center gap-1.5">
-          <span className="text-emerald-900 font-bold">{hoveredNode.word}</span>
-          <span className="text-zinc-400">·</span>
-          <span className="text-zinc-700 font-semibold">{hoveredNode.length}L</span>
-        </div>
       )}
     </div>
   );

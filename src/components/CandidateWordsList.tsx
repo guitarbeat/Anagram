@@ -148,21 +148,6 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             width: `calc(${(1 - splitRatio) * 100}% - 10px)`,
           }}
         >
-          {/* Minimal Floating Clear Badge when Filter is Active */}
-          {selectedLengthFilter !== null && (
-            <div className="flex justify-end pb-1.5 border-b border-zinc-200/60">
-              <button
-                type="button"
-                onClick={onClearLengthFilter}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-mono font-bold hover:bg-emerald-200 transition-colors cursor-pointer"
-                title="Clear length filter"
-              >
-                <span>{selectedLengthFilter}L Filter Active</span>
-                <X className="w-2.5 h-2.5" />
-              </button>
-            </div>
-          )}
-
           {/* Vertical Histogram Bars */}
           <div className="flex-1 min-h-0 flex items-end justify-between gap-1 pt-2 pb-1">
             {histogramData.map(item => {

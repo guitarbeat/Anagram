@@ -114,6 +114,8 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
     };
   }, [isDragging]);
 
+  const hasSource = Boolean(sourceText.trim());
+
   return (
     <div
       ref={containerRef}
@@ -126,7 +128,7 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
           className={`relative flex items-stretch min-w-[80px] sm:min-w-[100px] transition-all ${
             isDragging ? 'duration-0' : 'duration-300 ease-out'
           }`}
-          style={{ width: `${widthRatio * 100}%` }}
+          style={{ width: hasSource ? `${widthRatio * 100}%` : '100%' }}
         >
           <EditableBox
             id="source-input"
@@ -149,42 +151,46 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
           )}
         </div>
 
-        {/* MIDDLE VERTICAL RESIZER FOR INPUTS */}
-        <div
-          role="separator"
-          onPointerDown={startDrag}
-          onDoubleClick={resetAdaptiveWidth}
-          className={`w-2.5 shrink-0 z-30 cursor-col-resize hover:bg-black/10 active:bg-black/20 relative transition-all ${
-            isDragging ? 'bg-black/15' : 'bg-transparent'
-          }`}
-          style={{ touchAction: 'none' }}
-          title="Drag to resize input widths (Double-click to reset adaptive sizing)"
-        />
+        {/* MIDDLE VERTICAL RESIZER & Target Input (Only when sourceText has text) */}
+        {hasSource && (
+          <>
+            <div
+              role="separator"
+              onPointerDown={startDrag}
+              onDoubleClick={resetAdaptiveWidth}
+              className={`w-2.5 shrink-0 z-30 cursor-col-resize hover:bg-black/10 active:bg-black/20 relative transition-all ${
+                isDragging ? 'bg-black/15' : 'bg-transparent'
+              }`}
+              style={{ touchAction: 'none' }}
+              title="Drag to resize input widths (Double-click to reset adaptive sizing)"
+            />
 
-        {/* Target Input Panel */}
-        <div
-          className={`relative flex items-stretch min-w-[80px] sm:min-w-[100px] transition-all ${
-            isDragging ? 'duration-0' : 'duration-300 ease-out'
-          }`}
-          style={{ width: `calc(${(1 - widthRatio) * 100}% - 6px)` }}
-        >
-          <EditableBox
-            id="target-input"
-            value={targetPhrase}
-            onChange={onTargetPhraseChange}
-            placeholder="Remix it"
-          />
-          {targetPhrase && (
-            <button
-              type="button"
-              onClick={() => onTargetPhraseChange('')}
-              aria-label="Clear target input"
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-900 p-0.5 rounded cursor-pointer transition-colors z-10"
+            {/* Target Input Panel */}
+            <div
+              className={`relative flex items-stretch min-w-[80px] sm:min-w-[100px] transition-all ${
+                isDragging ? 'duration-0' : 'duration-300 ease-out'
+              }`}
+              style={{ width: `calc(${(1 - widthRatio) * 100}% - 6px)` }}
             >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
+              <EditableBox
+                id="target-input"
+                value={targetPhrase}
+                onChange={onTargetPhraseChange}
+                placeholder="Remix it"
+              />
+              {targetPhrase && (
+                <button
+                  type="button"
+                  onClick={() => onTargetPhraseChange('')}
+                  aria-label="Clear target input"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-900 p-0.5 rounded cursor-pointer transition-colors z-10"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
