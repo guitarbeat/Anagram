@@ -1,13 +1,9 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { WordsGraphView } from './WordsGraphView';
-import { BarChart3, X, Sparkles, Copy, Check, ArrowUpRight } from 'lucide-react';
-import type { AnagramResult } from '../engine/types';
+import { Sparkles, Copy, Check, ArrowUpRight, CheckCircle2, AlertTriangle } from 'lucide-react';
+import type { AnagramResult, CandidateWordItem, HistogramBin, LetterBudgetSummary } from '../engine/types';
 
-export interface CandidateWordItem {
-  word: string;
-  length: number;
-  freq: number;
-}
+export type { CandidateWordItem };
 
 export interface CandidateWordsListProps {
   sourceText: string;
@@ -15,13 +11,17 @@ export interface CandidateWordsListProps {
   selectedLengthFilter: number[] | number | null;
   onSelectLengthFilter: (lengths: number[] | null) => void;
   onClearLengthFilter: () => void;
-  histogramData: { length: number; count: number }[];
+  histogramData: HistogramBin[];
   onAddWordToTarget: (word: string) => void;
   onSetWordAsTarget: (word: string) => void;
   activeTargetPhrase?: string;
   onShowToast: (text: string, type?: 'success' | 'info' | 'error') => void;
   results?: AnagramResult[];
   isSolving?: boolean;
+  exactClosers?: string[];
+  remainingLetters?: string[];
+  surplusLetters?: string[];
+  budget?: LetterBudgetSummary;
 }
 
 export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
@@ -37,10 +37,14 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   onShowToast,
   results = [],
   isSolving = false,
+  exactClosers = [],
+  remainingLetters = [],
+  surplusLetters = [],
+  budget: _budget,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hasUserCustomizedSplit, setHasUserCustomizedSplit] = useState<boolean>(false);
-  const [topTab, setTopTab] = useState<'anagrams' | 'words'>('anagrams');
+  const [topTab, _setTopTab] = useState<'anagrams' | 'words'>('anagrams');
   const [copiedPhrase, setCopiedPhrase] = useState<string | null>(null);
 
   const getAdaptiveSplit = () => {
@@ -290,51 +294,84 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             width: `calc(${(1 - splitRatio) * 100}% - 10px)`,
           }}
         >
-          {/* TOP CARD (Red Box 1): Solved Anagrams & Suggestions */}
+          {/* TOP CARD (Red Box 1): Solved Anagrams, Exact Closers & Suggestions */}
           <div className="flex-1 min-h-0 bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2.5 shadow-sm">
             {/* Body */}
             <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar space-y-1">
-              {topTab === 'anagrams' ? (
-                isSolving ? (
-                  <div className="h-full flex flex-col items-center justify-center p-3 text-center">
-                    <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mb-1" />
-                    <span className="text-[10px] font-mono text-zinc-400">Solving...</span>
+              {/* Case 1: Surplus Illegal Letter */}
+              {surplusLetters.length > 0 ? (
+                <div className="h-full flex flex-col items-center justify-center p-2 text-center select-none">
+                  <AlertTriangle className="w-5 h-5 text-amber-500 mb-1" />
+                  <span className="text-[11px] font-mono font-bold text-amber-900 uppercase">
+                    Surplus: {surplusLetters.join(', ').toUpperCase()}
+                  </span>
+                  <span className="text-[9.5px] font-mono text-zinc-500 mt-0.5">
+                    Delete extra letters to match
+                  </span>
+                </div>
+              ) : exactClosers.length > 0 && activeTargetPhrase.trim().length > 0 ? (
+                /* Case 2: Exact Closers (100% finishing words for leftover letters) */
+                <>
+                  <div className="text-[9px] font-mono font-bold text-emerald-800 uppercase tracking-wider px-1 pb-1 flex items-center gap-1 border-b border-zinc-100 sticky top-0 bg-white z-10">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span>Exact Closers ({exactClosers.length})</span>
                   </div>
-                ) : results && results.length > 0 ? (
-                  results.slice(0, 50).map((r, idx) => (
+                  {exactClosers.slice(0, 40).map((closer, idx) => (
                     <div
                       key={idx}
-                      onClick={() => onSetWordAsTarget(r.phrase)}
-                      className="group flex items-center justify-between p-1.5 rounded-lg hover:bg-emerald-50/80 border border-transparent hover:border-emerald-200 transition-all cursor-pointer select-none"
-                      title="Click to remix this anagram"
+                      onClick={() => onAddWordToTarget(closer)}
+                      className="group flex items-center justify-between p-1.5 rounded-lg bg-emerald-50/70 hover:bg-emerald-100 border border-emerald-200/70 transition-all cursor-pointer select-none"
+                      title="Click to complete anagram 100%"
                     >
-                      <span className="text-[11px] font-mono font-bold text-zinc-800 group-hover:text-emerald-950 uppercase truncate pr-1">
-                        {r.phrase}
-                      </span>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => handleCopyPhrase(r.phrase, e)}
-                          className="p-1 text-zinc-400 hover:text-zinc-700 transition-colors"
-                          title="Copy"
-                        >
-                          {copiedPhrase === r.phrase ? (
-                            <Check className="w-3 h-3 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
-                        <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-mono font-bold text-emerald-700">+</span>
+                        <span className="text-[11px] font-mono font-bold text-emerald-950 uppercase truncate">
+                          {closer}
+                        </span>
                       </div>
+                      <span className="text-[8.5px] font-mono bg-emerald-200/80 text-emerald-900 font-bold px-1 rounded">
+                        100%
+                      </span>
                     </div>
-                  ))
-                ) : (
-                  <div className="h-full flex items-center justify-center text-center p-3">
-                    <span className="text-[10px] font-mono text-zinc-400">No anagrams found</span>
+                  ))}
+                </>
+              ) : isSolving ? (
+                /* Case 3: Solving */
+                <div className="h-full flex flex-col items-center justify-center p-3 text-center">
+                  <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mb-1" />
+                  <span className="text-[10px] font-mono text-zinc-400">Solving...</span>
+                </div>
+              ) : results && results.length > 0 ? (
+                /* Case 4: Full Solved Anagram Phrases */
+                results.slice(0, 50).map((r, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => onSetWordAsTarget(r.phrase)}
+                    className="group flex items-center justify-between p-1.5 rounded-lg hover:bg-emerald-50/80 border border-transparent hover:border-emerald-200 transition-all cursor-pointer select-none"
+                    title="Click to remix this anagram"
+                  >
+                    <span className="text-[11px] font-mono font-bold text-zinc-800 group-hover:text-emerald-950 uppercase truncate pr-1">
+                      {r.phrase}
+                    </span>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => handleCopyPhrase(r.phrase, e)}
+                        className="p-1 text-zinc-400 hover:text-zinc-700 transition-colors"
+                        title="Copy"
+                      >
+                        {copiedPhrase === r.phrase ? (
+                          <Check className="w-3 h-3 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </button>
+                      <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                    </div>
                   </div>
-                )
-              ) : (
-                /* Words tab */
+                ))
+              ) : candidateWords.length > 0 ? (
+                /* Case 5: Candidate words */
                 candidateWords.slice(0, 60).map((w, idx) => (
                   <div
                     key={idx}
@@ -350,6 +387,10 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                     </span>
                   </div>
                 ))
+              ) : (
+                <div className="h-full flex items-center justify-center text-center p-3">
+                  <span className="text-[10px] font-mono text-zinc-400">No suggestions</span>
+                </div>
               )}
             </div>
           </div>
