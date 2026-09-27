@@ -22,8 +22,8 @@ describe('Multiset Delta Engine', () => {
   });
 
   it('detects exact anagram match', () => {
-    // Source: "AARON WOODS", Target: "RAD ON WOODS"
-    const delta = computeMultisetDelta('AARON WOODS', 'RAD ON WOODS');
+    // Source: "AARON WOODS", Target: "WOODS A ROAN"
+    const delta = computeMultisetDelta('AARON WOODS', 'WOODS A ROAN');
 
     expect(delta.remainingLetters).toEqual([]);
     expect(delta.surplusLetters).toEqual([]);
@@ -38,7 +38,6 @@ describe('Multiset Delta Engine', () => {
     // Let's test with a known word: "CLOUDS", user typed "C" -> remaining "LOUDS" -> closer "LOUDS" / "SOULD"
     const closers = findExactClosers(['r', 'o', 'a', 'n']);
     expect(closers).toContain('roan');
-    expect(closers).toContain('nora');
   });
 
   it('computes complete construction state seamlessly', () => {

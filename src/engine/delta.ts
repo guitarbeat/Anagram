@@ -150,10 +150,10 @@ export function findExactClosers(remainingLetters: string[], limit = 30): string
     if (word.length !== targetLen) continue;
     if (LETTER_MASKS[w] !== remMask) continue;
 
-    const wCounts = LETTER_COUNTS[w];
+    const offset = w * 26;
     let isExact = true;
     for (let i = 0; i < 26; i++) {
-      if (wCounts[i] !== remCounts[i]) {
+      if (LETTER_COUNTS[offset + i] !== remCounts[i]) {
         isExact = false;
         break;
       }
@@ -188,10 +188,10 @@ export function findCandidateWords(letterPool: string, limit = 1200): CandidateW
     // Fast bitwise test: does candidate require letters not present in pool?
     if ((wordMask & ~poolMask) !== 0) continue;
 
-    const wCounts = LETTER_COUNTS[w];
+    const offset = w * 26;
     let fits = true;
     for (let i = 0; i < 26; i++) {
-      if (wCounts[i] > poolCounts[i]) {
+      if (LETTER_COUNTS[offset + i] > poolCounts[i]) {
         fits = false;
         break;
       }

@@ -29,6 +29,18 @@ const EditableBox: React.FC<EditableBoxProps> = ({ value, onChange, placeholder,
     }
   }, [value]);
 
+  const handleFocus = () => {
+    // Keep window and body anchored to (0,0) so mobile Safari doesn't scroll inputs off-screen
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+    });
+    setTimeout(() => {
+      window.scrollTo(0, 0);
+    }, 100);
+  };
+
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-white border-2 border-black focus-within:border-emerald-500 rounded-[18px] sm:rounded-[22px] px-3 sm:px-6 transition-all overflow-hidden">
       <div
@@ -36,14 +48,15 @@ const EditableBox: React.FC<EditableBoxProps> = ({ value, onChange, placeholder,
         id={id}
         contentEditable
         suppressContentEditableWarning
+        onFocus={handleFocus}
         onInput={e => {
           const text = e.currentTarget.innerText.replace(/\n/g, ' ');
           onChange(text);
         }}
-        className="w-full text-center bg-transparent text-zinc-900 font-bold uppercase tracking-wider text-xs sm:text-sm md:text-base outline-none select-text break-words cursor-text py-2 px-3 max-h-full overflow-y-auto no-scrollbar unified-app-text"
+        className="w-full text-center bg-transparent text-zinc-900 font-bold uppercase tracking-wider text-base sm:text-base md:text-lg outline-none select-text break-words cursor-text py-1 px-3 max-h-full overflow-y-auto no-scrollbar unified-app-text"
       />
       {!value && (
-        <span className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-500 font-bold uppercase tracking-wider text-[11px] sm:text-sm text-center px-4 sm:px-6 select-none unified-app-text">
+        <span className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-500 font-bold uppercase tracking-wider text-xs sm:text-sm text-center px-4 sm:px-6 select-none unified-app-text">
           {placeholder}
         </span>
       )}

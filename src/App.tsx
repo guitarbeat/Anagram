@@ -7,6 +7,7 @@ import { CandidateWordsList } from './components/CandidateWordsList';
 import { ThreePaneSplit } from './components/ThreePaneSplit';
 import { useProgressBus } from './hooks/useProgressBus';
 import { useAnagramDelta } from './hooks/useAnagramDelta';
+import { useVisualViewport } from './hooks/useVisualViewport';
 
 interface ToastMessage {
   id: string;
@@ -184,6 +185,9 @@ export function App() {
     budget,
   } = useAnagramDelta(sourceName, targetPhrase);
 
+  // Track dynamic visual viewport height to prevent keyboard from pushing UI out of view
+  const { viewportHeight, isKeyboardOpen } = useVisualViewport();
+
   const handleAddWordToTarget = useCallback((word: string) => {
     setTargetPhrase(prev => {
       const trimmed = prev.trim();
@@ -198,11 +202,18 @@ export function App() {
   }, [progressBus]);
 
   return (
-    <div className="h-[100dvh] w-screen max-h-[100dvh] bg-[#09090b] text-[#f4f4f5] flex flex-col overflow-hidden p-1 selection:bg-emerald-900 selection:text-emerald-200">
+    <div
+      style={{
+        height: `${viewportHeight}px`,
+        maxHeight: `${viewportHeight}px`,
+      }}
+      className="w-full bg-[#09090b] text-[#f4f4f5] flex flex-col overflow-hidden p-1 selection:bg-emerald-900 selection:text-emerald-200 fixed inset-0"
+    >
       {/* Unified 3-Pane Window Split */}
       <ThreePaneSplit
-        className="flex-1 w-full h-full"
+        className="flex-1 w-full h-full min-h-0"
         isStageActive={Boolean(sourceName.trim() && targetPhrase.trim())}
+        isKeyboardOpen={isKeyboardOpen}
         /* WINDOW 1: TOP KINETIC ANAGRAM STAGE */
         card1={
           sourceName.trim() && targetPhrase.trim() ? (

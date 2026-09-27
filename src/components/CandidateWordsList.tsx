@@ -1,6 +1,18 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { WordsGraphView } from './WordsGraphView';
-import { Sparkles, Copy, Check, ArrowUpRight, CheckCircle2, AlertTriangle } from 'lucide-react';
+import {
+  Sparkles,
+  Copy,
+  Check,
+  ArrowUpRight,
+  CheckCircle2,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
+} from 'lucide-react';
 import type { AnagramResult, CandidateWordItem, HistogramBin, LetterBudgetSummary } from '../engine/types';
 
 export type { CandidateWordItem };
@@ -56,6 +68,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
 
   const [splitRatio, setSplitRatio] = useState<number>(getAdaptiveSplit);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [soloSubPanel, setSoloSubPanel] = useState<'graph' | 'cards' | null>(null);
 
   // Range Drag and Multi-select state
   const rangeDragStartRef = useRef<number | null>(null);
@@ -245,55 +258,118 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     return histogramData.reduce((acc, curr) => acc + curr.count, 0);
   }, [histogramData]);
 
+  const showLeftGraph = totalWords > 0 && soloSubPanel !== 'cards';
+  const showRightCards = totalWords > 0 && soloSubPanel !== 'graph';
+
   return (
     <div
       ref={containerRef}
-      className="w-full h-full relative flex flex-row items-stretch min-h-0 text-zinc-900 select-none overflow-hidden bg-transparent"
+      className="w-full h-full relative flex flex-row items-stretch min-h-0 text-zinc-900 select-none overflow-hidden bg-transparent gap-0.5"
     >
       {/* LEFT: Constellation Graph View (Separate Panel) */}
-      <div
-        className={`h-full relative min-w-[120px] bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden transition-all ${
-          isDragging ? 'duration-0' : 'duration-300 ease-out'
-        }`}
-        style={{
-          width: totalWords > 0 ? `${splitRatio * 100}%` : '100%',
-        }}
-      >
-        <WordsGraphView
-          sourceText={sourceText}
-          candidateWords={candidateWords}
-          selectedLengthFilter={selectedLengthFilter}
-          onAddWordToTarget={onAddWordToTarget}
-          onSetWordAsTarget={onSetWordAsTarget}
-          activeTargetPhrase={activeTargetPhrase}
-          onShowToast={onShowToast}
-        />
-      </div>
+      {showLeftGraph && (
+        <div
+          className={`h-full relative min-w-[120px] bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden transition-all flex flex-col ${
+            isDragging ? 'duration-0' : 'duration-300 ease-out'
+          }`}
+          style={{
+            width: !showRightCards
+              ? '100%'
+              : `${splitRatio * 100}%`,
+          }}
+        >
+          {soloSubPanel === 'graph' && (
+            <button
+              type="button"
+              onClick={() => setSoloSubPanel(null)}
+              className="absolute top-2 right-2 z-20 px-2 py-1 bg-zinc-900/80 hover:bg-zinc-900 text-white rounded-lg text-[9px] font-mono font-bold flex items-center gap-1 shadow-md transition-all"
+              title="Restore Split View"
+            >
+              <Minimize2 className="w-2.5 h-2.5" />
+              <span>Restore Split</span>
+            </button>
+          )}
 
-      {/* DRAGGABLE VERTICAL RESIZER DIVIDER */}
-      {totalWords > 0 && (
+          <div className="flex-1 w-full h-full min-h-0">
+            <WordsGraphView
+              sourceText={sourceText}
+              candidateWords={candidateWords}
+              selectedLengthFilter={selectedLengthFilter}
+              onAddWordToTarget={onAddWordToTarget}
+              onSetWordAsTarget={onSetWordAsTarget}
+              activeTargetPhrase={activeTargetPhrase}
+              onShowToast={onShowToast}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* DRAGGABLE VERTICAL RESIZER DIVIDER & MINIMIZE CONTROLS */}
+      {showLeftGraph && showRightCards && (
         <div
           role="separator"
           onPointerDown={startDrag}
           onDoubleClick={resetAdaptiveSplit}
-          className={`w-2.5 shrink-0 z-30 cursor-col-resize hover:bg-black/10 active:bg-black/20 relative transition-colors ${
-            isDragging ? 'bg-black/15' : 'bg-transparent'
+          className={`w-3 sm:w-3.5 shrink-0 z-30 cursor-col-resize hover:bg-white/10 active:bg-white/20 relative transition-colors flex flex-col items-center justify-between py-2 ${
+            isDragging ? 'bg-white/15' : 'bg-transparent'
           }`}
           style={{ touchAction: 'none' }}
-          title="Drag to resize left/right panels (Double-click to reset adaptive sizing)"
-        />
+          title="Drag to resize left/right panels (Double-click to reset)"
+        >
+          {/* Top Collapse/Solo Buttons */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSoloSubPanel('cards');
+            }}
+            className="p-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+            title="Minimize Graph (Show Cards Fullscreen)"
+          >
+            <ChevronLeft className="w-2.5 h-2.5" />
+          </button>
+
+          {/* Center Drag Pill */}
+          <div className="w-1 h-8 rounded-full bg-zinc-600 opacity-40 hover:opacity-100 transition-opacity" />
+
+          {/* Bottom Collapse/Solo Buttons */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSoloSubPanel('graph');
+            }}
+            className="p-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+            title="Minimize Cards (Show Graph Fullscreen)"
+          >
+            <ChevronRight className="w-2.5 h-2.5" />
+          </button>
+        </div>
       )}
 
-      {/* RIGHT: Dual Card Column (Top Card & Bottom Card matching red boxes) */}
-      {totalWords > 0 && (
+      {/* RIGHT: Dual Card Column (Top Card & Bottom Card) */}
+      {showRightCards && (
         <div
-          className={`h-full shrink-0 flex flex-col gap-2 min-w-[140px] sm:min-w-[170px] transition-all ${
-            isDragging ? 'duration-0' : 'duration-300 ease-out'
-          }`}
+          className={`h-full relative flex flex-col gap-2 min-w-[140px] sm:min-w-[170px] transition-all ${
+            !showLeftGraph ? 'flex-1' : 'shrink-0'
+          } ${isDragging ? 'duration-0' : 'duration-300 ease-out'}`}
           style={{
-            width: `calc(${(1 - splitRatio) * 100}% - 10px)`,
+            width: !showLeftGraph
+              ? '100%'
+              : `calc(${(1 - splitRatio) * 100}% - 12px)`,
           }}
         >
+          {soloSubPanel === 'cards' && (
+            <button
+              type="button"
+              onClick={() => setSoloSubPanel(null)}
+              className="absolute top-2 right-2 z-20 px-2 py-1 bg-zinc-900/80 hover:bg-zinc-900 text-white rounded-lg text-[9px] font-mono font-bold flex items-center gap-1 shadow-md transition-all"
+              title="Restore Split View"
+            >
+              <Minimize2 className="w-2.5 h-2.5" />
+              <span>Restore Split</span>
+            </button>
+          )}
           {/* TOP CARD (Red Box 1): Solved Anagrams, Exact Closers & Suggestions */}
           <div className="flex-1 min-h-0 bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2.5 shadow-sm">
             {/* Body */}
