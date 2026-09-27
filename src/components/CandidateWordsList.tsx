@@ -9,6 +9,8 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Maximize2,
   Minimize2,
   RotateCcw,
@@ -69,6 +71,42 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   const [splitRatio, setSplitRatio] = useState<number>(getAdaptiveSplit);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [soloSubPanel, setSoloSubPanel] = useState<'graph' | 'cards' | null>(null);
+
+  // Vertical split state for Right Column (Top Suggestions vs Bottom Histogram)
+  const rightColumnRef = useRef<HTMLDivElement>(null);
+  const [cardSplitRatio, setCardSplitRatio] = useState<number>(0.52);
+  const [isCardDragging, setIsCardDragging] = useState<boolean>(false);
+  const [isSuggestionsMinimized, setIsSuggestionsMinimized] = useState<boolean>(false);
+  const [isHistogramMinimized, setIsHistogramMinimized] = useState<boolean>(false);
+
+  const startCardDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsCardDragging(true);
+  }, []);
+
+  const handleCardPointerMove = useCallback((e: PointerEvent) => {
+    if (!isCardDragging || !rightColumnRef.current) return;
+    const rect = rightColumnRef.current.getBoundingClientRect();
+    const relativeY = (e.clientY - rect.top) / rect.height;
+    const clampedY = Math.max(0.15, Math.min(0.85, relativeY));
+    setCardSplitRatio(clampedY);
+  }, [isCardDragging]);
+
+  const handleCardPointerUp = useCallback(() => {
+    setIsCardDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isCardDragging) return;
+    window.addEventListener('pointermove', handleCardPointerMove);
+    window.addEventListener('pointerup', handleCardPointerUp);
+    window.addEventListener('pointercancel', handleCardPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handleCardPointerMove);
+      window.removeEventListener('pointerup', handleCardPointerUp);
+      window.removeEventListener('pointercancel', handleCardPointerUp);
+    };
+  }, [isCardDragging, handleCardPointerMove, handleCardPointerUp]);
 
   // Range Drag and Multi-select state
   const rangeDragStartRef = useRef<number | null>(null);
@@ -264,8 +302,27 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full relative flex flex-row items-stretch min-h-0 text-zinc-900 select-none overflow-hidden bg-transparent gap-0.5"
+      className="w-full h-full relative flex flex-row items-stretch min-h-0 text-zinc-900 select-none overflow-hidden bg-transparent gap-0.5 animate-fade-in-up"
     >
+      {/* MINIMIZED VERTICAL PILL FOR GRAPH ON LEFT */}
+      {totalWords > 0 && soloSubPanel === 'cards' && (
+        <div
+          onClick={() => setSoloSubPanel(null)}
+          className="h-full w-7 bg-zinc-900 hover:bg-zinc-800 border-2 border-black rounded-[14px] flex flex-col items-center justify-between py-3 cursor-pointer transition-colors shrink-0 text-white select-none shadow-md"
+          title="Expand Graph View"
+        >
+          <div className="flex flex-col items-center gap-1.5 [writing-mode:vertical-lr] rotate-180">
+            <ChevronLeft className="w-3.5 h-3.5 text-emerald-400 rotate-90" />
+            <span className="text-[9.5px] font-mono text-zinc-400 font-bold uppercase tracking-widest">
+              Graph View
+            </span>
+          </div>
+          <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase [writing-mode:vertical-lr] rotate-180">
+            Expand
+          </span>
+        </div>
+      )}
+
       {/* LEFT: Constellation Graph View (Separate Panel) */}
       {showLeftGraph && (
         <div
@@ -278,18 +335,6 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
               : `${splitRatio * 100}%`,
           }}
         >
-          {soloSubPanel === 'graph' && (
-            <button
-              type="button"
-              onClick={() => setSoloSubPanel(null)}
-              className="absolute top-2 right-2 z-20 px-2 py-1 bg-zinc-900/80 hover:bg-zinc-900 text-white rounded-lg text-[9px] font-mono font-bold flex items-center gap-1 shadow-md transition-all"
-              title="Restore Split View"
-            >
-              <Minimize2 className="w-2.5 h-2.5" />
-              <span>Restore Split</span>
-            </button>
-          )}
-
           <div className="flex-1 w-full h-full min-h-0">
             <WordsGraphView
               sourceText={sourceText}
@@ -310,240 +355,393 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
           role="separator"
           onPointerDown={startDrag}
           onDoubleClick={resetAdaptiveSplit}
-          className={`w-3 sm:w-3.5 shrink-0 z-30 cursor-col-resize hover:bg-white/10 active:bg-white/20 relative transition-colors flex flex-col items-center justify-between py-2 ${
-            isDragging ? 'bg-white/15' : 'bg-transparent'
-          }`}
+          className="w-3.5 sm:w-4 shrink-0 z-30 cursor-col-resize relative flex flex-col items-center justify-center transition-all group"
           style={{ touchAction: 'none' }}
           title="Drag to resize left/right panels (Double-click to reset)"
         >
-          {/* Top Collapse/Solo Buttons */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSoloSubPanel('cards');
-            }}
-            className="p-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
-            title="Minimize Graph (Show Cards Fullscreen)"
-          >
-            <ChevronLeft className="w-2.5 h-2.5" />
-          </button>
+          {/* Razor-thin continuous vertical line with active emerald laser highlight */}
+          <div
+            className={`absolute inset-y-0 w-[1px] transition-colors duration-300 ${
+              isDragging ? 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-800 group-hover:bg-zinc-700'
+            }`}
+          />
 
-          {/* Center Drag Pill */}
-          <div className="w-1 h-8 rounded-full bg-zinc-600 opacity-40 hover:opacity-100 transition-opacity" />
-
-          {/* Bottom Collapse/Solo Buttons */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSoloSubPanel('graph');
-            }}
-            className="p-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
-            title="Minimize Cards (Show Graph Fullscreen)"
+          {/* High-fidelity vertical glass capsule controller handle with active drag response */}
+          <div
+            className={`relative z-10 flex flex-col items-center gap-1.5 p-1 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
+              isDragging
+                ? 'border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.25)] scale-105'
+                : 'border border-zinc-800/80 group-hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.22)] shadow-lg group-hover:scale-105'
+            }`}
           >
-            <ChevronRight className="w-2.5 h-2.5" />
-          </button>
+            {/* Top Collapse Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSoloSubPanel('cards');
+              }}
+              className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
+              title="Minimize Graph (Show Cards)"
+            >
+              <ChevronLeft className="w-3 h-3" />
+            </button>
+
+            {/* Tiny grip indicator */}
+            <div className="flex flex-col gap-0.5 justify-center items-center py-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
+              <div className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+              <div className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+            </div>
+
+            {/* Bottom Collapse Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSoloSubPanel('graph');
+              }}
+              className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
+              title="Minimize Cards (Show Graph)"
+            >
+              <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
         </div>
       )}
 
       {/* RIGHT: Dual Card Column (Top Card & Bottom Card) */}
       {showRightCards && (
         <div
-          className={`h-full relative flex flex-col gap-2 min-w-[140px] sm:min-w-[170px] transition-all ${
+          ref={rightColumnRef}
+          className={`h-full relative flex flex-col gap-1.5 min-w-[140px] sm:min-w-[170px] transition-all ${
             !showLeftGraph ? 'flex-1' : 'shrink-0'
-          } ${isDragging ? 'duration-0' : 'duration-300 ease-out'}`}
+          } ${isDragging || isCardDragging ? 'duration-0' : 'duration-300 ease-out'}`}
           style={{
             width: !showLeftGraph
               ? '100%'
               : `calc(${(1 - splitRatio) * 100}% - 12px)`,
           }}
         >
-          {soloSubPanel === 'cards' && (
-            <button
-              type="button"
-              onClick={() => setSoloSubPanel(null)}
-              className="absolute top-2 right-2 z-20 px-2 py-1 bg-zinc-900/80 hover:bg-zinc-900 text-white rounded-lg text-[9px] font-mono font-bold flex items-center gap-1 shadow-md transition-all"
-              title="Restore Split View"
+          {/* MINIMIZED HORIZONTAL PILL FOR SUGGESTIONS ON TOP */}
+          {isSuggestionsMinimized && (
+            <div
+              onClick={() => setIsSuggestionsMinimized(false)}
+              className="w-full h-8 bg-zinc-900 hover:bg-zinc-800 border-2 border-black rounded-[10px] flex items-center justify-between px-3 cursor-pointer transition-colors shrink-0 text-white select-none shadow-sm"
+              title="Expand Suggestions"
             >
-              <Minimize2 className="w-2.5 h-2.5" />
-              <span>Restore Split</span>
-            </button>
+              <span className="text-[9.5px] font-mono text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <ChevronDown className="w-3.5 h-3.5 text-emerald-400" />
+                Suggestions Panel (Minimized)
+              </span>
+              <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase">
+                Expand
+              </span>
+            </div>
           )}
+
           {/* TOP CARD (Red Box 1): Solved Anagrams, Exact Closers & Suggestions */}
-          <div className="flex-1 min-h-0 bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2.5 shadow-sm">
-            {/* Body */}
-            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar space-y-1">
-              {/* Case 1: Surplus Illegal Letter */}
-              {surplusLetters.length > 0 ? (
-                <div className="h-full flex flex-col items-center justify-center p-2 text-center select-none">
-                  <AlertTriangle className="w-5 h-5 text-amber-500 mb-1" />
-                  <span className="text-[11px] font-mono font-bold text-amber-900 uppercase">
-                    Surplus: {surplusLetters.join(', ').toUpperCase()}
-                  </span>
-                  <span className="text-[9.5px] font-mono text-zinc-500 mt-0.5">
-                    Delete extra letters to match
-                  </span>
-                </div>
-              ) : exactClosers.length > 0 && activeTargetPhrase.trim().length > 0 ? (
-                /* Case 2: Exact Closers (100% finishing words for leftover letters) */
-                <>
-                  <div className="text-[9px] font-mono font-bold text-emerald-800 uppercase tracking-wider px-1 pb-1 flex items-center gap-1 border-b border-zinc-100 sticky top-0 bg-white z-10">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                    <span>Exact Closers ({exactClosers.length})</span>
+          {!isSuggestionsMinimized && (
+            <div
+              className="w-full bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2 sm:p-2.5 shadow-sm transition-all min-h-0"
+              style={{
+                height: isHistogramMinimized
+                  ? '100%'
+                  : `calc(${cardSplitRatio * 100}% - 8px)`,
+                minHeight: '80px',
+              }}
+            >
+              {/* Body */}
+              <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar space-y-1">
+                {/* Case 1: Surplus Illegal Letter */}
+                {surplusLetters.length > 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center p-3 text-center select-none">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center mb-1.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <span className="text-xs font-mono font-bold text-amber-950 uppercase tracking-wide">
+                      Surplus: {surplusLetters.join(' ').toUpperCase()}
+                    </span>
+                    <span className="text-[10px] font-mono text-zinc-500 mt-1">
+                      Remove extra letters to form valid anagram
+                    </span>
                   </div>
-                  {exactClosers.slice(0, 40).map((closer, idx) => (
+                ) : exactClosers.length > 0 && activeTargetPhrase.trim().length > 0 ? (
+                  /* Case 2: Exact Closers (100% finishing words for leftover letters) */
+                  exactClosers.slice(0, 50).map((closer, idx) => (
                     <div
                       key={idx}
                       onClick={() => onAddWordToTarget(closer)}
-                      className="group flex items-center justify-between p-1.5 rounded-lg bg-emerald-50/70 hover:bg-emerald-100 border border-emerald-200/70 transition-all cursor-pointer select-none"
-                      title="Click to complete anagram 100%"
+                      className="group flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-50/80 hover:bg-emerald-100 border border-emerald-200/90 transition-all cursor-pointer select-none"
                     >
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] font-mono font-bold text-emerald-700">+</span>
-                        <span className="text-[11px] font-mono font-bold text-emerald-950 uppercase truncate">
+                      <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                        <span className="text-xs font-mono font-bold text-emerald-700 shrink-0">+</span>
+                        <span className="text-xs sm:text-[13px] font-mono font-bold text-emerald-950 uppercase tracking-wide truncate">
                           {closer}
                         </span>
                       </div>
-                      <span className="text-[8.5px] font-mono bg-emerald-200/80 text-emerald-900 font-bold px-1 rounded">
+                      <span className="text-[9px] font-mono bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded shrink-0 shadow-xs">
                         100%
                       </span>
                     </div>
-                  ))}
-                </>
-              ) : isSolving ? (
-                /* Case 3: Solving */
-                <div className="h-full flex flex-col items-center justify-center p-3 text-center">
-                  <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mb-1" />
-                  <span className="text-[10px] font-mono text-zinc-400">Solving...</span>
-                </div>
-              ) : results && results.length > 0 ? (
-                /* Case 4: Full Solved Anagram Phrases */
-                results.slice(0, 50).map((r, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => onSetWordAsTarget(r.phrase)}
-                    className="group flex items-center justify-between p-1.5 rounded-lg hover:bg-emerald-50/80 border border-transparent hover:border-emerald-200 transition-all cursor-pointer select-none"
-                    title="Click to remix this anagram"
-                  >
-                    <span className="text-[11px] font-mono font-bold text-zinc-800 group-hover:text-emerald-950 uppercase truncate pr-1">
-                      {r.phrase}
-                    </span>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <button
-                        type="button"
-                        onClick={(e) => handleCopyPhrase(r.phrase, e)}
-                        className="p-1 text-zinc-400 hover:text-zinc-700 transition-colors"
-                        title="Copy"
+                  ))
+                ) : isSolving ? (
+                  /* Case 3: Solving */
+                  <div className="h-full flex flex-col items-center justify-center p-3 text-center">
+                    <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mb-1.5" />
+                    <span className="text-xs font-mono font-bold text-zinc-600">Solving Anagrams...</span>
+                    <span className="text-[10px] font-mono text-zinc-400 mt-0.5">Searching dictionary combinations</span>
+                  </div>
+                ) : results && results.length > 0 ? (
+                  /* Case 4: Full Solved Anagram Phrases */
+                  results.slice(0, 60).map((r, idx) => {
+                    const isActive = activeTargetPhrase.trim().toUpperCase() === r.phrase.trim().toUpperCase();
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => onSetWordAsTarget(r.phrase)}
+                        className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer select-none ${
+                          isActive
+                            ? 'bg-emerald-100/90 border-emerald-400 text-emerald-950 shadow-xs'
+                            : 'bg-zinc-50/60 hover:bg-emerald-50/80 border-zinc-200/60 hover:border-emerald-300 text-zinc-900'
+                        }`}
                       >
-                        {copiedPhrase === r.phrase ? (
-                          <Check className="w-3 h-3 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                      </button>
-                      <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                        <span className="text-xs sm:text-[12.5px] font-mono font-bold uppercase tracking-wider truncate pr-1">
+                          {r.phrase}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyPhrase(r.phrase, e)}
+                            className="p-1 rounded text-zinc-400 hover:text-zinc-800 hover:bg-white/80 transition-colors"
+                            aria-label="Copy phrase"
+                          >
+                            {copiedPhrase === r.phrase ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                          <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-zinc-200/80 group-hover:bg-emerald-600 group-hover:text-white text-zinc-600 transition-colors text-[9px] font-mono font-bold">
+                            <span>Stage</span>
+                            <ArrowUpRight className="w-2.5 h-2.5" />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : candidateWords.length > 0 ? (
+                  /* Case 5: Candidate words */
+                  candidateWords.slice(0, 60).map((w, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => onAddWordToTarget(w.word)}
+                      className="group flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-50/60 hover:bg-emerald-50/80 border border-zinc-200/60 hover:border-emerald-300 transition-colors cursor-pointer select-none"
+                    >
+                      <span className="text-xs font-mono font-bold text-zinc-800 group-hover:text-emerald-950 uppercase tracking-wide">
+                        {w.word}
+                      </span>
+                      <span className="text-[9px] font-mono font-bold text-zinc-500 bg-zinc-200/80 group-hover:bg-emerald-200/80 group-hover:text-emerald-900 px-1.5 py-0.5 rounded">
+                        {w.length}L
+                      </span>
                     </div>
+                  ))
+                ) : (
+                  <div className="h-full flex items-center justify-center text-center p-3">
+                    <span className="text-xs font-mono text-zinc-400">No suggestions</span>
                   </div>
-                ))
-              ) : candidateWords.length > 0 ? (
-                /* Case 5: Candidate words */
-                candidateWords.slice(0, 60).map((w, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => onAddWordToTarget(w.word)}
-                    className="group flex items-center justify-between p-1 rounded hover:bg-zinc-100 transition-colors cursor-pointer select-none"
-                    title="Click to add word to remix"
-                  >
-                    <span className="text-[11px] font-mono font-semibold text-zinc-700 group-hover:text-zinc-950 uppercase">
-                      {w.word}
-                    </span>
-                    <span className="text-[9px] font-mono text-zinc-400">
-                      {w.length}L
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="h-full flex items-center justify-center text-center p-3">
-                  <span className="text-[10px] font-mono text-zinc-400">No suggestions</span>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* HORIZONTAL DRAGGABLE DIVIDER BETWEEN TOP & BOTTOM CARD */}
+          {!isSuggestionsMinimized && !isHistogramMinimized && (
+            <div
+              role="separator"
+              onPointerDown={startCardDrag}
+              onDoubleClick={() => setCardSplitRatio(0.52)}
+              className="w-full h-5 flex items-center justify-center cursor-row-resize select-none touch-none shrink-0 relative group"
+              style={{ touchAction: 'none' }}
+              title="Drag to resize (Double-click to reset 50/50)"
+            >
+              {/* Razor-thin continuous horizontal line with active emerald laser highlight */}
+              <div
+                className={`absolute inset-x-0 h-[1px] transition-colors duration-300 ${
+                  isCardDragging ? 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-800 group-hover:bg-zinc-700'
+                }`}
+              />
+
+              {/* High-fidelity horizontal glass capsule controller handle with active drag response */}
+              <div
+                className={`relative z-10 flex items-center gap-2 px-2 py-0.5 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
+                  isCardDragging
+                    ? 'border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.25)] scale-105'
+                    : 'border border-zinc-800/80 group-hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.22)] shadow-lg group-hover:scale-105'
+                }`}
+              >
+                {/* Button to minimize top card (Suggestions) */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsSuggestionsMinimized(true);
+                  }}
+                  className="pointer-events-auto p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
+                  title="Minimize Suggestions"
+                >
+                  <ChevronUp className="w-3 h-3" />
+                </button>
+
+                {/* Tiny grip indicator */}
+                <div className="flex gap-0.5 justify-center items-center px-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                  <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                  <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                  <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                </div>
+
+                {/* Button to minimize bottom card (Histogram) */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsHistogramMinimized(true);
+                  }}
+                  className="pointer-events-auto p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
+                  title="Minimize Histogram"
+                >
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* BOTTOM CARD (Red Box 2): Word Length Histogram */}
-          <div className="flex-1 min-h-0 bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2.5 shadow-sm">
-            {/* Vertical Histogram Bars */}
+          {!isHistogramMinimized && (
             <div
-              className="flex-1 min-h-0 flex items-end justify-between gap-1 pt-2 pb-1 select-none touch-none"
-              onDoubleClick={onClearLengthFilter}
-              title="Click or drag across to select length range • Double-click empty area to clear"
+              className="w-full bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2 sm:p-2.5 shadow-sm transition-all min-h-0 flex-1 relative"
+              style={{
+                height: isSuggestionsMinimized
+                  ? '100%'
+                  : `calc(${(1 - cardSplitRatio) * 100}% - 8px)`,
+                minHeight: '70px',
+              }}
             >
-              {histogramData.map(item => {
-                const isSelected = activeLengthsSet.has(item.length);
-                const heightPercent = item.count > 0 ? Math.max(14, (item.count / maxHistogramCount) * 100) : 0;
+              {selectedLengthFilter !== null && (
+                <button
+                  type="button"
+                  onClick={onClearLengthFilter}
+                  className="absolute top-1.5 right-1.5 z-10 text-[9px] font-mono font-bold text-emerald-700 hover:text-emerald-950 px-1.5 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 transition-colors shadow-xs"
+                >
+                  Clear Filter
+                </button>
+              )}
 
-                return (
-                  <div
-                    key={item.length}
-                    data-bar-length={item.length}
-                    onPointerDown={(e) => handleBarPointerDown(e, item.length)}
-                    onPointerEnter={() => {
-                      if (isRangeDraggingRef.current && rangeDragStartRef.current !== null) {
-                        if (rangeDragCurrentRef.current !== item.length) {
-                          dragMovedRef.current = true;
-                          rangeDragCurrentRef.current = item.length;
-                          setDragPreview({ start: rangeDragStartRef.current, current: item.length });
-                        }
-                      }
-                    }}
-                    className={`flex-1 flex flex-col items-center justify-end h-full group cursor-pointer transition-all rounded py-1 select-none ${
-                      isSelected
-                        ? 'bg-emerald-100/90 ring-1 ring-emerald-500 shadow-sm'
-                        : 'hover:bg-zinc-200/60'
-                    }`}
-                    title={`${item.length}-letter words (${item.count} words) • Drag across to select range`}
-                  >
-                    {/* Count Label */}
-                    <span
-                      className={`text-[9px] font-mono mb-1 transition-colors ${
-                        isSelected
-                          ? 'text-emerald-950 font-bold'
-                          : item.count > 0
-                          ? 'text-zinc-700 group-hover:text-zinc-950 font-semibold'
-                          : 'text-zinc-400'
-                      }`}
-                    >
-                      {item.count}
-                    </span>
+              {/* Vertical Histogram Bars */}
+              <div
+                className="flex-1 min-h-0 flex items-end justify-between gap-1 pt-2 pb-1 select-none touch-none"
+                onDoubleClick={onClearLengthFilter}
+              >
+                {histogramData.map(item => {
+                  const isSelected = activeLengthsSet.has(item.length);
+                  const heightPercent = item.count > 0 ? Math.max(14, (item.count / maxHistogramCount) * 100) : 0;
 
-                    {/* Vertical Bar */}
+                  return (
                     <div
-                      className={`w-full max-w-[18px] rounded-t-sm transition-all duration-300 ease-out ${
+                      key={item.length}
+                      data-bar-length={item.length}
+                      onPointerDown={(e) => handleBarPointerDown(e, item.length)}
+                      onPointerEnter={() => {
+                        if (isRangeDraggingRef.current && rangeDragStartRef.current !== null) {
+                          if (rangeDragCurrentRef.current !== item.length) {
+                            dragMovedRef.current = true;
+                            rangeDragCurrentRef.current = item.length;
+                            setDragPreview({ start: rangeDragStartRef.current, current: item.length });
+                          }
+                        }
+                      }}
+                      className={`flex-1 flex flex-col items-center justify-end h-full group cursor-pointer transition-all rounded py-1 select-none ${
                         isSelected
-                          ? 'bg-emerald-600 shadow-[0_0_10px_rgba(5,150,105,0.45)]'
-                          : item.count > 0
-                          ? 'bg-zinc-400 group-hover:bg-zinc-600 group-hover:shadow-sm'
-                          : 'bg-zinc-200'
-                      }`}
-                      style={{ height: `${heightPercent}%` }}
-                    />
-
-                    {/* Length Label */}
-                    <span
-                      className={`text-[9.5px] font-mono mt-1 ${
-                        isSelected
-                          ? 'text-emerald-950 font-bold'
-                          : 'text-zinc-600 group-hover:text-zinc-900 font-medium'
+                          ? 'bg-emerald-100/90 ring-1 ring-emerald-500 shadow-xs'
+                          : 'hover:bg-zinc-100'
                       }`}
                     >
-                      {item.length}L
-                    </span>
-                  </div>
-                );
-              })}
+                      {/* Count Label */}
+                      <span
+                        className={`text-[9px] font-mono mb-1 transition-colors ${
+                          isSelected
+                            ? 'text-emerald-950 font-bold'
+                            : item.count > 0
+                            ? 'text-zinc-700 group-hover:text-zinc-950 font-semibold'
+                            : 'text-zinc-400'
+                        }`}
+                      >
+                        {item.count}
+                      </span>
+
+                      {/* Vertical Bar */}
+                      <div
+                        className={`w-full max-w-[18px] rounded-t-sm transition-all duration-300 ease-out ${
+                          isSelected
+                            ? 'bg-emerald-600 shadow-[0_0_8px_rgba(5,150,105,0.4)]'
+                            : item.count > 0
+                            ? 'bg-zinc-400 group-hover:bg-zinc-700'
+                            : 'bg-zinc-200'
+                        }`}
+                        style={{ height: `${heightPercent}%` }}
+                      />
+
+                      {/* Length Label */}
+                      <span
+                        className={`text-[9.5px] font-mono mt-1 ${
+                          isSelected
+                            ? 'text-emerald-950 font-bold'
+                            : 'text-zinc-600 group-hover:text-zinc-900 font-medium'
+                        }`}
+                      >
+                        {item.length}L
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+          )}
+
+          {/* MINIMIZED HORIZONTAL PILL FOR HISTOGRAM AT BOTTOM */}
+          {isHistogramMinimized && (
+            <div
+              onClick={() => setIsHistogramMinimized(false)}
+              className="w-full h-8 bg-zinc-900 hover:bg-zinc-800 border-2 border-black rounded-[10px] flex items-center justify-between px-3 cursor-pointer transition-colors shrink-0 text-white select-none shadow-sm"
+              title="Expand Histogram"
+            >
+              <span className="text-[9.5px] font-mono text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <ChevronUp className="w-3.5 h-3.5 text-emerald-400" />
+                Histogram Panel (Minimized)
+              </span>
+              <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase">
+                Expand
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MINIMIZED VERTICAL PILL FOR CARDS ON RIGHT */}
+      {totalWords > 0 && soloSubPanel === 'graph' && (
+        <div
+          onClick={() => setSoloSubPanel(null)}
+          className="h-full w-7 bg-zinc-900 hover:bg-zinc-800 border-2 border-black rounded-[14px] flex flex-col items-center justify-between py-3 cursor-pointer transition-colors shrink-0 text-white select-none shadow-md"
+          title="Expand Suggestions & Histogram"
+        >
+          <div className="flex flex-col items-center gap-1.5 [writing-mode:vertical-lr]">
+            <ChevronRight className="w-3.5 h-3.5 text-emerald-400 -rotate-90" />
+            <span className="text-[9.5px] font-mono text-zinc-400 font-bold uppercase tracking-widest">
+              Suggestions & Histogram
+            </span>
           </div>
+          <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase [writing-mode:vertical-lr]">
+            Expand
+          </span>
         </div>
       )}
     </div>

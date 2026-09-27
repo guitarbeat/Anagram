@@ -62,6 +62,14 @@ export function useVisualViewport(): VisualViewportInfo {
 
     handleViewportChange();
 
+    const handleOrientationChange = () => {
+      handleViewportChange();
+      // WebKit / iOS Safari visualViewport settles asynchronously post orientation animation
+      setTimeout(handleViewportChange, 100);
+      setTimeout(handleViewportChange, 300);
+      setTimeout(handleViewportChange, 600);
+    };
+
     const vv = window.visualViewport;
     if (vv) {
       vv.addEventListener('resize', handleViewportChange, { passive: true });
@@ -69,6 +77,7 @@ export function useVisualViewport(): VisualViewportInfo {
     }
     window.addEventListener('resize', handleViewportChange, { passive: true });
     window.addEventListener('scroll', handleViewportChange, { passive: true });
+    window.addEventListener('orientationchange', handleOrientationChange, { passive: true });
 
     return () => {
       if (vv) {
@@ -77,6 +86,7 @@ export function useVisualViewport(): VisualViewportInfo {
       }
       window.removeEventListener('resize', handleViewportChange);
       window.removeEventListener('scroll', handleViewportChange);
+      window.removeEventListener('orientationchange', handleOrientationChange);
     };
   }, []);
 

@@ -18,9 +18,10 @@ interface EditableBoxProps {
   onChange: (val: string) => void;
   placeholder: string;
   id: string;
+  isHero?: boolean;
 }
 
-const EditableBox: React.FC<EditableBoxProps> = ({ value, onChange, placeholder, id }) => {
+const EditableBox: React.FC<EditableBoxProps> = ({ value, onChange, placeholder, id, isHero = false }) => {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,7 +43,7 @@ const EditableBox: React.FC<EditableBoxProps> = ({ value, onChange, placeholder,
   };
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center bg-white border-2 border-black focus-within:border-emerald-500 rounded-[18px] sm:rounded-[22px] px-3 sm:px-6 transition-all overflow-hidden">
+    <div className="relative w-full h-full flex items-center justify-center bg-white border-2 border-black focus-within:border-zinc-900 rounded-[18px] sm:rounded-[22px] px-3 sm:px-6 transition-all overflow-hidden">
       <div
         ref={ref}
         id={id}
@@ -53,10 +54,20 @@ const EditableBox: React.FC<EditableBoxProps> = ({ value, onChange, placeholder,
           const text = e.currentTarget.innerText.replace(/\n/g, ' ');
           onChange(text);
         }}
-        className="w-full text-center bg-transparent text-zinc-900 font-bold uppercase tracking-wider text-base sm:text-base md:text-lg outline-none select-text break-words cursor-text py-1 px-3 max-h-full overflow-y-auto no-scrollbar unified-app-text"
+        className={`w-full text-center bg-transparent text-zinc-900 font-black uppercase tracking-widest outline-none select-text break-words cursor-text py-1 px-3 max-h-full overflow-y-auto no-scrollbar unified-app-text transition-all duration-300 ${
+          isHero
+            ? 'text-4xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl'
+            : 'text-base sm:text-base md:text-lg font-extrabold tracking-wider'
+        }`}
       />
       {!value && (
-        <span className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-500 font-bold uppercase tracking-wider text-xs sm:text-sm text-center px-4 sm:px-6 select-none unified-app-text">
+        <span
+          className={`absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-300 font-black uppercase tracking-widest text-center px-4 sm:px-6 select-none unified-app-text transition-all duration-300 ${
+            isHero
+              ? 'text-3xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl'
+              : 'text-xs sm:text-sm font-extrabold tracking-wider'
+          }`}
+        >
           {placeholder}
         </span>
       )}
@@ -107,7 +118,7 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
     if (!isDragging || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const relativeX = (e.clientX - rect.left) / rect.width;
-    const clampedX = Math.max(0.2, Math.min(0.8, relativeX));
+    const clampedX = Math.max(0.15, Math.min(0.85, relativeX));
     setWidthRatio(clampedX);
   };
 
@@ -148,6 +159,7 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
             value={sourceText}
             onChange={onSourceNameChange}
             placeholder="Write name"
+            isHero={!sourceText.trim()}
           />
           {sourceText && (
             <button

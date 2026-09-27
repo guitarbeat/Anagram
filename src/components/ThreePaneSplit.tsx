@@ -78,18 +78,18 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
       const relativeY = (e.clientY - rect.top) / rect.height;
 
       if (activeDrag === 1 && hasStage) {
-        const clamped1 = Math.max(0.12, Math.min(0.65, relativeY));
-        const maxCard2 = Math.max(0.10, 0.86 - clamped1);
+        const clamped1 = Math.max(0.06, Math.min(0.80, relativeY));
+        const maxCard2 = Math.max(0.06, 0.92 - clamped1);
         const newRatio2 = Math.min(ratio2, maxCard2);
         setRatio1(clamped1);
         setRatio2(newRatio2);
       } else if (activeDrag === 2 && hasCard3) {
         if (hasStage) {
-          const clampedBottom = Math.max(0.18, Math.min(0.88, relativeY));
-          const newRatio2 = Math.max(0.09, clampedBottom - ratio1);
+          const clampedBottom = Math.max(0.12, Math.min(0.94, relativeY));
+          const newRatio2 = Math.max(0.06, clampedBottom - ratio1);
           setRatio2(newRatio2);
         } else {
-          const clamped2 = Math.max(0.08, Math.min(0.45, relativeY));
+          const clamped2 = Math.max(0.06, Math.min(0.60, relativeY));
           setRatio2(clamped2);
         }
       }
@@ -120,6 +120,23 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     setSoloCard(null);
     setRatio1(0.48);
     setRatio2(0.11);
+  };
+
+  const applyPreset = (preset: 'balanced' | 'focusStage' | 'focusExplorer') => {
+    setHasUserCustomized(true);
+    setIsCard1Minimized(false);
+    setIsCard3Minimized(false);
+    setSoloCard(null);
+    if (preset === 'balanced') {
+      setRatio1(0.48);
+      setRatio2(0.11);
+    } else if (preset === 'focusStage') {
+      setRatio1(0.72);
+      setRatio2(0.09);
+    } else if (preset === 'focusExplorer') {
+      setRatio1(0.15);
+      setRatio2(0.09);
+    }
   };
 
   const toggleMinimizeCard1 = (e: React.MouseEvent) => {
@@ -214,82 +231,94 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             tabIndex={0}
             onPointerDown={startDrag1}
             onDoubleClick={resetRatios}
-            className={`relative w-full h-3 sm:h-3.5 flex items-center justify-between gap-1.5 px-2 z-30 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar hover:bg-white/10 active:bg-white/20 ${
-              activeDrag === 1 ? 'bg-white/15' : 'bg-transparent'
-            }`}
+            className="relative w-full h-5 flex items-center justify-center z-30 cursor-row-resize touch-none select-none shrink-0 group"
             style={{ touchAction: 'none' }}
-            title="Drag to resize Window 1 & 2 (Double-click to reset layout)"
+            title="Drag to resize Stage & Input (Double-click to reset)"
           >
-            {/* Leading Accessories & Minimize/Solo Buttons */}
+            {/* Razor-thin continuous horizontal line with active emerald laser highlight */}
             <div
-              className="flex items-center gap-1 pointer-events-auto shrink-0"
+              className={`absolute inset-x-0 h-[1px] transition-colors duration-300 ${
+                activeDrag === 1 ? 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-800 group-hover:bg-zinc-700'
+              }`}
+            />
+
+            {/* Floating Presets on the Left */}
+            <div className="absolute left-4 z-20 hidden sm:flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity duration-300 pointer-events-auto animate-fade-in" onPointerDown={e => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => applyPreset('focusStage')}
+                className="px-1.5 py-0.5 rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer hover:scale-105"
+                title="Focus Stage (70%)"
+              >
+                Stage+
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPreset('balanced')}
+                className="px-1.5 py-0.5 rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer hover:scale-105"
+                title="Balanced 50/50 Layout"
+              >
+                Balanced
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPreset('focusExplorer')}
+                className="px-1.5 py-0.5 rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer hover:scale-105"
+                title="Focus Explorer (70%)"
+              >
+                Words+
+              </button>
+            </div>
+
+            {/* High-fidelity glass capsule toolbar with active scale and shadow response */}
+            <div
+              className={`relative z-10 flex items-center gap-2 px-2 py-0.5 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
+                activeDrag === 1
+                  ? 'border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.25)] scale-105'
+                  : 'border border-zinc-800/80 group-hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.22)] shadow-xl group-hover:scale-105'
+              }`}
               onPointerDown={e => e.stopPropagation()}
             >
+              {/* Button 1 (ChevronUp) - Minimizes Card 1 */}
               <button
                 type="button"
                 onClick={toggleMinimizeCard1}
-                className="px-1.5 py-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center gap-1 text-[9px] font-mono transition-colors"
+                className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
                 title={isCard1Minimized ? 'Expand Stage' : 'Minimize Stage'}
               >
-                {isCard1Minimized ? (
-                  <ChevronDown className="w-2.5 h-2.5 text-emerald-400" />
-                ) : (
-                  <ChevronUp className="w-2.5 h-2.5 text-zinc-400" />
-                )}
-                <span>{isCard1Minimized ? 'Show Stage' : 'Stage'}</span>
+                <ChevronUp className="w-3 h-3" />
               </button>
 
+              {/* Grip Indicator dots */}
+              <div className="flex gap-0.5 justify-center items-center px-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                <div className="w-1 h-1 rounded-full bg-zinc-500" />
+              </div>
+
+              {/* Button 2 (ChevronDown) - Minimizes Card 3 */}
               <button
                 type="button"
-                onClick={toggleSoloCard1}
-                className={`p-0.5 rounded transition-colors ${
-                  soloCard === 1
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white'
-                }`}
-                title={soloCard === 1 ? 'Restore Split' : 'Solo Stage Fullscreen'}
+                onClick={toggleMinimizeCard3}
+                className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
+                title={isCard3Minimized ? 'Expand Explorer' : 'Minimize Explorer'}
               >
-                {soloCard === 1 ? (
-                  <Minimize2 className="w-2.5 h-2.5" />
-                ) : (
-                  <Maximize2 className="w-2.5 h-2.5" />
-                )}
+                <ChevronDown className="w-3 h-3" />
               </button>
-
-              {divider1Accessories?.leading?.map((acc, idx) => (
-                <React.Fragment key={idx}>{acc}</React.Fragment>
-              ))}
             </div>
 
-            {/* Center Accessory / Drag Handle */}
-            <div
-              className="flex items-center gap-1 pointer-events-auto shrink-0 opacity-40 hover:opacity-100 transition-opacity"
-              onPointerDown={e => e.stopPropagation()}
-            >
-              {divider1Accessories?.center || (
-                <div className="w-8 h-1 rounded-full bg-zinc-600" />
-              )}
-            </div>
-
-            {/* Trailing Accessories */}
-            <div
-              className="flex items-center gap-1 pointer-events-auto shrink-0"
-              onPointerDown={e => e.stopPropagation()}
-            >
-              {(hasUserCustomized || isCard1Minimized || isCard3Minimized || soloCard) && (
-                <button
-                  type="button"
-                  onClick={resetRatios}
-                  className="p-1 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
-                  title="Reset layout proportions"
-                >
-                  <RotateCcw className="w-2.5 h-2.5" />
-                </button>
-              )}
-              {divider1Accessories?.trailing?.map((acc, idx) => (
-                <React.Fragment key={idx}>{acc}</React.Fragment>
-              ))}
-            </div>
+            {/* Floating Reset Button */}
+            {(hasUserCustomized || isCard1Minimized || isCard3Minimized || soloCard) && (
+              <button
+                type="button"
+                onClick={resetRatios}
+                className="absolute right-4 z-20 p-1 rounded-full bg-[#09090b]/90 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 shadow-md transition-all duration-300 pointer-events-auto hover:scale-105"
+                title="Reset layout proportions"
+                onPointerDown={e => e.stopPropagation()}
+              >
+                <RotateCcw className="w-3 h-3" />
+              </button>
+            )}
           </div>
         </>
       )}
@@ -326,82 +355,66 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             tabIndex={0}
             onPointerDown={startDrag2}
             onDoubleClick={resetRatios}
-            className={`relative w-full h-3 sm:h-3.5 flex items-center justify-between gap-1.5 px-2 z-30 cursor-row-resize touch-none select-none transition-colors shrink-0 overflow-x-auto no-scrollbar hover:bg-white/10 active:bg-white/20 ${
-              activeDrag === 2 ? 'bg-white/15' : 'bg-transparent'
-            }`}
+            className="relative w-full h-5 flex items-center justify-center z-30 cursor-row-resize touch-none select-none shrink-0 group"
             style={{ touchAction: 'none' }}
-            title="Drag to resize Window 2 & 3 (Double-click to reset layout)"
+            title="Drag to resize Word Explorer (Double-click to reset)"
           >
-            {/* Leading Accessories & Minimize/Solo Buttons */}
+            {/* Razor-thin continuous horizontal line with active emerald laser highlight */}
             <div
-              className="flex items-center gap-1 pointer-events-auto shrink-0"
+              className={`absolute inset-x-0 h-[1px] transition-colors duration-300 ${
+                activeDrag === 2 ? 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-800 group-hover:bg-zinc-700'
+              }`}
+            />
+
+            {/* High-fidelity glass capsule toolbar with active scale and shadow response */}
+            <div
+              className={`relative z-10 flex items-center gap-2 px-2 py-0.5 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
+                activeDrag === 2
+                  ? 'border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.25)] scale-105'
+                  : 'border border-zinc-800/80 group-hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.22)] shadow-xl group-hover:scale-105'
+              }`}
               onPointerDown={e => e.stopPropagation()}
             >
+              {/* Button 1 (ChevronUp) - Minimizes Card 1 */}
+              <button
+                type="button"
+                onClick={toggleMinimizeCard1}
+                className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
+                title={isCard1Minimized ? 'Expand Stage' : 'Minimize Stage'}
+              >
+                <ChevronUp className="w-3 h-3" />
+              </button>
+
+              {/* Grip Indicator dots */}
+              <div className="flex gap-0.5 justify-center items-center px-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                <div className="w-1 h-1 rounded-full bg-zinc-500" />
+              </div>
+
+              {/* Button 2 (ChevronDown) - Minimizes Card 3 */}
               <button
                 type="button"
                 onClick={toggleMinimizeCard3}
-                className="px-1.5 py-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center gap-1 text-[9px] font-mono transition-colors"
+                className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
                 title={isCard3Minimized ? 'Expand Explorer' : 'Minimize Explorer'}
               >
-                {isCard3Minimized ? (
-                  <ChevronUp className="w-2.5 h-2.5 text-emerald-400" />
-                ) : (
-                  <ChevronDown className="w-2.5 h-2.5 text-zinc-400" />
-                )}
-                <span>{isCard3Minimized ? 'Show Explorer' : 'Explorer'}</span>
+                <ChevronDown className="w-3 h-3" />
               </button>
+            </div>
 
+            {/* Floating Reset Button */}
+            {(hasUserCustomized || isCard1Minimized || isCard3Minimized || soloCard) && (
               <button
                 type="button"
-                onClick={toggleSoloCard3}
-                className={`p-0.5 rounded transition-colors ${
-                  soloCard === 3
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white'
-                }`}
-                title={soloCard === 3 ? 'Restore Split' : 'Solo Explorer Fullscreen'}
+                onClick={resetRatios}
+                className="absolute right-4 z-20 p-1 rounded-full bg-[#09090b]/90 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 shadow-md transition-all duration-300 pointer-events-auto hover:scale-105"
+                title="Reset layout proportions"
+                onPointerDown={e => e.stopPropagation()}
               >
-                {soloCard === 3 ? (
-                  <Minimize2 className="w-2.5 h-2.5" />
-                ) : (
-                  <Maximize2 className="w-2.5 h-2.5" />
-                )}
+                <RotateCcw className="w-3 h-3" />
               </button>
-
-              {divider2Accessories?.leading?.map((acc, idx) => (
-                <React.Fragment key={idx}>{acc}</React.Fragment>
-              ))}
-            </div>
-
-            {/* Center Drag Handle */}
-            <div
-              className="flex items-center gap-1 pointer-events-auto shrink-0 opacity-40 hover:opacity-100 transition-opacity"
-              onPointerDown={e => e.stopPropagation()}
-            >
-              {divider2Accessories?.center || (
-                <div className="w-8 h-1 rounded-full bg-zinc-600" />
-              )}
-            </div>
-
-            {/* Trailing Accessories */}
-            <div
-              className="flex items-center gap-1 pointer-events-auto shrink-0"
-              onPointerDown={e => e.stopPropagation()}
-            >
-              {(hasUserCustomized || isCard1Minimized || isCard3Minimized || soloCard) && (
-                <button
-                  type="button"
-                  onClick={resetRatios}
-                  className="p-1 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
-                  title="Reset layout proportions"
-                >
-                  <RotateCcw className="w-2.5 h-2.5" />
-                </button>
-              )}
-              {divider2Accessories?.trailing?.map((acc, idx) => (
-                <React.Fragment key={idx}>{acc}</React.Fragment>
-              ))}
-            </div>
+            )}
           </div>
 
           {/* WINDOW CARD 3: BOTTOM WORDS THAT FIT & GRAPH */}

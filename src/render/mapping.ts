@@ -77,7 +77,7 @@ export function fitFontSize(
   start = 42
 ): number {
   let size = start;
-  while (size > 11) {
+  while (size > 6) {
     ctx.font = `bold ${size}px 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
     if (ctx.measureText(text).width <= maxWidth) break;
     size -= 1;
@@ -185,17 +185,18 @@ export function buildLetterMapping(
 
   if (isSideBySide) {
     // Side by Side: Source on Left, Target on Right
-    const gap = Math.max(36, Math.min(80, canvasWidth * 0.08));
-    const halfWidth = (canvasWidth - gap - 40) / 2;
-    const maxHalfW = Math.max(120, halfWidth);
+    // Horizontal gap size that expands gracefully but keeps safety margins
+    const gap = Math.max(28, canvasWidth * 0.12);
+    // Real, mathematical remaining width for each half, leaving a clean 16px safety margin on the outer edges
+    const allowedHalfWidth = Math.max(40, (canvasWidth - gap - 32) / 2);
 
-    const targetMaxFont = Math.min(110, Math.max(13, Math.floor(canvasHeight * 0.65)));
-    const sizeFrom = fitFontSize(ctx, upperFrom, maxHalfW, targetMaxFont);
-    const sizeTo = fitFontSize(ctx, upperTo, maxHalfW, targetMaxFont);
-    const fontSize = Math.max(11, Math.min(sizeFrom, sizeTo));
+    const targetMaxFont = Math.min(100, Math.max(12, Math.floor(canvasHeight * 0.65)));
+    const sizeFrom = fitFontSize(ctx, upperFrom, allowedHalfWidth, targetMaxFont);
+    const sizeTo = fitFontSize(ctx, upperTo, allowedHalfWidth, targetMaxFont);
+    const fontSize = Math.max(10, Math.min(sizeFrom, sizeTo));
 
-    const leftCenterX = (canvasWidth - gap) / 4 + 10;
-    const rightCenterX = canvasWidth - (canvasWidth - gap) / 4 - 10;
+    const leftCenterX = (canvasWidth - gap) / 4 + 8;
+    const rightCenterX = canvasWidth - (canvasWidth - gap) / 4 - 8;
     const midY = canvasHeight / 2;
 
     const src = computeGlyphLayoutAtCenter(ctx, upperFrom, midY, fontSize, leftCenterX);
@@ -214,13 +215,15 @@ export function buildLetterMapping(
     };
   } else {
     // Two-line stacked: Source on Line 1 (Top), Target on Line 2 (Bottom)
-    const maxW = Math.max(200, canvasWidth - 48);
-    const targetMaxFont = Math.min(130, Math.max(16, Math.floor(canvasHeight * 0.38)));
-    const sizeFrom = fitFontSize(ctx, upperFrom, maxW, targetMaxFont);
-    const sizeTo = fitFontSize(ctx, upperTo, maxW, targetMaxFont);
-    const fontSize = Math.max(13, Math.min(sizeFrom, sizeTo));
+    // Real remaining width leaving a clean 32px padding on each side so letters are 100% visible
+    const allowedW = Math.max(60, canvasWidth - 64);
+    const targetMaxFont = Math.min(110, Math.max(14, Math.floor(canvasHeight * 0.35)));
+    const sizeFrom = fitFontSize(ctx, upperFrom, allowedW, targetMaxFont);
+    const sizeTo = fitFontSize(ctx, upperTo, allowedW, targetMaxFont);
+    const fontSize = Math.max(11, Math.min(sizeFrom, sizeTo));
 
-    const lineSpacing = Math.max(40, fontSize * 1.45);
+    // Dynamic line spacing to prevent vertical line collisions, bounded gracefully by height proportions
+    const lineSpacing = Math.max(28, Math.min(canvasHeight * 0.40, fontSize * 1.5));
     const srcY = canvasHeight / 2 - lineSpacing / 2;
     const dstY = canvasHeight / 2 + lineSpacing / 2;
 

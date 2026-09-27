@@ -43,6 +43,21 @@
   /* Prevent iOS automatic zoom on focus by ensuring minimum 16px font-size on editable fields */
   input, textarea, [contenteditable="true"] {
     font-size: 16px;
+    -webkit-user-select: text;
+    caret-color: #18181b;
+  }
+
+  /* WebKit Momentum Scrolling & Overscroll Isolation */
+  .overflow-y-auto, .overflow-x-auto, .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Prevent WebKit callout popups, gesture zooms, and tap highlights on interactive UI */
+  canvas, [role="separator"], button {
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
 
   body {
