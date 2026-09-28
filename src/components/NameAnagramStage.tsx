@@ -89,7 +89,7 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
     const w = Math.round(rect.width);
     const h = Math.round(rect.height);
 
