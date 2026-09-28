@@ -2,10 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ChevronUp,
   ChevronDown,
-  Maximize2,
-  Minimize2,
-  RotateCcw,
 } from 'lucide-react';
+import { SplitDivider } from './SplitDivider';
 
 export interface ThreePaneSplitProps {
   card1: React.ReactNode;
@@ -197,7 +195,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                   ? '78px'
                   : !showCard3
                   ? 'calc(100% - 70px)'
-                  : `calc(${ratio1 * 100}% - 14px)`,
+                  : `calc(${ratio1 * 100}% - 6px)`,
                 minHeight: isKeyboardOpen ? '60px' : '80px',
               }}
             >
@@ -212,11 +210,11 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                 setIsCard1Minimized(false);
                 setSoloCard(null);
               }}
-              className="w-full h-8 sm:h-9 bg-[#111114] hover:bg-[#18181c] border border-zinc-800 hover:border-emerald-500/50 rounded-[14px] flex items-center justify-between px-3 cursor-pointer transition-all shrink-0 text-white select-none shadow-sm group"
+              className="w-full h-8 sm:h-9 bg-[#111114] hover:bg-[#18181c] border border-zinc-800 hover:border-zinc-700 rounded-[14px] flex items-center justify-between px-3 cursor-pointer transition-all shrink-0 text-white select-none shadow-sm group"
               title="Click to expand Kinetic Stage"
             >
               <div className="flex items-center gap-2 min-w-0 pr-2">
-                <span className="p-1 rounded-md bg-zinc-800/80 text-emerald-400 group-hover:bg-emerald-500/10 group-hover:text-emerald-300 transition-colors shrink-0">
+                <span className="p-1 rounded-md bg-zinc-800/80 text-zinc-400 group-hover:text-zinc-200 transition-colors shrink-0">
                   <ChevronDown className="w-3.5 h-3.5 group-hover:translate-y-0.5 transition-transform" />
                 </span>
                 <span className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-200 group-hover:text-white transition-colors truncate">
@@ -226,107 +224,54 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                   MINIMIZED
                 </span>
               </div>
-              <span className="text-[9.5px] font-mono text-emerald-400 font-bold uppercase tracking-wider shrink-0">
+              <span className="text-[9.5px] font-mono text-zinc-400 group-hover:text-zinc-200 font-bold uppercase tracking-wider shrink-0 transition-colors">
                 Show Stage
               </span>
             </div>
           )}
 
           {/* DIVIDER BAR 1 */}
-          <div
-            role="separator"
-            tabIndex={0}
+          <SplitDivider
+            orientation="horizontal"
+            isDragging={activeDrag === 1}
             onPointerDown={startDrag1}
             onDoubleClick={resetRatios}
-            className="relative w-full h-6 flex items-center justify-center z-30 cursor-row-resize touch-none select-none shrink-0 group"
-            style={{ touchAction: 'none' }}
             title="Drag to resize Stage & Input (Double-click to reset)"
-          >
-            {/* Razor-thin continuous horizontal line with active emerald laser highlight */}
-            <div
-              className={`absolute inset-x-0 h-[1px] transition-colors duration-300 ${
-                activeDrag === 1 ? 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-800 group-hover:bg-zinc-700'
-              }`}
-            />
-
-            {/* Floating Presets on the Left */}
-            <div className="absolute left-4 z-20 hidden sm:flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity duration-300 pointer-events-auto animate-fade-in" onPointerDown={e => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={() => applyPreset('focusStage')}
-                className="px-1.5 py-0.5 h-[18px] flex items-center rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer hover:scale-105"
-                title="Focus Stage (70%)"
-              >
-                Stage+
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset('balanced')}
-                className="px-1.5 py-0.5 h-[18px] flex items-center rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer hover:scale-105"
-                title="Balanced 50/50 Layout"
-              >
-                Balanced
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset('focusExplorer')}
-                className="px-1.5 py-0.5 h-[18px] flex items-center rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer hover:scale-105"
-                title="Focus Explorer (70%)"
-              >
-                Words+
-              </button>
-            </div>
-
-            {/* High-fidelity glass capsule toolbar that fits snugly inside divider */}
-            <div
-              className={`relative z-10 flex items-center gap-1.5 px-1.5 py-0.5 h-5 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
-                activeDrag === 1
-                  ? 'border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.25)] scale-105'
-                  : 'border border-zinc-800/80 group-hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.22)] shadow-xl group-hover:scale-105'
-              }`}
-              onPointerDown={e => e.stopPropagation()}
-            >
-              {/* Button 1 (ChevronUp) - Minimizes Card 1 */}
-              <button
-                type="button"
-                onClick={toggleMinimizeCard1}
-                className="w-4 h-4 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer flex items-center justify-center"
-                title={isCard1Minimized ? 'Expand Stage' : 'Minimize Stage'}
-              >
-                <ChevronUp className="w-2.5 h-2.5" />
-              </button>
-
-              {/* Grip Indicator dots */}
-              <div className="flex gap-0.5 justify-center items-center px-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
-                <div className="w-0.5 h-0.5 rounded-full bg-zinc-500" />
-                <div className="w-0.5 h-0.5 rounded-full bg-zinc-500" />
-                <div className="w-0.5 h-0.5 rounded-full bg-zinc-500" />
-              </div>
-
-              {/* Button 2 (ChevronDown) - Minimizes Card 3 */}
-              <button
-                type="button"
-                onClick={toggleMinimizeCard3}
-                className="w-4 h-4 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer flex items-center justify-center"
-                title={isCard3Minimized ? 'Expand Explorer' : 'Minimize Explorer'}
-              >
-                <ChevronDown className="w-2.5 h-2.5" />
-              </button>
-            </div>
-
-            {/* Floating Reset Button */}
-            {(hasUserCustomized || isCard1Minimized || isCard3Minimized || soloCard) && (
-              <button
-                type="button"
-                onClick={resetRatios}
-                className="absolute right-4 z-20 w-5 h-5 flex items-center justify-center rounded-full bg-[#09090b]/90 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 shadow-md transition-all duration-300 pointer-events-auto hover:scale-105"
-                title="Reset layout proportions"
-                onPointerDown={e => e.stopPropagation()}
-              >
-                <RotateCcw className="w-3 h-3" />
-              </button>
-            )}
-          </div>
+            onCollapsePrev={toggleMinimizeCard1}
+            collapsePrevTitle={isCard1Minimized ? 'Expand Stage' : 'Minimize Stage'}
+            onCollapseNext={toggleMinimizeCard3}
+            collapseNextTitle={isCard3Minimized ? 'Expand Explorer' : 'Minimize Explorer'}
+            showReset={Boolean(hasUserCustomized || isCard1Minimized || isCard3Minimized || soloCard)}
+            onReset={resetRatios}
+            presets={
+              <>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('focusStage')}
+                  className="px-1.5 py-0.5 rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-all cursor-pointer hover:scale-105"
+                  title="Focus Stage (70%)"
+                >
+                  Stage+
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('balanced')}
+                  className="px-1.5 py-0.5 rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-all cursor-pointer hover:scale-105"
+                  title="Balanced 50/50 Layout"
+                >
+                  Balanced
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('focusExplorer')}
+                  className="px-1.5 py-0.5 rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-all cursor-pointer hover:scale-105"
+                  title="Focus Explorer (70%)"
+                >
+                  Words+
+                </button>
+              </>
+            }
+          />
         </>
       )}
 
@@ -340,7 +285,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             ? showCard1
               ? isKeyboardOpen
                 ? '50px'
-                : `calc(${ratio2 * 100}% - 14px)`
+                : `calc(${ratio2 * 100}% - 6px)`
               : hasUserCustomized
               ? `${ratio2 * 100}%`
               : '54px'
@@ -357,35 +302,19 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
       {hasCard3 && (
         <>
           {/* DIVIDER BAR 2 */}
-          <div
-            role="separator"
-            tabIndex={0}
+          <SplitDivider
+            orientation="horizontal"
+            isDragging={activeDrag === 2}
             onPointerDown={startDrag2}
             onDoubleClick={resetRatios}
-            className="relative w-full h-4 sm:h-5 flex items-center justify-center z-30 cursor-row-resize touch-none select-none shrink-0 group"
-            style={{ touchAction: 'none' }}
             title="Drag to resize Word Explorer (Double-click to reset)"
-          >
-            {/* Razor-thin continuous horizontal line with active emerald laser highlight */}
-            <div
-              className={`absolute inset-x-0 h-[1px] transition-colors duration-300 ${
-                activeDrag === 2 ? 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-800 group-hover:bg-zinc-700'
-              }`}
-            />
-
-            {/* Floating Reset Button */}
-            {(hasUserCustomized || isCard1Minimized || isCard3Minimized || soloCard) && (
-              <button
-                type="button"
-                onClick={resetRatios}
-                className="absolute right-4 z-20 w-5 h-5 flex items-center justify-center rounded-full bg-[#09090b]/90 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 shadow-md transition-all duration-300 pointer-events-auto hover:scale-105"
-                title="Reset layout proportions"
-                onPointerDown={e => e.stopPropagation()}
-              >
-                <RotateCcw className="w-3 h-3" />
-              </button>
-            )}
-          </div>
+            onCollapsePrev={toggleMinimizeCard1}
+            collapsePrevTitle={isCard1Minimized ? 'Expand Stage' : 'Minimize Stage'}
+            onCollapseNext={toggleMinimizeCard3}
+            collapseNextTitle={isCard3Minimized ? 'Expand Explorer' : 'Minimize Explorer'}
+            showReset={Boolean(hasUserCustomized || isCard1Minimized || isCard3Minimized || soloCard)}
+            onReset={resetRatios}
+          />
 
           {/* WINDOW CARD 3: BOTTOM WORDS THAT FIT & GRAPH */}
           {showCard3 ? (
@@ -408,11 +337,11 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                 setIsCard3Minimized(false);
                 setSoloCard(null);
               }}
-              className="w-full h-8 sm:h-9 bg-[#111114] hover:bg-[#18181c] border border-zinc-800 hover:border-emerald-500/50 rounded-[14px] flex items-center justify-between px-3 cursor-pointer transition-all shrink-0 text-white select-none shadow-sm group"
+              className="w-full h-8 sm:h-9 bg-[#111114] hover:bg-[#18181c] border border-zinc-800 hover:border-zinc-700 rounded-[14px] flex items-center justify-between px-3 cursor-pointer transition-all shrink-0 text-white select-none shadow-sm group"
               title="Click to expand Word Explorer"
             >
               <div className="flex items-center gap-2 min-w-0 pr-2">
-                <span className="p-1 rounded-md bg-zinc-800/80 text-emerald-400 group-hover:-translate-y-0.5 transition-transform shrink-0">
+                <span className="p-1 rounded-md bg-zinc-800/80 text-zinc-400 group-hover:text-zinc-200 group-hover:-translate-y-0.5 transition-transform shrink-0">
                   <ChevronUp className="w-3.5 h-3.5" />
                 </span>
                 <span className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-200 group-hover:text-white transition-colors truncate">
@@ -422,7 +351,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                   MINIMIZED
                 </span>
               </div>
-              <span className="text-[9.5px] font-mono text-emerald-400 font-bold uppercase tracking-wider shrink-0">
+              <span className="text-[9.5px] font-mono text-zinc-400 group-hover:text-zinc-200 font-bold uppercase tracking-wider shrink-0 transition-colors">
                 Show Explorer
               </span>
             </div>

@@ -246,3 +246,21 @@ export function formatWordForDisplay(word: string): string {
   return clean;
 }
 
+/**
+ * Checks if a word's part-of-speech matches an active POS filter.
+ * Treats 'other' as including non-content word classes: 'pron', 'prep', 'art', 'conj', and 'other'.
+ */
+export function isMatchingPos(wordPos: POS, filter: POS | 'all' | null | undefined): boolean {
+  if (!filter || filter === 'all') return true;
+  if (filter === 'other') {
+    return (
+      wordPos === 'other' ||
+      wordPos === 'pron' ||
+      wordPos === 'prep' ||
+      wordPos === 'art' ||
+      wordPos === 'conj'
+    );
+  }
+  return wordPos === filter;
+}
+

@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { WordsGraphView } from './WordsGraphView';
+import { SplitDivider } from './SplitDivider';
 import {
   AlertTriangle,
   ChevronLeft,
@@ -7,7 +8,8 @@ import {
   ChevronUp,
   ChevronDown,
 } from 'lucide-react';
-import type { AnagramResult, CandidateWordItem, HistogramBin, LetterBudgetSummary } from '../engine/types';
+import type { AnagramResult, CandidateWordItem, HistogramBin, LetterBudgetSummary, POS } from '../engine/types';
+import { pos, isMatchingPos } from '../engine/lexicon';
 
 export type { CandidateWordItem };
 
@@ -17,6 +19,8 @@ export interface CandidateWordsListProps {
   selectedLengthFilter: number[] | number | null;
   onSelectLengthFilter: (lengths: number[] | null) => void;
   onClearLengthFilter: () => void;
+  selectedPosFilter?: POS | 'all' | null;
+  onSelectPosFilter?: (pos: POS | 'all' | null) => void;
   histogramData: HistogramBin[];
   onAddWordToTarget: (word: string) => void;
   onSetWordAsTarget: (word: string) => void;
@@ -30,12 +34,71 @@ export interface CandidateWordsListProps {
   budget?: LetterBudgetSummary;
 }
 
+const POS_FILTERS = [
+  {
+    id: 'all' as const,
+    label: 'All',
+    desc: 'All dictionary word types',
+    details: 'Complete set of words formed by available letters',
+    textColor: 'text-zinc-800',
+    borderColor: 'border-zinc-300',
+    activeBg: 'bg-zinc-900 border-zinc-900 text-white ring-zinc-900',
+  },
+  {
+    id: 'noun' as const,
+    label: 'Nouns',
+    desc: 'Objects, entities, people & places',
+    details: 'Substantive naming words and entities',
+    textColor: 'text-blue-700',
+    borderColor: 'border-blue-200',
+    activeBg: 'bg-blue-600 border-blue-600 text-white ring-blue-600',
+  },
+  {
+    id: 'verb' as const,
+    label: 'Verbs',
+    desc: 'Action words, states & auxiliary verbs',
+    details: 'Actions, states of being, and modal verbs',
+    textColor: 'text-emerald-700',
+    borderColor: 'border-emerald-200',
+    activeBg: 'bg-emerald-600 border-emerald-600 text-white ring-emerald-600',
+  },
+  {
+    id: 'adj' as const,
+    label: 'Adjectives',
+    desc: 'Descriptors, qualities & attributes',
+    details: 'Sensory properties, modifiers, and descriptors',
+    textColor: 'text-amber-700',
+    borderColor: 'border-amber-200',
+    activeBg: 'bg-amber-600 border-amber-600 text-white ring-amber-600',
+  },
+  {
+    id: 'adv' as const,
+    label: 'Adverbs',
+    desc: 'Modifiers of verbs & adjectives',
+    details: 'Expressions of manner, degree, time, and frequency',
+    textColor: 'text-purple-700',
+    borderColor: 'border-purple-200',
+    activeBg: 'bg-purple-600 border-purple-600 text-white ring-purple-600',
+  },
+  {
+    id: 'other' as const,
+    label: 'Other',
+    desc: 'Pronouns, prepositions, articles, conjunctions, & misc',
+    details: 'pron (pronouns), prep (prepositions), art (articles/determiners), conj (conjunctions), other (misc)',
+    textColor: 'text-slate-600',
+    borderColor: 'border-slate-200',
+    activeBg: 'bg-slate-700 border-slate-700 text-white ring-slate-700',
+  },
+] as const;
+
 export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   sourceText,
   candidateWords,
   selectedLengthFilter,
   onSelectLengthFilter,
   onClearLengthFilter,
+  selectedPosFilter,
+  onSelectPosFilter,
   histogramData,
   onAddWordToTarget,
   onSetWordAsTarget,
@@ -51,24 +114,100 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [hasUserCustomizedSplit, setHasUserCustomizedSplit] = useState<boolean>(false);
   const [topTab, _setTopTab] = useState<'anagrams' | 'words'>('anagrams');
+  const [internalPosFilter, setInternalPosFilter] = useState<POS | 'all' | null>(null);
 
-  const getAdaptiveSplit = () => {
-    if (typeof window !== 'undefined' && window.innerWidth < 640) {
-      return 0.72; // Mobile
+  const activePosFilter = selectedPosFilter !== undefined ? selectedPosFilter : internalPosFilter;
+  const handlePosFilterChange = (val: POS | 'all' | null) => {
+    if (onSelectPosFilter) {
+      onSelectPosFilter(val);
+    } else {
+      setInternalPosFilter(val);
     }
-    return 0.65; // Desktop
   };
 
-  const [splitRatio, setSplitRatio] = useState<number>(getAdaptiveSplit);
+  const posCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      all: candidateWords.length,
+      noun: 0,
+      verb: 0,
+      adj: 0,
+      adv: 0,
+      other: 0,
+    };
+    for (let i = 0; i < candidateWords.length; i++) {
+      const p = pos(candidateWords[i].word);
+      if (counts[p] !== undefined) {
+        counts[p]++;
+      } else {
+        counts.other++;
+      }
+    }
+    return counts;
+  }, [candidateWords]);
+
+  // Breakdown of non-content word subtypes inside "Other"
+  const otherSubtypeCounts = useMemo(() => {
+    const subtypes = {
+      pron: 0,
+      prep: 0,
+      art: 0,
+      conj: 0,
+      other: 0,
+    };
+    for (let i = 0; i < candidateWords.length; i++) {
+      const p = pos(candidateWords[i].word);
+      if (p === 'pron' || p === 'prep' || p === 'art' || p === 'conj' || p === 'other') {
+        subtypes[p]++;
+      }
+    }
+    return subtypes;
+  }, [candidateWords]);
+
+  // Auto-reset filter if active filter has 0 matching words
+  useEffect(() => {
+    if (activePosFilter && activePosFilter !== 'all') {
+      if ((posCounts[activePosFilter] || 0) === 0) {
+        handlePosFilterChange(null);
+      }
+    }
+  }, [activePosFilter, posCounts]);
+
+  const getAdaptiveSplit = () => {
+    return 0.78; // Default wide graph on left (~78%), filter cards column on right (~22%)
+  };
+
+  const [splitRatio, setSplitRatio] = useState<number>(0.78);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [soloSubPanel, setSoloSubPanel] = useState<'graph' | 'cards' | null>(null);
 
   // Vertical split state for Right Column (Top Suggestions vs Bottom Histogram)
   const rightColumnRef = useRef<HTMLDivElement>(null);
-  const [cardSplitRatio, setCardSplitRatio] = useState<number>(0.52);
+  const [cardSplitRatio, setCardSplitRatio] = useState<number>(0.50);
   const [isCardDragging, setIsCardDragging] = useState<boolean>(false);
   const [isSuggestionsMinimized, setIsSuggestionsMinimized] = useState<boolean>(false);
   const [isHistogramMinimized, setIsHistogramMinimized] = useState<boolean>(false);
+
+  // ResizeObserver for the bubble container to guarantee all bubbles fit without clipping
+  const bubbleContainerRef = useRef<HTMLDivElement>(null);
+  const [bubbleBoxSize, setBubbleBoxSize] = useState<{ width: number; height: number }>({
+    width: 260,
+    height: 200,
+  });
+
+  useEffect(() => {
+    const el = bubbleContainerRef.current;
+    if (!el) return;
+    const updateSize = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setBubbleBoxSize({ width: rect.width, height: rect.height });
+      }
+    };
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isSuggestionsMinimized, isHistogramMinimized, cardSplitRatio]);
 
   const startCardDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -79,7 +218,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     if (!isCardDragging || !rightColumnRef.current) return;
     const rect = rightColumnRef.current.getBoundingClientRect();
     const relativeY = (e.clientY - rect.top) / rect.height;
-    const clampedY = Math.max(0.15, Math.min(0.85, relativeY));
+    const clampedY = Math.max(0.24, Math.min(0.80, relativeY));
     setCardSplitRatio(clampedY);
   }, [isCardDragging]);
 
@@ -251,7 +390,11 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     if (!isDragging || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const relativeX = (e.clientX - rect.left) / rect.width;
-    const clampedX = Math.max(0.25, Math.min(0.85, relativeX));
+    let clampedX = Math.max(0.20, Math.min(0.80, relativeX));
+    // Magnetic snap to equal 50/50 split within 2.5%
+    if (Math.abs(clampedX - 0.5) < 0.025) {
+      clampedX = 0.5;
+    }
     setSplitRatio(clampedX);
   }, [isDragging]);
 
@@ -271,9 +414,43 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     };
   }, [isDragging, handlePointerMove, handlePointerUp]);
 
+  // Compute histogram data filtered by the active POS filter
+  const effectiveHistogramData = useMemo(() => {
+    if (!activePosFilter || activePosFilter === 'all') {
+      return histogramData;
+    }
+
+    const filteredWords = candidateWords.filter(w => isMatchingPos(pos(w.word), activePosFilter));
+
+    const minL = histogramData.length > 0 ? histogramData[0].length : 2;
+    const maxL = histogramData.length > 0 ? histogramData[histogramData.length - 1].length : 12;
+
+    const countMap = new Map<number, number>();
+    for (let l = minL; l <= maxL; l++) {
+      countMap.set(l, 0);
+    }
+    for (let i = 0; i < filteredWords.length; i++) {
+      const len = filteredWords[i].length;
+      countMap.set(len, (countMap.get(len) || 0) + 1);
+    }
+
+    const res: { length: number; count: number }[] = [];
+    for (let l = minL; l <= maxL; l++) {
+      res.push({
+        length: l,
+        count: countMap.get(l) || 0,
+      });
+    }
+    return res;
+  }, [candidateWords, activePosFilter, histogramData]);
+
   const maxHistogramCount = useMemo(() => {
-    return Math.max(1, ...histogramData.map(d => d.count));
-  }, [histogramData]);
+    return Math.max(1, ...effectiveHistogramData.map(d => d.count));
+  }, [effectiveHistogramData]);
+
+  const totalFilteredWords = useMemo(() => {
+    return effectiveHistogramData.reduce((acc, curr) => acc + curr.count, 0);
+  }, [effectiveHistogramData]);
 
   const totalWords = useMemo(() => {
     return histogramData.reduce((acc, curr) => acc + curr.count, 0);
@@ -285,22 +462,22 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full relative flex flex-row items-stretch min-h-0 text-zinc-900 select-none overflow-hidden bg-transparent gap-0.5 animate-fade-in-up"
+      className="w-full h-full relative flex flex-row items-stretch min-h-0 text-zinc-900 select-none overflow-hidden bg-transparent gap-0 animate-fade-in-up"
     >
       {/* MINIMIZED VERTICAL PILL FOR GRAPH ON LEFT */}
       {totalWords > 0 && soloSubPanel === 'cards' && (
         <div
           onClick={() => setSoloSubPanel(null)}
-          className="h-full w-7 bg-zinc-900 hover:bg-zinc-800 border-2 border-black rounded-[14px] flex flex-col items-center justify-between py-3 cursor-pointer transition-colors shrink-0 text-white select-none shadow-md"
+          className="h-full w-7 bg-zinc-900 hover:bg-zinc-800 border-2 border-black rounded-[14px] flex flex-col items-center justify-between py-3 cursor-pointer transition-colors shrink-0 text-white select-none shadow-md group"
           title="Expand Graph View"
         >
           <div className="flex flex-col items-center gap-1.5 [writing-mode:vertical-lr] rotate-180">
-            <ChevronLeft className="w-3.5 h-3.5 text-emerald-400 rotate-90" />
-            <span className="text-[9.5px] font-mono text-zinc-400 font-bold uppercase tracking-widest">
+            <ChevronLeft className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-200 rotate-90 transition-colors" />
+            <span className="text-[9.5px] font-mono text-zinc-400 group-hover:text-zinc-200 font-bold uppercase tracking-widest transition-colors">
               Graph View
             </span>
           </div>
-          <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase [writing-mode:vertical-lr] rotate-180">
+          <span className="text-[9px] font-mono text-zinc-400 group-hover:text-zinc-200 font-bold uppercase [writing-mode:vertical-lr] rotate-180 transition-colors">
             Expand
           </span>
         </div>
@@ -315,7 +492,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
           style={{
             width: !showRightCards
               ? '100%'
-              : `${splitRatio * 100}%`,
+              : `calc(${splitRatio * 100}% - 7px)`,
           }}
         >
           <div className="flex-1 w-full h-full min-h-0">
@@ -323,6 +500,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
               sourceText={sourceText}
               candidateWords={candidateWords}
               selectedLengthFilter={selectedLengthFilter}
+              selectedPosFilter={activePosFilter}
               onAddWordToTarget={onAddWordToTarget}
               onSetWordAsTarget={onSetWordAsTarget}
               activeTargetPhrase={activeTargetPhrase}
@@ -334,62 +512,25 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
 
       {/* DRAGGABLE VERTICAL RESIZER DIVIDER & MINIMIZE CONTROLS */}
       {showLeftGraph && showRightCards && (
-        <div
-          role="separator"
+        <SplitDivider
+          orientation="vertical"
+          isDragging={isDragging}
           onPointerDown={startDrag}
           onDoubleClick={resetAdaptiveSplit}
-          className="w-3.5 sm:w-4 shrink-0 z-30 cursor-col-resize relative flex flex-col items-center justify-center transition-all group"
-          style={{ touchAction: 'none' }}
           title="Drag to resize left/right panels (Double-click to reset)"
-        >
-          {/* Razor-thin continuous vertical line with active emerald laser highlight */}
-          <div
-            className={`absolute inset-y-0 w-[1px] transition-colors duration-300 ${
-              isDragging ? 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-800 group-hover:bg-zinc-700'
-            }`}
-          />
-
-          {/* High-fidelity vertical glass capsule controller handle with active drag response */}
-          <div
-            className={`relative z-10 flex flex-col items-center gap-1.5 p-1 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
-              isDragging
-                ? 'border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.25)] scale-105'
-                : 'border border-zinc-800/80 group-hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.22)] shadow-lg group-hover:scale-105'
-            }`}
-          >
-            {/* Top Collapse Button */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSoloSubPanel('cards');
-              }}
-              className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
-              title="Minimize Graph (Show Cards)"
-            >
-              <ChevronLeft className="w-3 h-3" />
-            </button>
-
-            {/* Tiny grip indicator */}
-            <div className="flex flex-col gap-0.5 justify-center items-center py-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
-              <div className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
-              <div className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
-            </div>
-
-            {/* Bottom Collapse Button */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSoloSubPanel('graph');
-              }}
-              className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
-              title="Minimize Cards (Show Graph)"
-            >
-              <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
+          onCollapsePrev={(e) => {
+            e.stopPropagation();
+            setSoloSubPanel('cards');
+          }}
+          collapsePrevTitle="Minimize Graph (Show Cards)"
+          collapsePrevIcon="left"
+          onCollapseNext={(e) => {
+            e.stopPropagation();
+            setSoloSubPanel('graph');
+          }}
+          collapseNextTitle="Minimize Cards (Show Graph)"
+          collapseNextIcon="right"
+        />
       )}
 
       {/* RIGHT: Dual Card Column (Top Card & Bottom Card) */}
@@ -402,18 +543,18 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
           style={{
             width: !showLeftGraph
               ? '100%'
-              : `calc(${(1 - splitRatio) * 100}% - 12px)`,
+              : `calc(${(1 - splitRatio) * 100}% - 7px)`,
           }}
         >
           {/* MINIMIZED HORIZONTAL PILL FOR SUGGESTIONS ON TOP */}
           {isSuggestionsMinimized && (
             <div
               onClick={() => setIsSuggestionsMinimized(false)}
-              className="w-full h-9 sm:h-10 bg-[#111114] hover:bg-[#18181c] border border-zinc-800 hover:border-emerald-500/50 rounded-[14px] flex items-center justify-between px-3 cursor-pointer transition-all shrink-0 text-white select-none shadow-sm group"
+              className="w-full h-9 sm:h-10 bg-[#111114] hover:bg-[#18181c] border border-zinc-800 hover:border-zinc-700 rounded-[14px] flex items-center justify-between px-3 cursor-pointer transition-all shrink-0 text-white select-none shadow-sm group"
               title="Expand Suggestions"
             >
               <div className="flex items-center gap-2 min-w-0 pr-2">
-                <span className="p-1 rounded-md bg-zinc-800/80 text-emerald-400 group-hover:bg-emerald-500/10 group-hover:text-emerald-300 transition-colors shrink-0">
+                <span className="p-1 rounded-md bg-zinc-800/80 text-zinc-400 group-hover:text-zinc-200 transition-colors shrink-0">
                   <ChevronDown className="w-3.5 h-3.5 group-hover:translate-y-0.5 transition-transform" />
                 </span>
                 <span className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-200 group-hover:text-white transition-colors truncate">
@@ -423,7 +564,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                   MINIMIZED
                 </span>
               </div>
-              <div className="flex items-center gap-1 text-emerald-400 group-hover:text-emerald-300 transition-colors shrink-0">
+              <div className="flex items-center gap-1 text-zinc-400 group-hover:text-zinc-200 transition-colors shrink-0">
                 <span className="text-[9.5px] font-mono font-bold uppercase tracking-wider">
                   Expand
                 </span>
@@ -434,94 +575,179 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
           {/* TOP CARD (Red Box 1): Solved Anagrams, Exact Closers & Suggestions */}
           {!isSuggestionsMinimized && (
             <div
-              className="w-full bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2 sm:p-2.5 shadow-sm transition-all min-h-0"
+              className="w-full bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-0 shadow-sm transition-all min-h-0"
               style={{
                 height: isHistogramMinimized
                   ? '100%'
                   : `calc(${cardSplitRatio * 100}% - 8px)`,
-                minHeight: '80px',
+                minHeight: '120px',
               }}
             >
-              {/* Body */}
-              <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar space-y-1">
-                {/* Case 1: Surplus Illegal Letter */}
-                {surplusLetters.length > 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center p-3 text-center select-none">
-                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center mb-1.5">
-                      <AlertTriangle className="w-4 h-4 text-amber-600" />
-                    </div>
-                    <span className="text-xs font-mono font-bold text-amber-950 uppercase tracking-wide">
-                      Surplus: {surplusLetters.join(' ').toUpperCase()}
-                    </span>
-                    <span className="text-[10px] font-mono text-zinc-500 mt-1">
-                      Remove extra letters to form valid anagram
-                    </span>
+              {/* Body: Floating Part of Speech Filter Bubbles */}
+              <div className="flex-1 min-h-0 flex flex-col p-1.5 sm:p-2 select-none overflow-hidden relative">
+                {/* Floating Filter Bubbles Container */}
+                {candidateWords.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center p-2 text-center select-none">
+                    <span className="text-[10px] font-mono text-zinc-400">No words available</span>
                   </div>
-                ) : exactClosers.length > 0 && activeTargetPhrase.trim().length > 0 ? (
-                  /* Case 2: Exact Closers (100% finishing words for leftover letters) */
-                  exactClosers.slice(0, 50).map((closer, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => onAddWordToTarget(closer)}
-                      className="group flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-50/80 hover:bg-emerald-100 border border-emerald-200/90 transition-all cursor-pointer select-none"
-                    >
-                      <div className="flex items-center gap-1.5 min-w-0 pr-1">
-                        <span className="text-xs font-mono font-bold text-emerald-700 shrink-0">+</span>
-                        <span className="text-xs sm:text-[13px] font-mono font-bold text-emerald-950 uppercase tracking-wide truncate">
-                          {closer}
-                        </span>
-                      </div>
-                      <span className="text-[9px] font-mono bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded shrink-0 shadow-xs">
-                        100%
-                      </span>
-                    </div>
-                  ))
-                ) : isSolving ? (
-                  /* Case 3: Solving */
-                  <div className="h-full flex flex-col items-center justify-center p-3 text-center">
-                    <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mb-1.5" />
-                    <span className="text-xs font-mono font-bold text-zinc-600">Solving Anagrams...</span>
-                    <span className="text-[10px] font-mono text-zinc-400 mt-0.5">Searching dictionary combinations</span>
-                  </div>
-                ) : results && results.length > 0 ? (
-                  /* Case 4: Full Solved Anagram Phrases */
-                  results.slice(0, 60).map((r, idx) => {
-                    const isActive = activeTargetPhrase.trim().toUpperCase() === r.phrase.trim().toUpperCase();
-                    return (
-                      <div
-                        key={idx}
-                        onClick={() => onSetWordAsTarget(r.phrase)}
-                        className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer select-none ${
-                          isActive
-                            ? 'bg-emerald-100/90 border-emerald-400 text-emerald-950 shadow-xs'
-                            : 'bg-zinc-50/60 hover:bg-emerald-50/80 border-zinc-200/60 hover:border-emerald-300 text-zinc-900'
-                        }`}
-                      >
-                        <span className="text-xs sm:text-[12.5px] font-mono font-bold uppercase tracking-wider truncate">
-                          {r.phrase}
-                        </span>
-                      </div>
-                    );
-                  })
-                ) : candidateWords.length > 0 ? (
-                  /* Case 5: Candidate words */
-                  candidateWords.slice(0, 60).map((w, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => onAddWordToTarget(w.word)}
-                      className="group flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-50/60 hover:bg-emerald-50/80 border border-zinc-200/60 hover:border-emerald-300 transition-colors cursor-pointer select-none"
-                    >
-                      <span className="text-xs font-mono font-bold text-zinc-800 group-hover:text-emerald-950 uppercase tracking-wide">
-                        {w.word}
-                      </span>
-                      <span className="text-[9px] font-mono font-bold text-zinc-500 bg-zinc-200/80 group-hover:bg-emerald-200/80 group-hover:text-emerald-900 px-1.5 py-0.5 rounded">
-                        {w.length}L
-                      </span>
-                    </div>
-                  ))
                 ) : (
-                  <div className="h-full flex items-center justify-center text-center p-3">
-                    <span className="text-xs font-mono text-zinc-400">No suggestions</span>
+                  <div
+                    ref={bubbleContainerRef}
+                    className="flex-1 min-h-0 relative w-full h-full flex flex-col overflow-y-auto overflow-x-hidden p-1.5 sm:p-2 select-none scrollbar-none"
+                  >
+                    <style>{`
+                      @keyframes bubbleFloat1 {
+                        0%, 100% { transform: translateY(0px) translateX(0px); }
+                        50% { transform: translateY(-4px) translateX(2px); }
+                      }
+                      @keyframes bubbleFloat2 {
+                        0%, 100% { transform: translateY(0px) translateX(0px); }
+                        50% { transform: translateY(3px) translateX(-2px); }
+                      }
+                      @keyframes bubbleFloat3 {
+                        0%, 100% { transform: translateY(0px) translateX(0px); }
+                        50% { transform: translateY(-3px) translateX(-2px); }
+                      }
+                      @keyframes bubbleFloat4 {
+                        0%, 100% { transform: translateY(0px) translateX(0px); }
+                        50% { transform: translateY(4px) translateX(2px); }
+                      }
+                      @keyframes bubbleFloat5 {
+                        0%, 100% { transform: translateY(0px) translateX(0px); }
+                        50% { transform: translateY(-3px) translateX(2px); }
+                      }
+                      @keyframes bubbleFloat6 {
+                        0%, 100% { transform: translateY(0px) translateX(0px); }
+                        50% { transform: translateY(3px) translateX(-2px); }
+                      }
+                    `}</style>
+                    {(() => {
+                      const visibleFilters = POS_FILTERS.filter(
+                        filter => (posCounts[filter.id] || 0) > 0
+                      );
+                      const counts = visibleFilters.map(f => posCounts[f.id] || 0);
+                      const maxCount = Math.max(...counts, 1);
+                      const minCount = Math.min(...counts, 1);
+                      const hasVariation = maxCount > minCount;
+
+                      const availW = Math.max(130, bubbleBoxSize.width);
+                      const availH = Math.max(90, bubbleBoxSize.height);
+
+                      // Determine rows and columns based on aspect ratio of the card
+                      const rowEstimate = availW >= 280 ? 2 : availH < 170 ? 2 : 3;
+                      const colEstimate = Math.max(2, Math.ceil(visibleFilters.length / rowEstimate));
+
+                      const maxPossibleH = Math.floor((availH - 20) / rowEstimate);
+                      const maxPossibleW = Math.floor((availW - 20) / colEstimate);
+                      const safeMaxDiam = Math.max(34, Math.min(maxPossibleH, maxPossibleW, 76));
+
+                      const minDiameter = Math.max(32, Math.min(50, Math.round(safeMaxDiam * 0.74)));
+                      const maxDiameter = Math.max(minDiameter + 6, safeMaxDiam);
+
+                      return (
+                        <div className="m-auto flex flex-wrap items-center justify-center content-center gap-2 sm:gap-2.5 w-full py-1">
+                          {visibleFilters.map((filter, idx) => {
+                            const count = posCounts[filter.id] || 0;
+                            const isSelected =
+                              activePosFilter === filter.id ||
+                              (filter.id === 'all' && (!activePosFilter || activePosFilter === 'all'));
+                            const animName = `bubbleFloat${(idx % 6) + 1}`;
+                            const animDuration = `${3.2 + (idx % 3) * 0.8}s`;
+                            const animDelay = `${(idx * 0.4).toFixed(2)}s`;
+
+                            const ratio = hasVariation
+                              ? Math.sqrt((count - minCount) / (maxCount - minCount))
+                              : 0.5;
+                            const diameter = Math.round(minDiameter + ratio * (maxDiameter - minDiameter));
+
+                            const displayLabel =
+                              diameter < 52
+                                ? filter.id === 'adj'
+                                  ? 'ADJ'
+                                  : filter.id === 'adv'
+                                  ? 'ADV'
+                                  : filter.id === 'noun'
+                                  ? 'NOUN'
+                                  : filter.label
+                                : filter.label;
+
+                            return (
+                              <button
+                                key={filter.id}
+                                type="button"
+                                onClick={() => {
+                                  if (filter.id === 'all' || activePosFilter === filter.id) {
+                                    handlePosFilterChange(null);
+                                  } else {
+                                    handlePosFilterChange(filter.id as POS);
+                                  }
+                                }}
+                                style={{
+                                  width: `${diameter}px`,
+                                  height: `${diameter}px`,
+                                  animation: `${animName} ${animDuration} ease-in-out infinite alternate`,
+                                  animationDelay: animDelay,
+                                }}
+                                className={`group rounded-full border-2 transition-transform duration-200 cursor-pointer select-none flex flex-col items-center justify-center p-1 relative shadow-xs hover:scale-110 active:scale-95 shrink-0 ${
+                                  isSelected
+                                    ? `${filter.activeBg} font-bold shadow-md ring-2 ring-offset-1`
+                                    : `bg-white hover:bg-zinc-50 ${filter.borderColor} ${filter.textColor}`
+                                }`}
+                                title={
+                                  filter.id === 'other'
+                                    ? `OTHER (${count} words)\nNon-content grammatical words:\n• Pronouns (pron): ${otherSubtypeCounts.pron}\n• Prepositions (prep): ${otherSubtypeCounts.prep}\n• Articles/Determiners (art): ${otherSubtypeCounts.art}\n• Conjunctions (conj): ${otherSubtypeCounts.conj}\n• Miscellaneous (other): ${otherSubtypeCounts.other}`
+                                    : `${filter.label} (${count} words) — ${filter.desc}`
+                                }
+                              >
+                                <span
+                                  className={`font-mono font-bold uppercase leading-none mb-0.5 text-center px-0.5 max-w-full ${
+                                    displayLabel.length >= 8
+                                      ? diameter >= 66
+                                        ? 'text-[8.5px] sm:text-[9px] tracking-tighter'
+                                        : 'text-[7px] tracking-tighter'
+                                      : displayLabel.length >= 6
+                                      ? diameter >= 66
+                                        ? 'text-[9.5px] sm:text-[10px] tracking-tight'
+                                        : 'text-[7.5px] tracking-tight'
+                                      : diameter >= 64
+                                      ? 'text-[11px] sm:text-xs tracking-wider'
+                                      : diameter >= 48
+                                      ? 'text-[9px] sm:text-[9.5px] tracking-wide'
+                                      : 'text-[7.5px] tracking-normal'
+                                  }`}
+                                >
+                                  {displayLabel}
+                                </span>
+                                <span
+                                  className={`font-mono font-bold rounded-full leading-tight shrink-0 ${
+                                    diameter >= 64
+                                      ? 'text-xs sm:text-[13px] px-2 py-0.5'
+                                      : diameter >= 48
+                                      ? 'text-[9.5px] sm:text-[10.5px] px-1.5 py-0.2'
+                                      : 'text-[8.5px] px-1 py-0.1'
+                                  } ${
+                                    isSelected
+                                      ? 'bg-white/25 text-white'
+                                      : 'bg-zinc-100 text-zinc-700 group-hover:bg-zinc-200 group-hover:text-zinc-900'
+                                  }`}
+                                >
+                                  {count}
+                                </span>
+                                {filter.id === 'other' && diameter >= 66 && (
+                                  <span
+                                    className={`text-[7px] font-mono leading-none mt-0.5 text-center truncate max-w-full ${
+                                      isSelected ? 'text-slate-200/90' : 'text-slate-500'
+                                    }`}
+                                  >
+                                    pron·prep·conj
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -530,69 +756,32 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
 
           {/* HORIZONTAL DRAGGABLE DIVIDER BETWEEN TOP & BOTTOM CARD */}
           {!isSuggestionsMinimized && !isHistogramMinimized && (
-            <div
-              role="separator"
+            <SplitDivider
+              orientation="horizontal"
+              isDragging={isCardDragging}
               onPointerDown={startCardDrag}
-              onDoubleClick={() => setCardSplitRatio(0.52)}
-              className="w-full h-5 flex items-center justify-center cursor-row-resize select-none touch-none shrink-0 relative group"
-              style={{ touchAction: 'none' }}
+              onDoubleClick={() => setCardSplitRatio(0.5)}
               title="Drag to resize (Double-click to reset 50/50)"
-            >
-              {/* Razor-thin continuous horizontal line with active emerald laser highlight */}
-              <div
-                className={`absolute inset-x-0 h-[1px] transition-colors duration-300 ${
-                  isCardDragging ? 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-800 group-hover:bg-zinc-700'
-                }`}
-              />
-
-              {/* High-fidelity horizontal glass capsule controller handle with active drag response */}
-              <div
-                className={`relative z-10 flex items-center gap-2 px-2 py-0.5 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
-                  isCardDragging
-                    ? 'border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.25)] scale-105'
-                    : 'border border-zinc-800/80 group-hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.22)] shadow-lg group-hover:scale-105'
-                }`}
-              >
-                {/* Button to minimize top card (Suggestions) */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsSuggestionsMinimized(true);
-                  }}
-                  className="pointer-events-auto p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
-                  title="Minimize Suggestions"
-                >
-                  <ChevronUp className="w-3 h-3" />
-                </button>
-
-                {/* Tiny grip indicator */}
-                <div className="flex gap-0.5 justify-center items-center px-1 opacity-40 group-hover:opacity-100 transition-opacity">
-                  <div className="w-1 h-1 rounded-full bg-zinc-500" />
-                  <div className="w-1 h-1 rounded-full bg-zinc-500" />
-                  <div className="w-1 h-1 rounded-full bg-zinc-500" />
-                </div>
-
-                {/* Button to minimize bottom card (Histogram) */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsHistogramMinimized(true);
-                  }}
-                  className="pointer-events-auto p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
-                  title="Minimize Histogram"
-                >
-                  <ChevronDown className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
+              onCollapsePrev={(e) => {
+                e.stopPropagation();
+                setIsSuggestionsMinimized(true);
+              }}
+              collapsePrevTitle="Minimize Suggestions"
+              collapsePrevIcon="up"
+              onCollapseNext={(e) => {
+                e.stopPropagation();
+                setIsHistogramMinimized(true);
+              }}
+              collapseNextTitle="Minimize Histogram"
+              collapseNextIcon="down"
+              className="-my-1.5 !py-0 !my-0 !h-1"
+            />
           )}
 
           {/* BOTTOM CARD (Red Box 2): Word Length Histogram */}
           {!isHistogramMinimized && (
             <div
-              className="w-full bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-2 sm:p-2.5 shadow-sm transition-all min-h-0 flex-1 relative"
+              className="w-full bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-0 shadow-sm transition-all min-h-0 flex-1 relative"
               style={{
                 height: isSuggestionsMinimized
                   ? '100%'
@@ -600,6 +789,15 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                 minHeight: '70px',
               }}
             >
+              {/* Active Filter Label (Top-Left) */}
+              {activePosFilter && activePosFilter !== 'all' && (
+                <div className="absolute top-1.5 left-2.5 z-10 text-[9.5px] font-mono font-bold text-zinc-600 uppercase tracking-wider flex items-center gap-1.5 pointer-events-none select-none">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span>{POS_FILTERS.find(f => f.id === activePosFilter)?.label || activePosFilter}</span>
+                  <span className="text-zinc-400">({totalFilteredWords})</span>
+                </div>
+              )}
+
               {selectedLengthFilter !== null && (
                 <button
                   type="button"
@@ -615,7 +813,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                 className="flex-1 min-h-0 flex items-end justify-between gap-1 pt-2 pb-1 select-none touch-none"
                 onDoubleClick={onClearLengthFilter}
               >
-                {histogramData.map(item => {
+                {effectiveHistogramData.map(item => {
                   const isSelected = activeLengthsSet.has(item.length);
                   const heightPercent = item.count > 0 ? Math.max(14, (item.count / maxHistogramCount) * 100) : 0;
 
@@ -636,7 +834,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                       className={`flex-1 flex flex-col items-center justify-end h-full group cursor-pointer transition-all rounded py-1 select-none ${
                         isSelected
                           ? 'bg-emerald-100/90 ring-1 ring-emerald-500 shadow-xs'
-                          : 'hover:bg-zinc-100'
+                          : item.count > 0
+                          ? 'hover:bg-zinc-100'
+                          : 'opacity-40 hover:bg-transparent'
                       }`}
                     >
                       {/* Count Label */}
@@ -646,7 +846,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                             ? 'text-emerald-950 font-bold'
                             : item.count > 0
                             ? 'text-zinc-700 group-hover:text-zinc-950 font-semibold'
-                            : 'text-zinc-400'
+                            : 'text-zinc-300'
                         }`}
                       >
                         {item.count}
@@ -669,7 +869,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                         className={`text-[9.5px] font-mono mt-1 ${
                           isSelected
                             ? 'text-emerald-950 font-bold'
-                            : 'text-zinc-600 group-hover:text-zinc-900 font-medium'
+                            : item.count > 0
+                            ? 'text-zinc-600 group-hover:text-zinc-900 font-medium'
+                            : 'text-zinc-400'
                         }`}
                       >
                         {item.length}L
@@ -685,11 +887,11 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
           {isHistogramMinimized && (
             <div
               onClick={() => setIsHistogramMinimized(false)}
-              className="w-full h-9 sm:h-10 bg-[#111114] hover:bg-[#18181c] border border-zinc-800 hover:border-emerald-500/50 rounded-[14px] flex items-center justify-between px-3 cursor-pointer transition-all shrink-0 text-white select-none shadow-sm group"
+              className="w-full h-9 sm:h-10 bg-[#111114] hover:bg-[#18181c] border border-zinc-800 hover:border-zinc-700 rounded-[14px] flex items-center justify-between px-3 cursor-pointer transition-all shrink-0 text-white select-none shadow-sm group"
               title="Expand Histogram"
             >
               <div className="flex items-center gap-2 min-w-0 pr-2">
-                <span className="p-1 rounded-md bg-zinc-800/80 text-emerald-400 group-hover:-translate-y-0.5 transition-transform shrink-0">
+                <span className="p-1 rounded-md bg-zinc-800/80 text-zinc-400 group-hover:text-zinc-200 group-hover:-translate-y-0.5 transition-transform shrink-0">
                   <ChevronUp className="w-3.5 h-3.5" />
                 </span>
                 <span className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-200 group-hover:text-white transition-colors truncate">
@@ -699,7 +901,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                   MINIMIZED
                 </span>
               </div>
-              <div className="flex items-center gap-1 text-emerald-400 group-hover:text-emerald-300 transition-colors shrink-0">
+              <div className="flex items-center gap-1 text-zinc-400 group-hover:text-zinc-200 transition-colors shrink-0">
                 <span className="text-[9.5px] font-mono font-bold uppercase tracking-wider">
                   Expand
                 </span>
@@ -713,16 +915,16 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
       {totalWords > 0 && soloSubPanel === 'graph' && (
         <div
           onClick={() => setSoloSubPanel(null)}
-          className="h-full w-7 bg-zinc-900 hover:bg-zinc-800 border-2 border-black rounded-[14px] flex flex-col items-center justify-between py-3 cursor-pointer transition-colors shrink-0 text-white select-none shadow-md"
+          className="h-full w-7 bg-zinc-900 hover:bg-zinc-800 border-2 border-black rounded-[14px] flex flex-col items-center justify-between py-3 cursor-pointer transition-colors shrink-0 text-white select-none shadow-md group"
           title="Expand Suggestions & Histogram"
         >
           <div className="flex flex-col items-center gap-1.5 [writing-mode:vertical-lr]">
-            <ChevronRight className="w-3.5 h-3.5 text-emerald-400 -rotate-90" />
-            <span className="text-[9.5px] font-mono text-zinc-400 font-bold uppercase tracking-widest">
+            <ChevronRight className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-200 -rotate-90 transition-colors" />
+            <span className="text-[9.5px] font-mono text-zinc-400 group-hover:text-zinc-200 font-bold uppercase tracking-widest transition-colors">
               Suggestions & Histogram
             </span>
           </div>
-          <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase [writing-mode:vertical-lr]">
+          <span className="text-[9px] font-mono text-zinc-400 group-hover:text-zinc-200 font-bold uppercase [writing-mode:vertical-lr] transition-colors">
             Expand
           </span>
         </div>
