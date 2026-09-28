@@ -1,19 +1,11 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { WordsGraphView } from './WordsGraphView';
 import {
-  Sparkles,
-  Copy,
-  Check,
-  ArrowUpRight,
-  CheckCircle2,
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
   ChevronDown,
-  Maximize2,
-  Minimize2,
-  RotateCcw,
 } from 'lucide-react';
 import type { AnagramResult, CandidateWordItem, HistogramBin, LetterBudgetSummary } from '../engine/types';
 
@@ -59,7 +51,6 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [hasUserCustomizedSplit, setHasUserCustomizedSplit] = useState<boolean>(false);
   const [topTab, _setTopTab] = useState<'anagrams' | 'words'>('anagrams');
-  const [copiedPhrase, setCopiedPhrase] = useState<string | null>(null);
 
   const getAdaptiveSplit = () => {
     if (typeof window !== 'undefined' && window.innerWidth < 640) {
@@ -114,14 +105,6 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   const isRangeDraggingRef = useRef<boolean>(false);
   const dragMovedRef = useRef<boolean>(false);
   const [dragPreview, setDragPreview] = useState<{ start: number; current: number } | null>(null);
-
-  const handleCopyPhrase = (phrase: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard?.writeText(phrase);
-    setCopiedPhrase(phrase);
-    setTimeout(() => setCopiedPhrase(null), 1500);
-    onShowToast(`Copied "${phrase}"`, 'success');
-  };
 
   // Set of currently active/selected lengths
   const activeLengthsSet = useMemo(() => {
@@ -514,27 +497,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                             : 'bg-zinc-50/60 hover:bg-emerald-50/80 border-zinc-200/60 hover:border-emerald-300 text-zinc-900'
                         }`}
                       >
-                        <span className="text-xs sm:text-[12.5px] font-mono font-bold uppercase tracking-wider truncate pr-1">
+                        <span className="text-xs sm:text-[12.5px] font-mono font-bold uppercase tracking-wider truncate">
                           {r.phrase}
                         </span>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => handleCopyPhrase(r.phrase, e)}
-                            className="p-1 rounded text-zinc-400 hover:text-zinc-800 hover:bg-white/80 transition-colors"
-                            aria-label="Copy phrase"
-                          >
-                            {copiedPhrase === r.phrase ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                          <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-zinc-200/80 group-hover:bg-emerald-600 group-hover:text-white text-zinc-600 transition-colors text-[9px] font-mono font-bold">
-                            <span>Stage</span>
-                            <ArrowUpRight className="w-2.5 h-2.5" />
-                          </div>
-                        </div>
                       </div>
                     );
                   })
