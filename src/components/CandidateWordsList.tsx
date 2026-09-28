@@ -332,7 +332,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
           style={{
             width: !showRightCards
               ? '100%'
-              : `calc(${splitRatio * 100}% - 12px)`,
+              : `${splitRatio * 100}%`,
           }}
         >
           <div className="flex-1 w-full h-full min-h-0">
@@ -355,7 +355,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
           role="separator"
           onPointerDown={startDrag}
           onDoubleClick={resetAdaptiveSplit}
-          className="w-6 shrink-0 z-30 cursor-col-resize relative flex flex-col items-center justify-center transition-all group"
+          className="w-3.5 sm:w-4 shrink-0 z-30 cursor-col-resize relative flex flex-col items-center justify-center transition-all group"
           style={{ touchAction: 'none' }}
           title="Drag to resize left/right panels (Double-click to reset)"
         >
@@ -366,9 +366,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             }`}
           />
 
-          {/* High-fidelity vertical glass capsule controller handle that fits snugly inside divider */}
+          {/* High-fidelity vertical glass capsule controller handle with active drag response */}
           <div
-            className={`relative z-10 flex flex-col items-center gap-1 p-0.5 w-[20px] rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
+            className={`relative z-10 flex flex-col items-center gap-1.5 p-1 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
               isDragging
                 ? 'border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.25)] scale-105'
                 : 'border border-zinc-800/80 group-hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.22)] shadow-lg group-hover:scale-105'
@@ -381,16 +381,16 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                 e.stopPropagation();
                 setSoloSubPanel('cards');
               }}
-              className="w-4 h-4 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer flex items-center justify-center"
+              className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
               title="Minimize Graph (Show Cards)"
             >
-              <ChevronLeft className="w-2.5 h-2.5" />
+              <ChevronLeft className="w-3 h-3" />
             </button>
 
             {/* Tiny grip indicator */}
             <div className="flex flex-col gap-0.5 justify-center items-center py-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
-              <div className="w-1 h-1 rounded-full bg-zinc-500" />
-              <div className="w-1 h-1 rounded-full bg-zinc-500" />
+              <div className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+              <div className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
             </div>
 
             {/* Bottom Collapse Button */}
@@ -400,10 +400,10 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                 e.stopPropagation();
                 setSoloSubPanel('graph');
               }}
-              className="w-4 h-4 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer flex items-center justify-center"
+              className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
               title="Minimize Cards (Show Graph)"
             >
-              <ChevronRight className="w-2.5 h-2.5" />
+              <ChevronRight className="w-3 h-3" />
             </button>
           </div>
         </div>
@@ -455,7 +455,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
               style={{
                 height: isHistogramMinimized
                   ? '100%'
-                  : `calc(${cardSplitRatio * 100}% - 12px)`,
+                  : `calc(${cardSplitRatio * 100}% - 8px)`,
                 minHeight: '80px',
               }}
             >
@@ -569,7 +569,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
               role="separator"
               onPointerDown={startCardDrag}
               onDoubleClick={() => setCardSplitRatio(0.52)}
-              className="w-full h-6 flex items-center justify-center cursor-row-resize select-none touch-none shrink-0 relative group"
+              className="w-full h-5 flex items-center justify-center cursor-row-resize select-none touch-none shrink-0 relative group"
               style={{ touchAction: 'none' }}
               title="Drag to resize (Double-click to reset 50/50)"
             >
@@ -580,9 +580,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                 }`}
               />
 
-              {/* High-fidelity horizontal glass capsule controller handle that fits snugly inside divider */}
+              {/* High-fidelity horizontal glass capsule controller handle with active drag response */}
               <div
-                className={`relative z-10 flex items-center gap-1.5 px-1.5 py-0.5 h-5 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
+                className={`relative z-10 flex items-center gap-2 px-2 py-0.5 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
                   isCardDragging
                     ? 'border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.25)] scale-105'
                     : 'border border-zinc-800/80 group-hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.22)] shadow-lg group-hover:scale-105'
@@ -595,17 +595,17 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                     e.stopPropagation();
                     setIsSuggestionsMinimized(true);
                   }}
-                  className="w-4 h-4 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer flex items-center justify-center"
+                  className="pointer-events-auto p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
                   title="Minimize Suggestions"
                 >
-                  <ChevronUp className="w-2.5 h-2.5" />
+                  <ChevronUp className="w-3 h-3" />
                 </button>
 
                 {/* Tiny grip indicator */}
-                <div className="flex gap-0.5 justify-center items-center px-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
-                  <div className="w-0.5 h-0.5 rounded-full bg-zinc-500" />
-                  <div className="w-0.5 h-0.5 rounded-full bg-zinc-500" />
-                  <div className="w-0.5 h-0.5 rounded-full bg-zinc-500" />
+                <div className="flex gap-0.5 justify-center items-center px-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                  <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                  <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                  <div className="w-1 h-1 rounded-full bg-zinc-500" />
                 </div>
 
                 {/* Button to minimize bottom card (Histogram) */}
@@ -615,10 +615,10 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                     e.stopPropagation();
                     setIsHistogramMinimized(true);
                   }}
-                  className="w-4 h-4 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer flex items-center justify-center"
+                  className="pointer-events-auto p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
                   title="Minimize Histogram"
                 >
-                  <ChevronDown className="w-2.5 h-2.5" />
+                  <ChevronDown className="w-3 h-3" />
                 </button>
               </div>
             </div>
@@ -631,7 +631,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
               style={{
                 height: isSuggestionsMinimized
                   ? '100%'
-                  : `calc(${(1 - cardSplitRatio) * 100}% - 12px)`,
+                  : `calc(${(1 - cardSplitRatio) * 100}% - 8px)`,
                 minHeight: '70px',
               }}
             >

@@ -238,7 +238,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             tabIndex={0}
             onPointerDown={startDrag1}
             onDoubleClick={resetRatios}
-            className="relative w-full h-6 flex items-center justify-center z-30 cursor-row-resize touch-none select-none shrink-0 group"
+            className="relative w-full h-5 flex items-center justify-center z-30 cursor-row-resize touch-none select-none shrink-0 group"
             style={{ touchAction: 'none' }}
             title="Drag to resize Stage & Input (Double-click to reset)"
           >
@@ -254,7 +254,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
               <button
                 type="button"
                 onClick={() => applyPreset('focusStage')}
-                className="px-1.5 py-0.5 h-[18px] flex items-center rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer hover:scale-105"
+                className="px-1.5 py-0.5 rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer hover:scale-105"
                 title="Focus Stage (70%)"
               >
                 Stage+
@@ -262,7 +262,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
               <button
                 type="button"
                 onClick={() => applyPreset('balanced')}
-                className="px-1.5 py-0.5 h-[18px] flex items-center rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer hover:scale-105"
+                className="px-1.5 py-0.5 rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer hover:scale-105"
                 title="Balanced 50/50 Layout"
               >
                 Balanced
@@ -270,16 +270,16 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
               <button
                 type="button"
                 onClick={() => applyPreset('focusExplorer')}
-                className="px-1.5 py-0.5 h-[18px] flex items-center rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer hover:scale-105"
+                className="px-1.5 py-0.5 rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all cursor-pointer hover:scale-105"
                 title="Focus Explorer (70%)"
               >
                 Words+
               </button>
             </div>
 
-            {/* High-fidelity glass capsule toolbar that fits snugly inside divider */}
+            {/* High-fidelity glass capsule toolbar with active scale and shadow response */}
             <div
-              className={`relative z-10 flex items-center gap-1.5 px-1.5 py-0.5 h-5 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
+              className={`relative z-10 flex items-center gap-2 px-2 py-0.5 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
                 activeDrag === 1
                   ? 'border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.25)] scale-105'
                   : 'border border-zinc-800/80 group-hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.22)] shadow-xl group-hover:scale-105'
@@ -290,27 +290,27 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
               <button
                 type="button"
                 onClick={toggleMinimizeCard1}
-                className="w-4 h-4 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer flex items-center justify-center"
+                className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
                 title={isCard1Minimized ? 'Expand Stage' : 'Minimize Stage'}
               >
-                <ChevronUp className="w-2.5 h-2.5" />
+                <ChevronUp className="w-3 h-3" />
               </button>
 
               {/* Grip Indicator dots */}
-              <div className="flex gap-0.5 justify-center items-center px-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
-                <div className="w-0.5 h-0.5 rounded-full bg-zinc-500" />
-                <div className="w-0.5 h-0.5 rounded-full bg-zinc-500" />
-                <div className="w-0.5 h-0.5 rounded-full bg-zinc-500" />
+              <div className="flex gap-0.5 justify-center items-center px-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                <div className="w-1 h-1 rounded-full bg-zinc-500" />
               </div>
 
               {/* Button 2 (ChevronDown) - Minimizes Card 3 */}
               <button
                 type="button"
                 onClick={toggleMinimizeCard3}
-                className="w-4 h-4 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer flex items-center justify-center"
+                className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
                 title={isCard3Minimized ? 'Expand Explorer' : 'Minimize Explorer'}
               >
-                <ChevronDown className="w-2.5 h-2.5" />
+                <ChevronDown className="w-3 h-3" />
               </button>
             </div>
 
@@ -319,7 +319,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
               <button
                 type="button"
                 onClick={resetRatios}
-                className="absolute right-4 z-20 w-5 h-5 flex items-center justify-center rounded-full bg-[#09090b]/90 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 shadow-md transition-all duration-300 pointer-events-auto hover:scale-105"
+                className="absolute right-4 z-20 p-1 rounded-full bg-[#09090b]/90 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 shadow-md transition-all duration-300 pointer-events-auto hover:scale-105"
                 title="Reset layout proportions"
                 onPointerDown={e => e.stopPropagation()}
               >
@@ -362,7 +362,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             tabIndex={0}
             onPointerDown={startDrag2}
             onDoubleClick={resetRatios}
-            className="relative w-full h-6 flex items-center justify-center z-30 cursor-row-resize touch-none select-none shrink-0 group"
+            className="relative w-full h-5 flex items-center justify-center z-30 cursor-row-resize touch-none select-none shrink-0 group"
             style={{ touchAction: 'none' }}
             title="Drag to resize Word Explorer (Double-click to reset)"
           >
@@ -373,9 +373,9 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
               }`}
             />
 
-            {/* High-fidelity glass capsule toolbar that fits snugly inside divider */}
+            {/* High-fidelity glass capsule toolbar with active scale and shadow response */}
             <div
-              className={`relative z-10 flex items-center gap-1.5 px-1.5 py-0.5 h-5 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
+              className={`relative z-10 flex items-center gap-2 px-2 py-0.5 rounded-full bg-[#09090b]/95 backdrop-blur-md transition-all duration-300 pointer-events-auto ${
                 activeDrag === 2
                   ? 'border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.25)] scale-105'
                   : 'border border-zinc-800/80 group-hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.22)] shadow-xl group-hover:scale-105'
@@ -386,27 +386,27 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
               <button
                 type="button"
                 onClick={toggleMinimizeCard1}
-                className="w-4 h-4 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer flex items-center justify-center"
+                className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
                 title={isCard1Minimized ? 'Expand Stage' : 'Minimize Stage'}
               >
-                <ChevronUp className="w-2.5 h-2.5" />
+                <ChevronUp className="w-3 h-3" />
               </button>
 
               {/* Grip Indicator dots */}
-              <div className="flex gap-0.5 justify-center items-center px-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
-                <div className="w-0.5 h-0.5 rounded-full bg-zinc-500" />
-                <div className="w-0.5 h-0.5 rounded-full bg-zinc-500" />
-                <div className="w-0.5 h-0.5 rounded-full bg-zinc-500" />
+              <div className="flex gap-0.5 justify-center items-center px-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                <div className="w-1 h-1 rounded-full bg-zinc-500" />
+                <div className="w-1 h-1 rounded-full bg-zinc-500" />
               </div>
 
               {/* Button 2 (ChevronDown) - Minimizes Card 3 */}
               <button
                 type="button"
                 onClick={toggleMinimizeCard3}
-                className="w-4 h-4 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer flex items-center justify-center"
+                className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
                 title={isCard3Minimized ? 'Expand Explorer' : 'Minimize Explorer'}
               >
-                <ChevronDown className="w-2.5 h-2.5" />
+                <ChevronDown className="w-3 h-3" />
               </button>
             </div>
 
@@ -415,7 +415,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
               <button
                 type="button"
                 onClick={resetRatios}
-                className="absolute right-4 z-20 w-5 h-5 flex items-center justify-center rounded-full bg-[#09090b]/90 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 shadow-md transition-all duration-300 pointer-events-auto hover:scale-105"
+                className="absolute right-4 z-20 p-1 rounded-full bg-[#09090b]/90 border border-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/50 shadow-md transition-all duration-300 pointer-events-auto hover:scale-105"
                 title="Reset layout proportions"
                 onPointerDown={e => e.stopPropagation()}
               >
