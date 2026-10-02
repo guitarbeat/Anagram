@@ -135,8 +135,8 @@ export function renderRearrangementCanvas(
 
     if (isDone) {
       ctx.fillStyle = '#000000';
-      ctx.shadowColor = 'rgba(16, 185, 129, 0.25)'; // Gentle emerald glow on arrival
-      ctx.shadowBlur = 4;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.2)'; // Crisp elevation shadow on arrival
+      ctx.shadowBlur = 3;
       ctx.shadowOffsetY = 1;
     } else if (isMoving) {
       ctx.fillStyle = '#09090b';

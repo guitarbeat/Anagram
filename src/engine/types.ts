@@ -42,6 +42,9 @@ export interface CandidateWordItem {
   word: string;
   length: number;
   freq: number;
+  isSolvable?: boolean;
+  isExactCloser?: boolean;
+  completionSample?: string[];
 }
 
 export interface HistogramBin {
@@ -79,8 +82,17 @@ export interface MultisetDelta {
   budget: LetterBudgetSummary;
 }
 
+export interface FinisherPair {
+  word1: string;
+  word2: string;
+  phrase: string;
+}
+
 export interface ConstructionState extends MultisetDelta {
   exactClosers: string[];
   candidateWords: CandidateWordItem[];
   histogramData: HistogramBin[];
+  solvableWordsCount: number;
+  deadEndWordsCount: number;
+  finisherPairs: FinisherPair[];
 }

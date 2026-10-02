@@ -1,364 +1,566 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
+  BookOpen,
+  Hash,
+  Tag,
+  LayoutGrid,
+  BarChart3,
+  ShieldCheck,
+  RotateCcw,
+  Network,
+  Play,
+  Pause,
+  ChevronsUp,
   ChevronUp,
   ChevronDown,
+  Rows2,
+  Target,
+  Type,
+  Sparkles,
+  Link2,
+  Star,
+  Zap,
 } from 'lucide-react';
 import { SplitDivider } from './SplitDivider';
+import { TopWrapper, BottomWrapper } from './PanelWrappers';
+import { IdlePeekDock } from './IdlePeekDock';
+import { useSplitController } from '../hooks/useSplitController';
+import type { SplitDetent, PanelId, SplitAccessory, WordFilterMode } from '../types/split';
+import { SplitDetents } from '../types/split';
+import type { LexicalViewMode } from './CandidateWordsList';
+import type { ProgressBus } from '../hooks/useProgressBus';
+
+interface ModeConfig {
+  label: string;
+  icon: React.ReactNode;
+  getDescription: (count: number) => string;
+}
+
+const MODE_CONFIGS: Record<WordFilterMode, ModeConfig> = {
+  safe: {
+    label: 'Safe Words',
+    icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />,
+    getDescription: (count) => `Safe Words: Showing ${count} solvable words (avoids dead ends). Click to toggle modes.`,
+  },
+  all: {
+    label: 'All Words',
+    icon: <BookOpen className="w-3.5 h-3.5 text-zinc-300" />,
+    getDescription: (count) => `All Words: Showing all ${count} candidate words. Click to toggle modes.`,
+  },
+  closers: {
+    label: 'Closers',
+    icon: <Sparkles className="w-3.5 h-3.5 text-amber-400" />,
+    getDescription: (count) => `Exact Closers: ${count} instant 1-word solutions! Click to toggle modes.`,
+  },
+  pairs: {
+    label: 'Pairs',
+    icon: <Link2 className="w-3.5 h-3.5 text-cyan-400" />,
+    getDescription: (count) => `Finisher Pairs: ${count} 2-word combinations. Click to toggle modes.`,
+  },
+  common: {
+    label: 'Common',
+    icon: <Star className="w-3.5 h-3.5 text-yellow-400" />,
+    getDescription: (count) => `Common Words: ${count} top everyday English words. Click to toggle modes.`,
+  },
+  long: {
+    label: 'Long Words',
+    icon: <Zap className="w-3.5 h-3.5 text-purple-400" />,
+    getDescription: (count) => `Long Words: ${count} words with 5+ letters. Click to toggle modes.`,
+  },
+};
 
 export interface ThreePaneSplitProps {
   card1: React.ReactNode;
+  card1Idle?: React.ReactNode;
   card2: React.ReactNode;
   card3: React.ReactNode;
+  card3Idle?: React.ReactNode;
   isStageActive?: boolean;
   isKeyboardOpen?: boolean;
-  divider1Accessories?: {
-    leading?: React.ReactNode[];
-    center?: React.ReactNode;
-    trailing?: React.ReactNode[];
-  };
-  divider2Accessories?: {
-    leading?: React.ReactNode[];
-    center?: React.ReactNode;
-    trailing?: React.ReactNode[];
-  };
+  detent?: SplitDetent;
+  onDetentChange?: (detent: SplitDetent) => void;
   className?: string;
+
+  // Kinetic Stage Scrubber
+  progressBus?: ProgressBus;
+
+  // Stage (Divider 1) Informative Complications
+  isStagePlaying?: boolean;
+  onToggleStagePlay?: () => void;
+  onResetStage?: () => void;
+  solveProgressPercent?: number;
+  placedLetterCount?: number;
+  sourceLetterCount?: number;
+  remainingLettersCount?: number;
+
+  // Explorer (Divider 2) Informative Complications
+  inspectorCategory?: 'length' | 'pos';
+  onInspectorCategoryChange?: (cat: 'length' | 'pos') => void;
+  lexicalViewMode?: LexicalViewMode;
+  onLexicalViewModeChange?: (mode: LexicalViewMode) => void;
+  avoidDeadEnds?: boolean;
+  onAvoidDeadEndsChange?: (val: boolean) => void;
+  candidateWordsCount?: number;
+  exactClosersCount?: number;
+  finisherPairsCount?: number;
+  solvableWordsCount?: number;
+  wordFilterMode?: WordFilterMode;
+  onCycleWordFilter?: () => void;
+  countsByMode?: Record<WordFilterMode, number>;
+  activeModeFilter?: 'all' | 'closers' | 'pairs';
+  onSelectModeFilter?: (mode: 'all' | 'closers' | 'pairs') => void;
+  showGraphPanel?: boolean;
+  onToggleGraphPanel?: () => void;
+  showInspectorPanel?: boolean;
+  onToggleInspectorPanel?: () => void;
+
+  // Real-time Solver Indicator State
+  isSolving?: boolean;
+  justFoundResults?: boolean;
 }
 
 export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   card1,
+  card1Idle,
   card2,
   card3,
+  card3Idle,
   isStageActive = false,
   isKeyboardOpen = false,
-  divider1Accessories,
-  divider2Accessories,
+  detent,
+  onDetentChange,
   className = '',
+  progressBus,
+  isStagePlaying = false,
+  onToggleStagePlay,
+  onResetStage,
+  solveProgressPercent = 0,
+  placedLetterCount = 0,
+  sourceLetterCount = 0,
+  remainingLettersCount,
+  inspectorCategory,
+  onInspectorCategoryChange,
+  lexicalViewMode,
+  onLexicalViewModeChange,
+  avoidDeadEnds,
+  onAvoidDeadEndsChange,
+  candidateWordsCount,
+  exactClosersCount = 0,
+  finisherPairsCount = 0,
+  solvableWordsCount = 0,
+  wordFilterMode,
+  onCycleWordFilter,
+  countsByMode,
+  activeModeFilter = 'all',
+  onSelectModeFilter,
+  showGraphPanel = true,
+  onToggleGraphPanel,
+  showInspectorPanel = true,
+  onToggleInspectorPanel,
+  isSolving = false,
+  justFoundResults = false,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Track if user manually customized ratios via drag
-  const [hasUserCustomized, setHasUserCustomized] = useState<boolean>(false);
-
   const hasStage = Boolean(isStageActive && card1);
   const hasCard3 = Boolean(card3);
 
-  // Minimization / Solo panel states
-  const [isCard1Minimized, setIsCard1Minimized] = useState<boolean>(false);
-  const [isCard3Minimized, setIsCard3Minimized] = useState<boolean>(false);
-  const [soloCard, setSoloCard] = useState<1 | 3 | null>(null);
-
-  // Default ratios:
-  // When stage is active: Card 1 gets 48%, Card 2 gets 11%, Card 3 gets remaining 41%
-  const [ratio1, setRatio1] = useState<number>(0.48);
-  const [ratio2, setRatio2] = useState<number>(0.11);
-  const [activeDrag, setActiveDrag] = useState<1 | 2 | null>(null);
-
-  const startDrag1 = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setHasUserCustomized(true);
-    setIsCard1Minimized(false);
-    setSoloCard(null);
-    setActiveDrag(1);
-  };
-
-  const startDrag2 = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setHasUserCustomized(true);
-    setIsCard3Minimized(false);
-    setSoloCard(null);
-    setActiveDrag(2);
-  };
-
-  const handlePointerMove = useCallback(
-    (e: PointerEvent) => {
-      if (!activeDrag || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const relativeY = (e.clientY - rect.top) / rect.height;
-
-      if (activeDrag === 1 && hasStage) {
-        const clamped1 = Math.max(0.06, Math.min(0.80, relativeY));
-        const maxCard2 = Math.max(0.06, 0.92 - clamped1);
-        const newRatio2 = Math.min(ratio2, maxCard2);
-        setRatio1(clamped1);
-        setRatio2(newRatio2);
-      } else if (activeDrag === 2 && hasCard3) {
-        if (hasStage) {
-          const clampedBottom = Math.max(0.12, Math.min(0.94, relativeY));
-          const newRatio2 = Math.max(0.06, clampedBottom - ratio1);
-          setRatio2(newRatio2);
-        } else {
-          const clamped2 = Math.max(0.06, Math.min(0.60, relativeY));
-          setRatio2(clamped2);
-        }
-      }
-    },
-    [activeDrag, hasStage, hasCard3, ratio1, ratio2]
+  // Real-time animation progress subscription from progressBus
+  const [stageProgress, setStageProgress] = useState<number>(() =>
+    progressBus ? progressBus.get() : 0
   );
 
-  const handlePointerUp = useCallback(() => {
-    setActiveDrag(null);
-  }, []);
-
   useEffect(() => {
-    if (!activeDrag) return;
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('pointercancel', handlePointerUp);
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerUp);
-    };
-  }, [activeDrag, handlePointerMove, handlePointerUp]);
+    if (!progressBus) return;
+    return progressBus.subscribe((p) => {
+      setStageProgress(p);
+    });
+  }, [progressBus]);
 
-  const resetRatios = () => {
-    setHasUserCustomized(false);
-    setIsCard1Minimized(false);
-    setIsCard3Minimized(false);
-    setSoloCard(null);
-    setRatio1(0.48);
-    setRatio2(0.11);
+  const {
+    containerRef,
+    panelOrder,
+    movePanel,
+    draggedPanel,
+    dropTargetIndex,
+    startPanelDrag,
+    detentLabel,
+    currentDetent,
+    isCard1Minimized,
+    isCard3Minimized,
+    soloCard,
+    ratio1,
+    activeDrag,
+    showCard1,
+    showCard3,
+    topHeight,
+    middleHeight,
+    bottomHeight,
+    startDrag1,
+    startDrag2,
+    resetRatios,
+    toggleMinimizeCard1,
+    toggleMinimizeCard3,
+    cyclePresets,
+    setDetent,
+    setIsCard1Minimized,
+    setIsCard3Minimized,
+    setSoloCard,
+    divider1MenuAccessories,
+    divider2MenuAccessories,
+  } = useSplitController({
+    hasStage,
+    hasCard3,
+    isKeyboardOpen,
+    defaultDetent: detent,
+    onDetentChange,
+  });
+
+  // DIVIDER 1 LEADING: Kinetic Rearrangement Scrubber Slider (Play, Rewind, Range Slider, %)
+  const resolvedDivider1Leading: SplitAccessory[] = [
+    ...(hasStage && progressBus
+      ? [
+          {
+            id: 'stageScrubber',
+            title: 'Kinetic Rearrangement Scrubber',
+            action: () => {},
+            customContent: (
+              <div
+                className="flex items-center gap-1.5 sm:gap-2 select-none"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                {onToggleStagePlay && (
+                  <button
+                    type="button"
+                    onClick={onToggleStagePlay}
+                    aria-label={isStagePlaying ? 'Pause animation' : 'Play animation'}
+                    title={isStagePlaying ? 'Pause Animation (Space)' : 'Play Animation (Space)'}
+                    className="h-6 w-6 flex items-center justify-center rounded-md text-white hover:bg-white/15 transition-all cursor-pointer active:scale-[0.88] active:opacity-80"
+                  >
+                    {isStagePlaying ? (
+                      <Pause className="w-3.5 h-3.5 fill-current text-emerald-400" />
+                    ) : (
+                      <Play className="w-3.5 h-3.5 fill-current text-white ml-0.5" />
+                    )}
+                  </button>
+                )}
+
+                {onResetStage && (
+                  <button
+                    type="button"
+                    onClick={onResetStage}
+                    aria-label="Reset animation"
+                    title="Rewind Letter Tiles to Start (Key R)"
+                    className="h-6 w-6 flex items-center justify-center rounded-md text-zinc-400 hover:text-white hover:bg-white/15 transition-all cursor-pointer active:scale-[0.88] active:opacity-80"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                <div className="w-24 sm:w-36 md:w-48 flex items-center px-1">
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.001}
+                    value={stageProgress}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      progressBus.set(val);
+                    }}
+                    aria-label="Kinetic rearrangement animation progress"
+                    className="w-full h-1.5 bg-zinc-700/80 rounded-full appearance-none cursor-pointer accent-white focus:outline-none"
+                  />
+                </div>
+
+                <span className="text-[10px] font-mono text-zinc-300 min-w-[28px] text-right font-medium tabular-nums">
+                  {Math.round(stageProgress * 100)}%
+                </span>
+              </div>
+            ),
+          },
+        ]
+      : []),
+  ];
+
+  // DIVIDER 1 TRAILING: Clean status (Solved badge when exact match)
+  const resolvedDivider1Trailing: SplitAccessory[] = [
+    ...(solveProgressPercent === 100
+      ? [
+          {
+            id: 'solvedBanner',
+            title: 'Exact Anagram Solved!',
+            icon: <Sparkles className="w-3.5 h-3.5 text-emerald-400" />,
+            label: <span className="text-emerald-300 font-semibold text-[11px]">Exact Match</span>,
+            action: () => {},
+            active: true,
+          },
+        ]
+      : []),
+  ];
+
+  // DIVIDER 2 LEADING: Mode Filter (Cycles between Safe, All, Closers, Pairs, Common, Long)
+  const currentMode = wordFilterMode || (avoidDeadEnds ? 'safe' : 'all');
+  const safeCounts = countsByMode || {
+    safe: solvableWordsCount || candidateWordsCount || 0,
+    all: candidateWordsCount || 0,
+    closers: exactClosersCount || 0,
+    pairs: finisherPairsCount || 0,
+    common: 0,
+    long: 0,
   };
 
-  const applyPreset = (preset: 'balanced' | 'focusStage' | 'focusExplorer') => {
-    setHasUserCustomized(true);
-    setIsCard1Minimized(false);
-    setIsCard3Minimized(false);
-    setSoloCard(null);
-    if (preset === 'balanced') {
-      setRatio1(0.48);
-      setRatio2(0.11);
-    } else if (preset === 'focusStage') {
-      setRatio1(0.72);
-      setRatio2(0.09);
-    } else if (preset === 'focusExplorer') {
-      setRatio1(0.15);
-      setRatio2(0.09);
+  // DIVIDER 2 LEADING (Left Side): Graph Toggle (spatially aligned with Left Graph View) + Word Filter Mode
+  const resolvedDivider2Leading: SplitAccessory[] = [
+    ...(onToggleGraphPanel
+      ? [
+          {
+            id: 'graphPanelToggle',
+            title: showGraphPanel
+              ? 'Constellation Graph: Active (Click to Hide)'
+              : 'Constellation Graph: Hidden (Click to Show)',
+            icon: <Network className="w-3.5 h-3.5" />,
+            label: 'Graph',
+            shortcut: 'G',
+            action: onToggleGraphPanel,
+            active: showGraphPanel,
+          },
+        ]
+      : []),
+    {
+      id: 'wordsFilterToggle',
+      title: MODE_CONFIGS[currentMode].getDescription(safeCounts[currentMode]),
+      icon: MODE_CONFIGS[currentMode].icon,
+      label: MODE_CONFIGS[currentMode].label,
+      badge: safeCounts[currentMode],
+      shortcut: 'S',
+      action: onCycleWordFilter
+        ? onCycleWordFilter
+        : () => {
+            if (activeModeFilter !== 'all') {
+              onSelectModeFilter?.('all');
+            } else {
+              onAvoidDeadEndsChange?.(!avoidDeadEnds);
+            }
+          },
+      active: true,
+    },
+  ];
+
+  // DIVIDER 2 TRAILING (Right Side): Inspector Toggle (spatially aligned with Right Lexical Inspector)
+  const resolvedDivider2Trailing: SplitAccessory[] = [
+    ...(onToggleInspectorPanel
+      ? [
+          {
+            id: 'inspectorPanelToggle',
+            title: showInspectorPanel
+              ? 'Lexical Inspector: Active (Click to Hide)'
+              : 'Lexical Inspector: Hidden (Click to Show)',
+            icon: <BarChart3 className="w-3.5 h-3.5" />,
+            label: 'Inspector',
+            shortcut: 'I',
+            action: onToggleInspectorPanel,
+            active: showInspectorPanel,
+          },
+        ]
+      : []),
+  ];
+
+  // Filter only visible panels
+  const visiblePanels = panelOrder.filter((id) => {
+    if (id === 'stage') return hasStage;
+    if (id === 'composer') return true;
+    if (id === 'explorer') return hasCard3;
+    return true;
+  });
+
+  const renderPanel = (panelId: PanelId, index: number) => {
+    const isFirst = index === 0;
+    const isLast = index === visiblePanels.length - 1;
+    const isBeingDragged = draggedPanel === panelId;
+
+    const isStageMinimized = isCard1Minimized || soloCard === 3;
+    const isExplorerMinimized = isCard3Minimized || soloCard === 1;
+
+    switch (panelId) {
+      case 'stage':
+        if (!hasStage) return null;
+        return (
+          <TopWrapper
+            key="stage"
+            id="stage"
+            title="Kinetic Stage"
+            isFirst={isFirst}
+            isLast={isLast}
+            isBeingDragged={isBeingDragged}
+            onStartDrag={(e) => startPanelDrag('stage', e)}
+            onMoveUp={() => movePanel('stage', 'up')}
+            onMoveDown={() => movePanel('stage', 'down')}
+            isMinimized={isStageMinimized}
+            isFull={soloCard === 1}
+            isResizing={activeDrag === 1}
+            onRestore={() => {
+              setIsCard1Minimized(false);
+              setSoloCard(null);
+            }}
+            style={
+              isStageMinimized
+                ? { height: '38px', flex: 'none' }
+                : isExplorerMinimized || !hasCard3
+                ? { flex: '1 1 0%', minHeight: '120px' }
+                : { flex: `${Math.max(0.18, Math.min(0.82, ratio1))} 1 0%`, minHeight: '100px' }
+            }
+            content={card1}
+            overlay={
+              card1Idle ? (
+                card1Idle
+              ) : (
+                <IdlePeekDock
+                  title="Kinetic Stage"
+                  badge="PEEK IDLE"
+                  actionLabel="Tap to expand"
+                  direction="down"
+                />
+              )
+            }
+          />
+        );
+
+      case 'composer':
+        return (
+          <div
+            key="composer"
+            className={`w-full relative overflow-hidden flex flex-col min-h-0 flex-none shrink-0 bg-transparent ${
+              activeDrag ? 'duration-0' : 'duration-350 ease-[cubic-bezier(0.16,1,0.3,1)]'
+            } ${
+              isBeingDragged
+                ? 'opacity-80 ring-2 ring-white/40 shadow-2xl scale-[0.99] z-40'
+                : ''
+            }`}
+            style={{
+              height: isKeyboardOpen ? '58px' : '72px',
+              minHeight: '56px',
+            }}
+          >
+            <div className="w-full h-full flex flex-col justify-center min-h-0">
+              {card2}
+            </div>
+          </div>
+        );
+
+      case 'explorer':
+        if (!hasCard3) return null;
+        return (
+          <BottomWrapper
+            key="explorer"
+            id="explorer"
+            title="Word Explorer"
+            isFirst={isFirst}
+            isLast={isLast}
+            isBeingDragged={isBeingDragged}
+            onStartDrag={(e) => startPanelDrag('explorer', e)}
+            onMoveUp={() => movePanel('explorer', 'up')}
+            onMoveDown={() => movePanel('explorer', 'down')}
+            isMinimized={isExplorerMinimized}
+            isFull={soloCard === 3}
+            isResizing={activeDrag === 2}
+            onRestore={() => {
+              setIsCard3Minimized(false);
+              setSoloCard(null);
+            }}
+            style={
+              isExplorerMinimized
+                ? { height: '38px', flex: 'none' }
+                : isStageMinimized || !hasStage
+                ? { flex: '1 1 0%', minHeight: '120px' }
+                : { flex: `${Math.max(0.18, Math.min(0.82, 1 - ratio1))} 1 0%`, minHeight: '100px' }
+            }
+            content={card3}
+            overlay={
+              card3Idle ? (
+                card3Idle
+              ) : (
+                <IdlePeekDock
+                  title="Word Explorer"
+                  badge="PEEK IDLE"
+                  actionLabel="Tap to expand"
+                  direction="up"
+                />
+              )
+            }
+          />
+        );
     }
   };
-
-  const toggleMinimizeCard1 = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSoloCard(null);
-    setIsCard1Minimized(prev => !prev);
-  };
-
-  const toggleMinimizeCard3 = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSoloCard(null);
-    setIsCard3Minimized(prev => !prev);
-  };
-
-  const toggleSoloCard1 = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (soloCard === 1) {
-      setSoloCard(null);
-    } else {
-      setSoloCard(1);
-      setIsCard1Minimized(false);
-      setIsCard3Minimized(false);
-    }
-  };
-
-  const toggleSoloCard3 = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (soloCard === 3) {
-      setSoloCard(null);
-    } else {
-      setSoloCard(3);
-      setIsCard1Minimized(false);
-      setIsCard3Minimized(false);
-    }
-  };
-
-  // Calculate actual height behavior
-  const showCard1 = hasStage && !isCard1Minimized && soloCard !== 3;
-  const showCard3 = hasCard3 && !isCard3Minimized && soloCard !== 1;
 
   return (
     <div
       ref={containerRef}
       className={`ThreePaneSplit relative flex flex-col w-full h-full min-h-0 select-none overflow-hidden bg-[#09090b] gap-0.5 ${className}`}
     >
-      {/* WINDOW CARD 1: TOP KINETIC STAGE */}
-      {hasStage && (
-        <>
-          {showCard1 ? (
-            <div
-              className={`w-full rounded-[18px] sm:rounded-[22px] bg-white border border-white/[0.12] shadow-2xl relative overflow-hidden transition-all flex flex-col min-h-0 shrink-0 ${
-                activeDrag ? 'duration-0' : 'duration-300 ease-out'
-              }`}
-              style={{
-                height: soloCard === 1
-                  ? 'calc(100% - 70px)'
-                  : isKeyboardOpen
-                  ? '78px'
-                  : !showCard3
-                  ? 'calc(100% - 70px)'
-                  : `calc(${ratio1 * 100}% - 6px)`,
-                minHeight: isKeyboardOpen ? '60px' : '80px',
-              }}
-            >
-              <div className="w-full h-full overflow-y-auto no-scrollbar flex flex-col min-h-0">
-                {card1}
-              </div>
-            </div>
-          ) : (
-            /* Minimized Stage Pill Banner */
-            <div
-              onClick={() => {
-                setIsCard1Minimized(false);
-                setSoloCard(null);
-              }}
-              className="w-full h-8 sm:h-9 bg-[#111114] hover:bg-[#18181c] border border-zinc-800 hover:border-zinc-700 rounded-[14px] flex items-center justify-between px-3 cursor-pointer transition-all shrink-0 text-white select-none shadow-sm group"
-              title="Click to expand Kinetic Stage"
-            >
-              <div className="flex items-center gap-2 min-w-0 pr-2">
-                <span className="p-1 rounded-md bg-zinc-800/80 text-zinc-400 group-hover:text-zinc-200 transition-colors shrink-0">
-                  <ChevronDown className="w-3.5 h-3.5 group-hover:translate-y-0.5 transition-transform" />
-                </span>
-                <span className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-200 group-hover:text-white transition-colors truncate">
-                  Kinetic Stage
-                </span>
-                <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-zinc-800/90 text-zinc-400 border border-zinc-700/60 shrink-0">
-                  MINIMIZED
-                </span>
-              </div>
-              <span className="text-[9.5px] font-mono text-zinc-400 group-hover:text-zinc-200 font-bold uppercase tracking-wider shrink-0 transition-colors">
-                Show Stage
-              </span>
+      {visiblePanels.map((panelId, index) => (
+        <React.Fragment key={panelId}>
+          {/* Drop indicator if hovering above this panel */}
+          {draggedPanel && dropTargetIndex === index && (
+            <div className="w-full h-1.5 py-0.5 my-0.5 flex items-center justify-center shrink-0 z-50">
+              <div className="w-full h-1 bg-white rounded-full shadow-[0_0_12px_rgba(255,255,255,0.9)] animate-pulse" />
             </div>
           )}
 
-          {/* DIVIDER BAR 1 */}
-          <SplitDivider
-            orientation="horizontal"
-            isDragging={activeDrag === 1}
-            onPointerDown={startDrag1}
-            onDoubleClick={resetRatios}
-            title="Drag to resize Stage & Input (Double-click to reset)"
-            onCollapsePrev={toggleMinimizeCard1}
-            collapsePrevTitle={isCard1Minimized ? 'Expand Stage' : 'Minimize Stage'}
-            onCollapseNext={toggleMinimizeCard3}
-            collapseNextTitle={isCard3Minimized ? 'Expand Explorer' : 'Minimize Explorer'}
-            showReset={Boolean(hasUserCustomized || isCard1Minimized || isCard3Minimized || soloCard)}
-            onReset={resetRatios}
-            presets={
-              <>
-                <button
-                  type="button"
-                  onClick={() => applyPreset('focusStage')}
-                  className="px-1.5 py-0.5 rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-all cursor-pointer hover:scale-105"
-                  title="Focus Stage (70%)"
-                >
-                  Stage+
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyPreset('balanced')}
-                  className="px-1.5 py-0.5 rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-all cursor-pointer hover:scale-105"
-                  title="Balanced 50/50 Layout"
-                >
-                  Balanced
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyPreset('focusExplorer')}
-                  className="px-1.5 py-0.5 rounded bg-[#09090b]/80 border border-zinc-800 text-[8.5px] font-mono font-bold text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-all cursor-pointer hover:scale-105"
-                  title="Focus Explorer (70%)"
-                >
-                  Words+
-                </button>
-              </>
-            }
-          />
-        </>
-      )}
+          {renderPanel(panelId, index)}
 
-      {/* WINDOW CARD 2: MIDDLE TARGET WORD & INPUT ROW */}
-      <div
-        className={`w-full relative overflow-hidden transition-all flex flex-col min-h-0 shrink-0 ${
-          !showCard3 && !showCard1 ? 'flex-1 justify-center' : ''
-        } ${activeDrag ? 'duration-0' : 'duration-300 ease-out'}`}
-        style={{
-          height: showCard3
-            ? showCard1
-              ? isKeyboardOpen
-                ? '50px'
-                : `calc(${ratio2 * 100}% - 6px)`
-              : hasUserCustomized
-              ? `${ratio2 * 100}%`
-              : '54px'
-            : '54px',
-          minHeight: showCard1 ? '44px' : '52px',
-        }}
-      >
-        <div className="w-full h-full overflow-y-auto min-h-0">
-          {card2}
-        </div>
-      </div>
+          {/* Divider between adjacent visible panels */}
+          {index < visiblePanels.length - 1 && (() => {
+            const currentPanel = visiblePanels[index];
+            const nextPanel = visiblePanels[index + 1];
 
-      {/* DIVIDER BAR 2 & CARD 3 */}
-      {hasCard3 && (
-        <>
-          {/* DIVIDER BAR 2 */}
-          <SplitDivider
-            orientation="horizontal"
-            isDragging={activeDrag === 2}
-            onPointerDown={startDrag2}
-            onDoubleClick={resetRatios}
-            title="Drag to resize Word Explorer (Double-click to reset)"
-            onCollapsePrev={toggleMinimizeCard1}
-            collapsePrevTitle={isCard1Minimized ? 'Expand Stage' : 'Minimize Stage'}
-            onCollapseNext={toggleMinimizeCard3}
-            collapseNextTitle={isCard3Minimized ? 'Expand Explorer' : 'Minimize Explorer'}
-            showReset={Boolean(hasUserCustomized || isCard1Minimized || isCard3Minimized || soloCard)}
-            onReset={resetRatios}
-          />
+            // If the next panel is explorer, this divider directly controls the Explorer panel (Divider 2)
+            // If the current panel is stage, this divider directly controls the Stage panel (Divider 1)
+            const isExplorerDivider = nextPanel === 'explorer' || currentPanel === 'explorer';
+            const isDivider1 = currentPanel === 'stage' || (!isExplorerDivider && index === 0);
 
-          {/* WINDOW CARD 3: BOTTOM WORDS THAT FIT & GRAPH */}
-          {showCard3 ? (
-            <div
-              className={`w-full relative overflow-hidden transition-all flex flex-col flex-1 min-h-0 ${
-                activeDrag ? 'duration-0' : 'duration-300 ease-out'
-              }`}
-              style={{
-                minHeight: '100px',
-              }}
-            >
-              <div className="w-full h-full overflow-y-auto min-h-0">
-                {card3}
-              </div>
-            </div>
-          ) : (
-            /* Minimized Explorer Pill Banner */
-            <div
-              onClick={() => {
-                setIsCard3Minimized(false);
-                setSoloCard(null);
-              }}
-              className="w-full h-8 sm:h-9 bg-[#111114] hover:bg-[#18181c] border border-zinc-800 hover:border-zinc-700 rounded-[14px] flex items-center justify-between px-3 cursor-pointer transition-all shrink-0 text-white select-none shadow-sm group"
-              title="Click to expand Word Explorer"
-            >
-              <div className="flex items-center gap-2 min-w-0 pr-2">
-                <span className="p-1 rounded-md bg-zinc-800/80 text-zinc-400 group-hover:text-zinc-200 group-hover:-translate-y-0.5 transition-transform shrink-0">
-                  <ChevronUp className="w-3.5 h-3.5" />
-                </span>
-                <span className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-200 group-hover:text-white transition-colors truncate">
-                  Word Explorer
-                </span>
-                <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-zinc-800/90 text-zinc-400 border border-zinc-700/60 shrink-0">
-                  MINIMIZED
-                </span>
-              </div>
-              <span className="text-[9.5px] font-mono text-zinc-400 group-hover:text-zinc-200 font-bold uppercase tracking-wider shrink-0 transition-colors">
-                Show Explorer
-              </span>
+            return (
+              <SplitDivider
+                key={`divider-${currentPanel}-${nextPanel}`}
+                orientation="horizontal"
+                isDragging={isDivider1 ? activeDrag === 1 : activeDrag === 2}
+                onPointerDown={isDivider1 ? startDrag1 : startDrag2}
+                onDoubleClick={cyclePresets}
+                title="Drag to resize panel split"
+                onToggleCollapse={isDivider1 ? toggleMinimizeCard1 : toggleMinimizeCard3}
+                isCollapsed={isDivider1 ? isCard1Minimized : isCard3Minimized}
+                collapseTooltip={
+                  isDivider1
+                    ? isCard1Minimized
+                      ? 'Click to expand Kinetic Stage (Drag to resize)'
+                      : 'Click to minimize Kinetic Stage (Drag to resize)'
+                    : isCard3Minimized
+                    ? 'Click to expand Word Explorer (Drag to resize)'
+                    : 'Click to minimize Word Explorer (Drag to resize)'
+                }
+                isBusy={isExplorerDivider && isSolving}
+                isSuccess={isExplorerDivider && justFoundResults}
+                statusTooltip={
+                  isExplorerDivider
+                    ? isSolving
+                      ? 'Solver calculating anagram permutations...'
+                      : justFoundResults
+                      ? 'New anagram candidates found!'
+                      : 'Drag to resize panel split'
+                    : 'Drag to resize panel split'
+                }
+                leadingAccessories={isDivider1 ? resolvedDivider1Leading : resolvedDivider2Leading}
+                trailingAccessories={isDivider1 ? resolvedDivider1Trailing : resolvedDivider2Trailing}
+              />
+            );
+          })()}
+
+          {/* Drop indicator if hovering below the last panel */}
+          {draggedPanel && index === visiblePanels.length - 1 && dropTargetIndex === visiblePanels.length && (
+            <div className="w-full h-1.5 py-0.5 my-0.5 flex items-center justify-center shrink-0 z-50">
+              <div className="w-full h-1 bg-white rounded-full shadow-[0_0_12px_rgba(255,255,255,0.9)] animate-pulse" />
             </div>
           )}
-        </>
-      )}
+        </React.Fragment>
+      ))}
     </div>
   );
 };
-

@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { Play, Pause, RotateCcw } from 'lucide-react';
 import { renderRearrangementCanvas } from '../render/stage';
 import type { ProgressBus } from '../hooks/useProgressBus';
 
@@ -8,6 +7,9 @@ export interface NameAnagramStageProps {
   targetPhrase: string;
   progressBus: ProgressBus;
   onShowToast: (text: string) => void;
+  isPlaying?: boolean;
+  onTogglePlay?: () => void;
+  onReset?: () => void;
 }
 
 export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
@@ -15,10 +17,21 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
   targetPhrase,
   progressBus,
   onShowToast,
+  isPlaying: externalIsPlaying,
+  onTogglePlay: externalOnTogglePlay,
+  onReset: externalOnReset,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [progress, setProgress] = useState<number>(() => progressBus.get());
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [internalIsPlaying, setInternalIsPlaying] = useState<boolean>(false);
+  const isPlaying = externalIsPlaying !== undefined ? externalIsPlaying : internalIsPlaying;
+  const setIsPlaying = (val: boolean) => {
+    if (externalOnTogglePlay && val !== isPlaying) {
+      externalOnTogglePlay();
+    } else {
+      setInternalIsPlaying(val);
+    }
+  };
   const animFrameRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number | null>(null);
 
@@ -62,20 +75,28 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
   }, [isPlaying, progressBus]);
 
   const togglePlay = () => {
-    if (isPlaying) {
-      setIsPlaying(false);
+    if (externalOnTogglePlay) {
+      externalOnTogglePlay();
     } else {
-      if (progressBus.get() >= 0.99) {
-        progressBus.set(0);
+      if (isPlaying) {
+        setIsPlaying(false);
+      } else {
+        if (progressBus.get() >= 0.99) {
+          progressBus.set(0);
+        }
+        setIsPlaying(true);
       }
-      setIsPlaying(true);
     }
   };
 
   const handleReset = () => {
-    setIsPlaying(false);
-    progressBus.set(0);
-    onShowToast('Rearrangement reset to 0%');
+    if (externalOnReset) {
+      externalOnReset();
+    } else {
+      setIsPlaying(false);
+      progressBus.set(0);
+      onShowToast('Rearrangement reset to 0%');
+    }
   };
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -170,47 +191,9 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
   return (
     <div
       id="anagram-stage"
-      className="relative w-full h-full flex items-center justify-center overflow-hidden bg-white group select-none"
+      className="relative w-full h-full flex items-center justify-center overflow-hidden bg-white select-none"
     >
       <canvas ref={canvasRef} className="w-full h-full block bg-white" />
-
-      {/* Floating Control Bar for Kinetic Animation */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-black/90 text-white px-3 py-1.5 rounded-full shadow-xl border border-white/20 backdrop-blur-md transition-all">
-        <button
-          type="button"
-          onClick={togglePlay}
-          aria-label={isPlaying ? 'Pause animation' : 'Play animation'}
-          className="p-1 hover:bg-white/20 rounded-full transition-colors cursor-pointer text-white"
-        >
-          {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
-        </button>
-
-        <button
-          type="button"
-          onClick={handleReset}
-          aria-label="Reset animation"
-          className="p-1 hover:bg-white/20 rounded-full transition-colors cursor-pointer text-white/80 hover:text-white"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-        </button>
-
-        <div className="w-24 sm:w-36 md:w-48 flex items-center px-1">
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.001}
-            value={progress}
-            onChange={handleSliderChange}
-            aria-label="Kinetic rearrangement animation progress"
-            className="w-full h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-white focus:outline-none transition-all"
-          />
-        </div>
-
-        <span className="text-[10px] font-mono text-white/80 min-w-[32px] text-right font-medium">
-          {Math.round(progress * 100)}%
-        </span>
-      </div>
     </div>
   );
 };

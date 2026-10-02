@@ -109,6 +109,50 @@ Telemetry Chips   Monospace         10-11px     500 (m)   wide (+0.03em)
 ### 4.3 Motion Canvas Viewport
 - Dark inset screen with 60fps HTML5 Canvas rendering, integrated scrubber timeline, loop mode selector, and export controls.
 
+### 4.4 Analytical Data Cards & Clean Enclosures
+- **Zero-Header Philosophy**: Data cards (such as Part of Speech bubbles and Word Length treemaps) omit redundant static header bars and title strips (`Word Lengths`, `Part of Speech`). The visualization canvas runs edge-to-edge inside the card bezel to maximize 100% of available vertical and horizontal space.
+- **Squarified Treemaps over Histograms**: Frequency and length distributions employ responsive squarified treemaps instead of column histograms. Traditional histograms leave empty headroom and squish columns in tall/narrow responsive panels; squarified treemaps tile 100% of available area with balanced aspect ratios.
+- **Self-Reversing Direct Toggles (No "Clear Filter" Buttons)**: Never overlay floating or static "Clear Filter" buttons or reset badges onto the visualization. Clicking any active tile or segment toggles it off. If all active segments are toggled off, the filter clears automatically. Clicking multiple segments seamlessly adds or removes them from a compound filter. Double-clicking the container background acts as an optional gesture to reset all filters at once without cluttering the canvas.
+- **Parallel (Concentric) Corners**: When nesting rounded content boxes or treemap tiles within rounded enclosures, inner corner radii must be strictly concentric ($R_{inner} = R_{outer\_inner\_surface} - \text{gap}$). The outer card has $R_{outer} = 22px$ with a $2px$ border, yielding an inner-edge radius of $20px$ (sm) / $16px$ (mobile). With uniform $6px$ perimeter padding, the perimeter-facing corners of corner tiles are set to $14px$ (`sm:rounded-tl-[14px]`) / $10px$ (`rounded-tl-[10px]`). This eliminates corner bulging or pinching, guaranteeing a mathematically uniform $6.0px$ parallel curve at all angles. Interior corners adjacent to other tiles maintain a tight $5px$–$6px$ radius.
+
+### 4.5 Fluid Split Screen, Snap Points & Idle Peek Architecture
+- **Continuous Fluid Snapping with Velocity Damping**: Inspired by native gesture split-screen sheets (Amie / `VerticalSplit`), dragging a divider tracks pointer velocity. Quick flicks (high velocity) automatically snap panels to their target states (e.g. flick up to minimize stage or expand words; flick down to minimize words or expand stage).
+- **First-Class `SplitDetent` Type & Algebraic States**: Directly ported from `SplitDetent.swift`:
+  - `topFull`: Top view fills the entire viewport; bottom view collapses into an edge minimal pill with one-tap restore.
+  - `bottomFull`: Bottom view fills the entire viewport; top view collapses into an edge minimal pill with one-tap restore.
+  - `topMini`: Top view collapses into its compact Idle Peek state (sleek 34px dock refined from `m0ahs` fork) while bottom view occupies primary focus.
+  - `bottomMini`: Bottom view collapses into its compact Idle Peek state (sleek 34px dock refined from `m0ahs` fork) while top view occupies primary focus.
+  - `fraction(value)`: Proportional harmonic split ratio with 15% preview threshold (`fraction(0.15)` from `m0ahs` fork) preventing abrupt total collapse, snapped across 6 discrete notches: `0.15`, `0.32`, `0.48`, `0.64`, `0.76`.
+- **Tactile Spring Dynamics & Haptic Tuning**: Directly ported from `benhernes` (`VerticalSplitBen` fork):
+  - *Spring Physics*: Custom spring curve matching `.spring(response: 0.3, dampingFraction: 0.7)` (`cubic-bezier(0.2, 0.9, 0.3, 1)`) for immediate physical snap response without sluggish linear delay.
+  - *Vibration Haptics*: Tuned tactile intensities calling `navigator.vibrate` on touch/mobile devices (`heavyImpact` on overscroll boundaries, `rigidImpact` on harmonic detent crossings).
+- **Precision Indicator Line & Blur Tuning**: Directly ported from `m0ahs` fork:
+  - *Precision 40×2px Line*: Replaced bulky rounded pill bar with a modern, high-precision geometric drag line (`w-10 sm:w-12 h-[2px] bg-white/50 group-hover:bg-white/90`) that scales down (`scale-90`) on active drag.
+  - *Crisp 4px Optical Blur*: Reduced minimization blur from 8px to 4px to maintain depth while eliminating muddy/dull visual artifacts.
+- **Composable Modifiers & Accessories Architecture (`leadingAccessories`, `trailingAccessories`, `menuAccessories`)**: Directly ported from `Modifiers.swift` and `Accessories.swift`, superseding all fragmented, ad-hoc button props:
+  - *Leading Accessories*: Dedicated buttons placed to the left of the drag handle (e.g. panel minimization/expansion chevron).
+  - *Trailing Accessories*: Contextual quick-action buttons placed to the right of the drag handle (e.g. one-click reset/restore when customized).
+  - *Menu Accessories*: Rich pop-out capsule actions (icon + label) that bloom smoothly inside the split region when the menu trigger is clicked.
+  - *Unified Hit-Testing & Theming*: All accessories share standardized touch targets, active state glow, active-tap scale damping (`active:scale-90`), and keyboard accessibility.
+- **Dual-Layer Panel Wrappers (`TopWrapper` & `BottomWrapper`)**: Rather than unmounting components during minimization, cards employ a dual-layer wrapper directly ported from SwiftUI `Wrappers.swift`:
+  - *Zero Unmounting*: Both the primary content and mini overlay reside continuously in the DOM, preserving canvas state, scroll positions, and WebGL/Canvas loops.
+  - *Asymmetric Scaling Anchors*: `TopWrapper` anchors content to `origin-top`, while `BottomWrapper` anchors content to `origin-bottom`.
+  - *Interpolated Minimization Optics*: As minimization occurs ($p \in [1, 0]$):
+    - Main content scales by $1 - (1 - p) \times 0.15$ ($1.0 \to 0.85$), softly blurs by $(1 - p) \times 8\text{px}$, and fades opacity to $p$.
+    - Mini overlay floats in from $\pm 16 \times p\text{px}$ offset, scales from $1 + p \times 0.15 \to 1.0$, and dissolves blur ($p \times 6\text{px} \to 0$).
+  - *Hit-Testing Exclusivity*: Content receives pointer events only when expanded ($p > 0.2$); the overlay receives pointer events exclusively when minimized.
+- **Floating Split Capsule with Pop-Out Menu Accessories**: Rather than a bare hairline, the divider houses an elevated floating capsule containing:
+  - Tactile grab handle with dynamic hover/drag expansion (`w-10` to `w-20`), laser glow, and active drag scale damping (`scale(isDragging ? 0.9 : 1)`).
+  - Leading and trailing accessory buttons.
+  - Expandable **Pop-out Menu Capsule** (`menuAccessories`) that blooms open directly in the split region when clicking the slider trigger (`SlidersHorizontal`), offering instant one-click detent switching (`50/50`, `Stage 75%`, `Words 75%`, `Solo`) without navigating to separate controls.
+  - **Ambient Backdrop Overlay**: When the menu accessory capsule is opened, an ambient backdrop (`fixed inset-0 bg-black/50 backdrop-blur-[2px]`) smoothly dims background cards, allowing dismissal on any outside tap.
+- **Overscroll Push to Fullscreen (`topFull` / `bottomFull`)**: Dragging past extreme boundaries with sustained velocity or high position (`> 82%` or `< 16%`) pushes the active card into full-screen mode, smoothly sliding the opposing view off-screen and docking an edge minimal pill for 1-click restore.
+- **Double-Click Gesture Cycling**: Double-clicking the grab handle cycles through `Balanced 50/50` ➔ `Stage Focused 75%` ➔ `Words Focused 75%`.
+- **Live "Idle Peek" Component States**: Minimized panels NEVER collapse into dead, static text strips. As a panel collapses, it transitions into a rich, compact Idle Peek bar:
+  - *Kinetic Stage Idle*: Displays live status pill (`STAGE`), source ➔ target phrase overview, perfect match or remaining letter badges, and instant expand trigger.
+  - *Word Explorer Idle*: Displays live candidate word count, inline clickable quick-add word chips (`+WORD`), and instant expand trigger.
+- **Boundary Friction (Rubberband Damping)**: When dragging past layout limits, logarithmic friction damping prevents hard collisions.
+
 ---
 
 ## 5. Interaction & Feedback
@@ -116,3 +160,15 @@ Telemetry Chips   Monospace         10-11px     500 (m)   wide (+0.03em)
 - **Instant Visual State**: Verification badges update synchronously on every keystroke.
 - **Micro Toast Notifications**: Subtle, non-blocking toast notifications appear at bottom-right for copy operations, rack transfers, and file exports.
 - **Accessible Touch Targets**: All buttons adhere to minimum 36px desktop / 44px mobile touch dimensions.
+
+---
+
+## 6. Design Voice: Pure Data Density & Space Maximization
+
+1. **Every Pixel Belongs to the Data**: Avoid explanatory chrome, decorative title banners, floating reset badges, and empty top/bottom gutters. The data itself—its glyphs, weights, shapes, and colors—is the interface.
+2. **Direct-Action State Inversion**: Elements that apply filters must toggle on and off directly upon interaction. Redundant "Clear Filter" chrome is prohibited; users simply click the segment again to turn it off.
+3. **Compound Segment Multi-Select**: Analytical views must allow users to click multiple segments to create compound filter sets (e.g., selecting 4-letter and 5-letter words simultaneously) with clean additive and subtractive clicking.
+4. **Active Idle Continuity**: Collapsed or minimized components must retain real-time status and actionable micro-interactions via Idle Peek states rather than disappearing completely.
+5. **Aspect-Aware Spatial Fluidity**: When viewports or split panels become tall and narrow, elements must dynamically re-distribute and utilize the full vertical column rather than bunching in the center.
+6. **Concentric Architectural Geometry**: Nested borders and enclosures must always have parallel radii ($R_{inner} = R_{outer} - \text{padding}$). Curves must never visually pinch or swell in corners.
+7. **Self-Documenting Typographic Tiles**: Use explicit, compact typography (`4 LETTERS`, `5 LETTERS`, `167`, `NOUNS`, `129`) directly on interactive elements to eliminate the need for legends, axis labels, or header ribbons.

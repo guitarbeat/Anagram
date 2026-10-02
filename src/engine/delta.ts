@@ -6,6 +6,7 @@ import type {
   LetterBudgetSummary,
   MultisetDelta,
   ConstructionState,
+  FinisherPair,
 } from './types';
 
 const VOWELS = new Set(['a', 'e', 'i', 'o', 'u']);
@@ -254,6 +255,229 @@ export function computeLengthHistogram(
 }
 
 /**
+ * Audits all candidate words to identify which ones guarantee 0 stranded letters (solvable),
+ * providing completion samples and finding 2-word finisher pairs.
+ */
+export function auditCandidateSolvability(
+  letterPool: string,
+  candidateWords: CandidateWordItem[]
+): {
+  auditedCandidates: CandidateWordItem[];
+  solvableWordsCount: number;
+  deadEndWordsCount: number;
+  finisherPairs: FinisherPair[];
+} {
+  const clean = normalizeLetters(letterPool);
+  if (!clean) {
+    return {
+      auditedCandidates: [],
+      solvableWordsCount: 0,
+      deadEndWordsCount: 0,
+      finisherPairs: [],
+    };
+  }
+
+  const { counts: poolCounts } = toCountAndMask(clean);
+  const poolLen = clean.length;
+
+  // Pre-index candidate words by length
+  const byLength = new Map<number, CandidateWordItem[]>();
+  for (const c of candidateWords) {
+    let list = byLength.get(c.length);
+    if (!list) {
+      list = [];
+      byLength.set(c.length, list);
+    }
+    list.push(c);
+  }
+
+  // Precompute word letter counts
+  const candCountMaps = new Map<string, Uint8Array>();
+  for (const c of candidateWords) {
+    const arr = new Uint8Array(26);
+    for (let i = 0; i < c.word.length; i++) {
+      arr[c.word.charCodeAt(i) - 97]++;
+    }
+    candCountMaps.set(c.word, arr);
+  }
+
+  // Find 2-word finisher pairs for the whole pool
+  const finisherPairs: FinisherPair[] = [];
+  if (poolLen >= 4 && poolLen <= 14) {
+    const seenPairs = new Set<string>();
+    for (let l1 = 2; l1 <= Math.floor(poolLen / 2); l1++) {
+      if (finisherPairs.length >= 8) break;
+      const l2 = poolLen - l1;
+      const list1 = byLength.get(l1);
+      const list2 = byLength.get(l2);
+      if (!list1 || !list2) continue;
+
+      for (const w1 of list1.slice(0, 20)) {
+        if (finisherPairs.length >= 8) break;
+        const c1 = candCountMaps.get(w1.word)!;
+        let fits1 = true;
+        for (let c = 0; c < 26; c++) {
+          if (c1[c] > poolCounts[c]) { fits1 = false; break; }
+        }
+        if (!fits1) continue;
+
+        for (const w2 of list2.slice(0, 20)) {
+          if (w1.word === w2.word && poolLen === l1 * 2) {
+            // Check if pool has enough letters for duplicated word
+            let doubleFit = true;
+            for (let c = 0; c < 26; c++) {
+              if (c1[c] * 2 > poolCounts[c]) { doubleFit = false; break; }
+            }
+            if (!doubleFit) continue;
+          }
+          const c2 = candCountMaps.get(w2.word)!;
+          let sumFits = true;
+          for (let c = 0; c < 26; c++) {
+            if (c1[c] + c2[c] !== poolCounts[c]) {
+              sumFits = false;
+              break;
+            }
+          }
+          if (sumFits) {
+            const pairKey = [w1.word, w2.word].sort().join(' ');
+            if (!seenPairs.has(pairKey)) {
+              seenPairs.add(pairKey);
+              finisherPairs.push({
+                word1: w1.word,
+                word2: w2.word,
+                phrase: `${w1.word} ${w2.word}`,
+              });
+            }
+            if (finisherPairs.length >= 8) break;
+          }
+        }
+      }
+    }
+  }
+
+  let solvableCount = 0;
+  let deadEndCount = 0;
+  const auditedCandidates: CandidateWordItem[] = [];
+
+  for (const cand of candidateWords) {
+    const remLen = poolLen - cand.length;
+    if (remLen === 0) {
+      solvableCount++;
+      auditedCandidates.push({
+        ...cand,
+        isSolvable: true,
+        isExactCloser: true,
+        completionSample: [],
+      });
+      continue;
+    }
+
+    const cCounts = candCountMaps.get(cand.word)!;
+    const remCounts = new Uint8Array(26);
+    let vowels = 0;
+    for (let i = 0; i < 26; i++) {
+      remCounts[i] = poolCounts[i] - cCounts[i];
+      if (remCounts[i] > 0 && (i === 0 || i === 4 || i === 8 || i === 14 || i === 20)) {
+        vowels += remCounts[i];
+      }
+    }
+
+    // Immediate dead end if no vowels or 1-letter non-vowel
+    if (vowels === 0 || (remLen === 1 && remCounts[0] === 0 && remCounts[8] === 0)) {
+      deadEndCount++;
+      auditedCandidates.push({
+        ...cand,
+        isSolvable: false,
+        isExactCloser: false,
+      });
+      continue;
+    }
+
+    let solved = false;
+    let sampleCompletion: string[] = [];
+
+    // 1. Single-word closer check
+    const exactMatches = byLength.get(remLen);
+    if (exactMatches) {
+      for (const m of exactMatches) {
+        const mCounts = candCountMaps.get(m.word)!;
+        let fits = true;
+        for (let c = 0; c < 26; c++) {
+          if (mCounts[c] !== remCounts[c]) {
+            fits = false;
+            break;
+          }
+        }
+        if (fits) {
+          solved = true;
+          sampleCompletion = [m.word];
+          break;
+        }
+      }
+    }
+
+    // 2. Two-word combination check
+    if (!solved && remLen >= 2) {
+      for (let l1 = 1; l1 <= Math.floor(remLen / 2); l1++) {
+        if (solved) break;
+        const l2 = remLen - l1;
+        const list1 = byLength.get(l1);
+        const list2 = byLength.get(l2);
+        if (!list1 || !list2) continue;
+
+        for (const w1 of list1.slice(0, 25)) {
+          if (solved) break;
+          const c1 = candCountMaps.get(w1.word)!;
+          let fits1 = true;
+          for (let c = 0; c < 26; c++) {
+            if (c1[c] > remCounts[c]) { fits1 = false; break; }
+          }
+          if (!fits1) continue;
+
+          for (const w2 of list2.slice(0, 25)) {
+            const c2 = candCountMaps.get(w2.word)!;
+            let fits2 = true;
+            for (let c = 0; c < 26; c++) {
+              if (c1[c] + c2[c] !== remCounts[c]) { fits2 = false; break; }
+            }
+            if (fits2) {
+              solved = true;
+              sampleCompletion = [w1.word, w2.word];
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Fallback heuristic for large remainders (>= 8 letters with >= 2 vowels)
+    if (!solved && remLen >= 8 && vowels >= 2) {
+      solved = true;
+    }
+
+    if (solved) {
+      solvableCount++;
+    } else {
+      deadEndCount++;
+    }
+
+    auditedCandidates.push({
+      ...cand,
+      isSolvable: solved,
+      isExactCloser: false,
+      completionSample: sampleCompletion,
+    });
+  }
+
+  return {
+    auditedCandidates,
+    solvableWordsCount: solvableCount,
+    deadEndWordsCount: deadEndCount,
+    finisherPairs,
+  };
+}
+
+/**
  * Full unified pipeline calculating the complete ConstructionState
  */
 export function getConstructionState(sourceText: string, targetText: string): ConstructionState {
@@ -271,9 +495,17 @@ export function getConstructionState(sourceText: string, targetText: string): Co
     ? findExactClosers(delta.remainingLetters)
     : [];
 
-  const candidateWords = findCandidateWords(activePool);
+  const rawCandidateWords = findCandidateWords(activePool);
+
+  const {
+    auditedCandidates,
+    solvableWordsCount,
+    deadEndWordsCount,
+    finisherPairs,
+  } = auditCandidateSolvability(activePool, rawCandidateWords);
+
   const histogramData = computeLengthHistogram(
-    candidateWords,
+    auditedCandidates,
     1,
     activePool.length || delta.sourceLetters.length
   );
@@ -281,7 +513,10 @@ export function getConstructionState(sourceText: string, targetText: string): Co
   return {
     ...delta,
     exactClosers,
-    candidateWords,
+    candidateWords: auditedCandidates,
     histogramData,
+    solvableWordsCount,
+    deadEndWordsCount,
+    finisherPairs,
   };
 }

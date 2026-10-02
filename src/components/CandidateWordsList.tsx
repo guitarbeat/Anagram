@@ -1,15 +1,15 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { WordsGraphView } from './WordsGraphView';
-import { SplitDivider } from './SplitDivider';
-import {
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  ChevronDown,
-} from 'lucide-react';
-import type { AnagramResult, CandidateWordItem, HistogramBin, LetterBudgetSummary, POS } from '../engine/types';
+import type { CandidateWordItem, HistogramBin, POS, FinisherPair } from '../engine/types';
 import { pos, isMatchingPos } from '../engine/lexicon';
+import { PosTreemap } from './PosTreemap';
+import { WordLengthTreemap } from './WordLengthTreemap';
+import { WordLengthHistogramSlider } from './WordLengthHistogramSlider';
+import { PosHistogram } from './PosHistogram';
+import { WordLengthLabels } from './WordLengthLabels';
+import { PosLabels } from './PosLabels';
+
+export type LexicalViewMode = 'treemap' | 'histogram' | 'labels';
 
 export type { CandidateWordItem };
 
@@ -26,70 +26,21 @@ export interface CandidateWordsListProps {
   onSetWordAsTarget: (word: string) => void;
   activeTargetPhrase?: string;
   onShowToast: (text: string, type?: 'success' | 'info' | 'error') => void;
-  results?: AnagramResult[];
-  isSolving?: boolean;
   exactClosers?: string[];
-  remainingLetters?: string[];
-  surplusLetters?: string[];
-  budget?: LetterBudgetSummary;
-}
+  finisherPairs?: FinisherPair[];
+  solvableWordsCount?: number;
+  deadEndWordsCount?: number;
 
-const POS_FILTERS = [
-  {
-    id: 'all' as const,
-    label: 'All',
-    desc: 'All dictionary word types',
-    details: 'Complete set of words formed by available letters',
-    textColor: 'text-zinc-800',
-    borderColor: 'border-zinc-300',
-    activeBg: 'bg-zinc-900 border-zinc-900 text-white ring-zinc-900',
-  },
-  {
-    id: 'noun' as const,
-    label: 'Nouns',
-    desc: 'Objects, entities, people & places',
-    details: 'Substantive naming words and entities',
-    textColor: 'text-blue-700',
-    borderColor: 'border-blue-200',
-    activeBg: 'bg-blue-600 border-blue-600 text-white ring-blue-600',
-  },
-  {
-    id: 'verb' as const,
-    label: 'Verbs',
-    desc: 'Action words, states & auxiliary verbs',
-    details: 'Actions, states of being, and modal verbs',
-    textColor: 'text-emerald-700',
-    borderColor: 'border-emerald-200',
-    activeBg: 'bg-emerald-600 border-emerald-600 text-white ring-emerald-600',
-  },
-  {
-    id: 'adj' as const,
-    label: 'Adjectives',
-    desc: 'Descriptors, qualities & attributes',
-    details: 'Sensory properties, modifiers, and descriptors',
-    textColor: 'text-amber-700',
-    borderColor: 'border-amber-200',
-    activeBg: 'bg-amber-600 border-amber-600 text-white ring-amber-600',
-  },
-  {
-    id: 'adv' as const,
-    label: 'Adverbs',
-    desc: 'Modifiers of verbs & adjectives',
-    details: 'Expressions of manner, degree, time, and frequency',
-    textColor: 'text-purple-700',
-    borderColor: 'border-purple-200',
-    activeBg: 'bg-purple-600 border-purple-600 text-white ring-purple-600',
-  },
-  {
-    id: 'other' as const,
-    label: 'Other',
-    desc: 'Pronouns, prepositions, articles, conjunctions, & misc',
-    details: 'pron (pronouns), prep (prepositions), art (articles/determiners), conj (conjunctions), other (misc)',
-    textColor: 'text-slate-600',
-    borderColor: 'border-slate-200',
-    activeBg: 'bg-slate-700 border-slate-700 text-white ring-slate-700',
-  },
-] as const;
+  // Hoisted Complication State & Callbacks
+  inspectorCategory?: 'length' | 'pos';
+  onInspectorCategoryChange?: (cat: 'length' | 'pos') => void;
+  lexicalViewMode?: LexicalViewMode;
+  onLexicalViewModeChange?: (mode: LexicalViewMode) => void;
+  avoidDeadEnds?: boolean;
+  onAvoidDeadEndsChange?: (val: boolean) => void;
+  showGraphPanel?: boolean;
+  showInspectorPanel?: boolean;
+}
 
 export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   sourceText,
@@ -104,17 +55,34 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   onSetWordAsTarget,
   activeTargetPhrase = '',
   onShowToast,
-  results = [],
-  isSolving = false,
   exactClosers = [],
-  remainingLetters = [],
-  surplusLetters = [],
-  budget: _budget,
+  finisherPairs = [],
+  solvableWordsCount = 0,
+  deadEndWordsCount = 0,
+  inspectorCategory: externalInspectorCategory,
+  onInspectorCategoryChange,
+  lexicalViewMode: externalLexicalViewMode,
+  onLexicalViewModeChange,
+  avoidDeadEnds: externalAvoidDeadEnds,
+  onAvoidDeadEndsChange,
+  showGraphPanel = true,
+  showInspectorPanel = true,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [hasUserCustomizedSplit, setHasUserCustomizedSplit] = useState<boolean>(false);
-  const [topTab, _setTopTab] = useState<'anagrams' | 'words'>('anagrams');
+  const rightColumnRef = useRef<HTMLDivElement>(null);
   const [internalPosFilter, setInternalPosFilter] = useState<POS | 'all' | null>(null);
+
+  // Avoid Dead-Ends Mode (Internal state fallback if not hoisted)
+  const [internalAvoidDeadEnds, setInternalAvoidDeadEnds] = useState<boolean>(true);
+  const avoidDeadEnds = externalAvoidDeadEnds !== undefined ? externalAvoidDeadEnds : internalAvoidDeadEnds;
+  const setAvoidDeadEnds = onAvoidDeadEndsChange || setInternalAvoidDeadEnds;
+
+  // Candidates filtered by solvability safety
+  const safeCandidateWords = useMemo(() => {
+    if (!avoidDeadEnds) return candidateWords;
+    const filtered = candidateWords.filter(c => c.isSolvable !== false);
+    return filtered.length > 0 ? filtered : candidateWords;
+  }, [candidateWords, avoidDeadEnds]);
 
   const activePosFilter = selectedPosFilter !== undefined ? selectedPosFilter : internalPosFilter;
   const handlePosFilterChange = (val: POS | 'all' | null) => {
@@ -127,15 +95,15 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
 
   const posCounts = useMemo(() => {
     const counts: Record<string, number> = {
-      all: candidateWords.length,
+      all: safeCandidateWords.length,
       noun: 0,
       verb: 0,
       adj: 0,
       adv: 0,
       other: 0,
     };
-    for (let i = 0; i < candidateWords.length; i++) {
-      const p = pos(candidateWords[i].word);
+    for (let i = 0; i < safeCandidateWords.length; i++) {
+      const p = pos(safeCandidateWords[i].word);
       if (counts[p] !== undefined) {
         counts[p]++;
       } else {
@@ -143,9 +111,8 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
       }
     }
     return counts;
-  }, [candidateWords]);
+  }, [safeCandidateWords]);
 
-  // Breakdown of non-content word subtypes inside "Other"
   const otherSubtypeCounts = useMemo(() => {
     const subtypes = {
       pron: 0,
@@ -154,273 +121,127 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
       conj: 0,
       other: 0,
     };
-    for (let i = 0; i < candidateWords.length; i++) {
-      const p = pos(candidateWords[i].word);
-      if (p === 'pron' || p === 'prep' || p === 'art' || p === 'conj' || p === 'other') {
-        subtypes[p]++;
+    for (let i = 0; i < safeCandidateWords.length; i++) {
+      const p = pos(safeCandidateWords[i].word);
+      if (p === 'other') {
+        const w = safeCandidateWords[i].word.toLowerCase();
+        if (['i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'who', 'whom', 'whose'].includes(w)) {
+          subtypes.pron++;
+        } else if (['in', 'on', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'over', 'under'].includes(w)) {
+          subtypes.prep++;
+        } else if (['the', 'a', 'an', 'this', 'that', 'these', 'those', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'all', 'both', 'half', 'some', 'any', 'no'].includes(w)) {
+          subtypes.art++;
+        } else if (['and', 'but', 'or', 'nor', 'for', 'yet', 'so', 'although', 'because', 'since', 'unless'].includes(w)) {
+          subtypes.conj++;
+        } else {
+          subtypes.other++;
+        }
       }
     }
     return subtypes;
-  }, [candidateWords]);
+  }, [safeCandidateWords]);
 
-  // Auto-reset filter if active filter has 0 matching words
-  useEffect(() => {
-    if (activePosFilter && activePosFilter !== 'all') {
-      if ((posCounts[activePosFilter] || 0) === 0) {
-        handlePosFilterChange(null);
-      }
+  // Inspector Category (Length vs Parts of Speech - fallback to internal if not hoisted)
+  const [internalInspectorCategory, setInternalInspectorCategory] = useState<'length' | 'pos'>('length');
+  const inspectorCategory = externalInspectorCategory !== undefined ? externalInspectorCategory : internalInspectorCategory;
+  const setInspectorCategory = onInspectorCategoryChange || setInternalInspectorCategory;
+
+  // Hovered word from Graph View for cross-visualization reactivity
+  const [hoveredGraphWord, setHoveredGraphWord] = useState<string | null>(null);
+
+  // Hovered POS or Length from Inspector views for graph bubble highlighting
+  const [hoveredTreemapPos, setHoveredTreemapPos] = useState<POS | null>(null);
+  const [hoveredTreemapLength, setHoveredTreemapLength] = useState<number | null>(null);
+
+  // Inspector View Modes: Treemap, Histogram Slider, Labels
+  const [internalPosViewMode, setInternalPosViewMode] = useState<LexicalViewMode>('treemap');
+  const posViewMode = externalLexicalViewMode !== undefined ? externalLexicalViewMode : internalPosViewMode;
+  const lengthViewMode = posViewMode;
+  const setGlobalViewMode = onLexicalViewModeChange || setInternalPosViewMode;
+
+  const hoveredWordInfo = useMemo(() => {
+    if (!hoveredGraphWord) return null;
+    const w = hoveredGraphWord.toLowerCase();
+    const wordPos = pos(w);
+    let mappedPos: POS = 'other';
+    if (wordPos === 'noun' || wordPos === 'verb' || wordPos === 'adj' || wordPos === 'adv') {
+      mappedPos = wordPos;
     }
-  }, [activePosFilter, posCounts]);
 
-  const getAdaptiveSplit = () => {
-    return 0.78; // Default wide graph on left (~78%), filter cards column on right (~22%)
-  };
-
-  const [splitRatio, setSplitRatio] = useState<number>(0.78);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [soloSubPanel, setSoloSubPanel] = useState<'graph' | 'cards' | null>(null);
-
-  // Vertical split state for Right Column (Top Suggestions vs Bottom Histogram)
-  const rightColumnRef = useRef<HTMLDivElement>(null);
-  const [cardSplitRatio, setCardSplitRatio] = useState<number>(0.50);
-  const [isCardDragging, setIsCardDragging] = useState<boolean>(false);
-  const [isSuggestionsMinimized, setIsSuggestionsMinimized] = useState<boolean>(false);
-  const [isHistogramMinimized, setIsHistogramMinimized] = useState<boolean>(false);
-
-  // ResizeObserver for the bubble container to guarantee all bubbles fit without clipping
-  const bubbleContainerRef = useRef<HTMLDivElement>(null);
-  const [bubbleBoxSize, setBubbleBoxSize] = useState<{ width: number; height: number }>({
-    width: 260,
-    height: 200,
-  });
-
-  useEffect(() => {
-    const el = bubbleContainerRef.current;
-    if (!el) return;
-    const updateSize = () => {
-      const rect = el.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        setBubbleBoxSize({ width: rect.width, height: rect.height });
-      }
+    return {
+      word: hoveredGraphWord,
+      length: hoveredGraphWord.length,
+      pos: mappedPos,
     };
-    updateSize();
-    const observer = new ResizeObserver(updateSize);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [isSuggestionsMinimized, isHistogramMinimized, cardSplitRatio]);
+  }, [hoveredGraphWord]);
 
-  const startCardDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsCardDragging(true);
-  }, []);
+  // Compute compatible words that can be formed concurrently with hoveredGraphWord
+  const compatibleData = useMemo(() => {
+    if (!hoveredGraphWord || !sourceText) return null;
 
-  const handleCardPointerMove = useCallback((e: PointerEvent) => {
-    if (!isCardDragging || !rightColumnRef.current) return;
-    const rect = rightColumnRef.current.getBoundingClientRect();
-    const relativeY = (e.clientY - rect.top) / rect.height;
-    const clampedY = Math.max(0.24, Math.min(0.80, relativeY));
-    setCardSplitRatio(clampedY);
-  }, [isCardDragging]);
+    const cleanSource = sourceText.toLowerCase().replace(/[^a-z]/g, '');
+    const cleanHovered = hoveredGraphWord.toLowerCase().replace(/[^a-z]/g, '');
 
-  const handleCardPointerUp = useCallback(() => {
-    setIsCardDragging(false);
-  }, []);
+    const sourceCounts = new Uint8Array(26);
+    for (let i = 0; i < cleanSource.length; i++) {
+      sourceCounts[cleanSource.charCodeAt(i) - 97]++;
+    }
 
-  useEffect(() => {
-    if (!isCardDragging) return;
-    window.addEventListener('pointermove', handleCardPointerMove);
-    window.addEventListener('pointerup', handleCardPointerUp);
-    window.addEventListener('pointercancel', handleCardPointerUp);
-    return () => {
-      window.removeEventListener('pointermove', handleCardPointerMove);
-      window.removeEventListener('pointerup', handleCardPointerUp);
-      window.removeEventListener('pointercancel', handleCardPointerUp);
+    // Subtract hovered word letters
+    for (let i = 0; i < cleanHovered.length; i++) {
+      const code = cleanHovered.charCodeAt(i) - 97;
+      if (sourceCounts[code] === 0) return null;
+      sourceCounts[code]--;
+    }
+
+    const posCountsMap: Record<string, number> = {
+      noun: 0,
+      verb: 0,
+      adj: 0,
+      adv: 0,
+      other: 0,
     };
-  }, [isCardDragging, handleCardPointerMove, handleCardPointerUp]);
+    const lengthCountsMap: Record<number, number> = {};
+    let totalCompatible = 0;
 
-  // Range Drag and Multi-select state
-  const rangeDragStartRef = useRef<number | null>(null);
-  const rangeDragCurrentRef = useRef<number | null>(null);
-  const isRangeDraggingRef = useRef<boolean>(false);
-  const dragMovedRef = useRef<boolean>(false);
-  const [dragPreview, setDragPreview] = useState<{ start: number; current: number } | null>(null);
+    for (let idx = 0; idx < candidateWords.length; idx++) {
+      const item = candidateWords[idx];
+      const w = item.word.toLowerCase();
+      if (w === cleanHovered) continue;
 
-  // Set of currently active/selected lengths
-  const activeLengthsSet = useMemo(() => {
-    if (dragPreview) {
-      const minL = Math.min(dragPreview.start, dragPreview.current);
-      const maxL = Math.max(dragPreview.start, dragPreview.current);
-      const set = new Set<number>();
-      for (let l = minL; l <= maxL; l++) set.add(l);
-      return set;
-    }
-    if (selectedLengthFilter === null || selectedLengthFilter === undefined) {
-      return new Set<number>();
-    }
-    if (Array.isArray(selectedLengthFilter)) {
-      return new Set(selectedLengthFilter);
-    }
-    return new Set([selectedLengthFilter]);
-  }, [dragPreview, selectedLengthFilter]);
-
-  // Handle pointer down on a histogram bar to initiate range drag or click
-  const handleBarPointerDown = useCallback((e: React.PointerEvent, len: number) => {
-    if (e.button !== 0) return;
-    if (isDragging) return;
-
-    isRangeDraggingRef.current = true;
-    dragMovedRef.current = false;
-    rangeDragStartRef.current = len;
-    rangeDragCurrentRef.current = len;
-    setDragPreview({ start: len, current: len });
-  }, [isDragging]);
-
-  // Global pointer listeners for range drag across histogram bars
-  useEffect(() => {
-    const handleGlobalPointerMove = (e: PointerEvent) => {
-      if (!isRangeDraggingRef.current) return;
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      const barEl = el?.closest('[data-bar-length]');
-      if (barEl) {
-        const len = Number(barEl.getAttribute('data-bar-length'));
-        if (!isNaN(len) && len !== rangeDragCurrentRef.current) {
-          dragMovedRef.current = true;
-          rangeDragCurrentRef.current = len;
-          setDragPreview({ start: rangeDragStartRef.current!, current: len });
+      const testCounts = new Uint8Array(26);
+      let fits = true;
+      for (let i = 0; i < w.length; i++) {
+        const code = w.charCodeAt(i) - 97;
+        testCounts[code]++;
+        if (testCounts[code] > sourceCounts[code]) {
+          fits = false;
+          break;
         }
       }
-    };
 
-    const handleGlobalPointerUp = (e: PointerEvent) => {
-      if (!isRangeDraggingRef.current) return;
-      isRangeDraggingRef.current = false;
-
-      const start = rangeDragStartRef.current;
-      const curr = rangeDragCurrentRef.current;
-      const hasMoved = dragMovedRef.current;
-
-      rangeDragStartRef.current = null;
-      rangeDragCurrentRef.current = null;
-      setDragPreview(null);
-
-      if (start === null) return;
-      const end = curr !== null ? curr : start;
-      const minL = Math.min(start, end);
-      const maxL = Math.max(start, end);
-
-      if (!hasMoved || minL === maxL) {
-        // Single bar click / toggle
-        const currentArray = Array.isArray(selectedLengthFilter)
-          ? selectedLengthFilter
-          : selectedLengthFilter !== null
-          ? [selectedLengthFilter]
-          : [];
-
-        if (e.shiftKey || e.metaKey || e.ctrlKey) {
-          if (currentArray.includes(minL)) {
-            const filtered = currentArray.filter(l => l !== minL);
-            onSelectLengthFilter(filtered.length > 0 ? filtered : null);
-          } else {
-            onSelectLengthFilter([...currentArray, minL].sort((a, b) => a - b));
-          }
-        } else {
-          // If only this single bar is currently selected, toggle it off!
-          if (currentArray.length === 1 && currentArray[0] === minL) {
-            onSelectLengthFilter(null);
-          } else {
-            onSelectLengthFilter([minL]);
-          }
-        }
-      } else {
-        // Range dragged across minL..maxL
-        const range: number[] = [];
-        for (let l = minL; l <= maxL; l++) {
-          range.push(l);
-        }
-
-        if (e.shiftKey || e.metaKey || e.ctrlKey) {
-          const currentSet = new Set(
-            Array.isArray(selectedLengthFilter)
-              ? selectedLengthFilter
-              : selectedLengthFilter !== null
-              ? [selectedLengthFilter]
-              : []
-          );
-          range.forEach(l => currentSet.add(l));
-          onSelectLengthFilter(Array.from(currentSet).sort((a, b) => a - b));
-        } else {
-          onSelectLengthFilter(range);
-        }
+      if (fits) {
+        totalCompatible++;
+        const p = pos(w);
+        const mappedP: POS = (p === 'noun' || p === 'verb' || p === 'adj' || p === 'adv') ? p : 'other';
+        posCountsMap[mappedP] = (posCountsMap[mappedP] || 0) + 1;
+        lengthCountsMap[item.length] = (lengthCountsMap[item.length] || 0) + 1;
       }
-    };
-
-    window.addEventListener('pointermove', handleGlobalPointerMove);
-    window.addEventListener('pointerup', handleGlobalPointerUp);
-    window.addEventListener('pointercancel', handleGlobalPointerUp);
-
-    return () => {
-      window.removeEventListener('pointermove', handleGlobalPointerMove);
-      window.removeEventListener('pointerup', handleGlobalPointerUp);
-      window.removeEventListener('pointercancel', handleGlobalPointerUp);
-    };
-  }, [selectedLengthFilter, onSelectLengthFilter]);
-
-  // Adaptively adjust on window resize if user hasn't manually customized
-  useEffect(() => {
-    if (hasUserCustomizedSplit) return;
-    const handleResize = () => {
-      setSplitRatio(getAdaptiveSplit());
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [hasUserCustomizedSplit]);
-
-  const startDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setHasUserCustomizedSplit(true);
-    setIsDragging(true);
-  }, []);
-
-  const resetAdaptiveSplit = useCallback(() => {
-    setHasUserCustomizedSplit(false);
-    setSplitRatio(getAdaptiveSplit());
-  }, []);
-
-  const handlePointerMove = useCallback((e: PointerEvent) => {
-    if (!isDragging || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const relativeX = (e.clientX - rect.left) / rect.width;
-    let clampedX = Math.max(0.20, Math.min(0.80, relativeX));
-    // Magnetic snap to equal 50/50 split within 2.5%
-    if (Math.abs(clampedX - 0.5) < 0.025) {
-      clampedX = 0.5;
     }
-    setSplitRatio(clampedX);
-  }, [isDragging]);
 
-  const handlePointerUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  useEffect(() => {
-    if (!isDragging) return;
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('pointercancel', handlePointerUp);
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerUp);
+    return {
+      compatiblePosCounts: posCountsMap,
+      compatibleLengthCounts: lengthCountsMap,
+      totalCompatible,
     };
-  }, [isDragging, handlePointerMove, handlePointerUp]);
+  }, [hoveredGraphWord, sourceText, candidateWords]);
 
-  // Compute histogram data filtered by the active POS filter
+  // Compute histogram data filtered by the active POS filter and avoidDeadEnds
   const effectiveHistogramData = useMemo(() => {
-    if (!activePosFilter || activePosFilter === 'all') {
-      return histogramData;
-    }
-
-    const filteredWords = candidateWords.filter(w => isMatchingPos(pos(w.word), activePosFilter));
+    const wordsPool = safeCandidateWords;
+    const filteredWords = (!activePosFilter || activePosFilter === 'all')
+      ? wordsPool
+      : wordsPool.filter(w => isMatchingPos(pos(w.word), activePosFilter));
 
     const minL = histogramData.length > 0 ? histogramData[0].length : 2;
     const maxL = histogramData.length > 0 ? histogramData[histogramData.length - 1].length : 12;
@@ -442,11 +263,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
       });
     }
     return res;
-  }, [candidateWords, activePosFilter, histogramData]);
-
-  const maxHistogramCount = useMemo(() => {
-    return Math.max(1, ...effectiveHistogramData.map(d => d.count));
-  }, [effectiveHistogramData]);
+  }, [safeCandidateWords, activePosFilter, histogramData]);
 
   const totalFilteredWords = useMemo(() => {
     return effectiveHistogramData.reduce((acc, curr) => acc + curr.count, 0);
@@ -456,477 +273,109 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     return histogramData.reduce((acc, curr) => acc + curr.count, 0);
   }, [histogramData]);
 
-  const showLeftGraph = totalWords > 0 && soloSubPanel !== 'cards';
-  const showRightCards = totalWords > 0 && soloSubPanel !== 'graph';
+  const showLeftGraph = showGraphPanel && totalWords > 0;
+  const showRightCards = showInspectorPanel && totalWords > 0;
 
   return (
     <div
       ref={containerRef}
-      className="w-full h-full relative flex flex-row items-stretch min-h-0 text-zinc-900 select-none overflow-hidden bg-transparent gap-0 animate-fade-in-up"
+      className="w-full h-full relative flex flex-row items-stretch min-h-0 text-zinc-900 select-none overflow-hidden bg-transparent gap-1.5 sm:gap-2"
     >
-      {/* MINIMIZED VERTICAL PILL FOR GRAPH ON LEFT */}
-      {totalWords > 0 && soloSubPanel === 'cards' && (
-        <div
-          onClick={() => setSoloSubPanel(null)}
-          className="h-full w-7 bg-zinc-900 hover:bg-zinc-800 border-2 border-black rounded-[14px] flex flex-col items-center justify-between py-3 cursor-pointer transition-colors shrink-0 text-white select-none shadow-md group"
-          title="Expand Graph View"
-        >
-          <div className="flex flex-col items-center gap-1.5 [writing-mode:vertical-lr] rotate-180">
-            <ChevronLeft className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-200 rotate-90 transition-colors" />
-            <span className="text-[9.5px] font-mono text-zinc-400 group-hover:text-zinc-200 font-bold uppercase tracking-widest transition-colors">
-              Graph View
-            </span>
-          </div>
-          <span className="text-[9px] font-mono text-zinc-400 group-hover:text-zinc-200 font-bold uppercase [writing-mode:vertical-lr] rotate-180 transition-colors">
-            Expand
-          </span>
-        </div>
-      )}
-
-      {/* LEFT: Constellation Graph View (Separate Panel) */}
+      {/* LEFT: Constellation Graph Panel */}
       {showLeftGraph && (
-        <div
-          className={`h-full relative min-w-[120px] bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden transition-all flex flex-col ${
-            isDragging ? 'duration-0' : 'duration-300 ease-out'
-          }`}
-          style={{
-            width: !showRightCards
-              ? '100%'
-              : `calc(${splitRatio * 100}% - 7px)`,
-          }}
-        >
+        <div className="flex-1 min-w-0 h-full relative bg-white border-2 border-black rounded-xl sm:rounded-2xl overflow-hidden shadow-xs flex flex-col">
           <div className="flex-1 w-full h-full min-h-0">
             <WordsGraphView
               sourceText={sourceText}
-              candidateWords={candidateWords}
+              candidateWords={safeCandidateWords}
               selectedLengthFilter={selectedLengthFilter}
               selectedPosFilter={activePosFilter}
               onAddWordToTarget={onAddWordToTarget}
               onSetWordAsTarget={onSetWordAsTarget}
               activeTargetPhrase={activeTargetPhrase}
               onShowToast={onShowToast}
+              onHoverWordChange={setHoveredGraphWord}
+              hoveredPosFilter={hoveredTreemapPos}
+              hoveredLengthFilter={hoveredTreemapLength}
             />
           </div>
         </div>
       )}
 
-      {/* DRAGGABLE VERTICAL RESIZER DIVIDER & MINIMIZE CONTROLS */}
-      {showLeftGraph && showRightCards && (
-        <SplitDivider
-          orientation="vertical"
-          isDragging={isDragging}
-          onPointerDown={startDrag}
-          onDoubleClick={resetAdaptiveSplit}
-          title="Drag to resize left/right panels (Double-click to reset)"
-          onCollapsePrev={(e) => {
-            e.stopPropagation();
-            setSoloSubPanel('cards');
-          }}
-          collapsePrevTitle="Minimize Graph (Show Cards)"
-          collapsePrevIcon="left"
-          onCollapseNext={(e) => {
-            e.stopPropagation();
-            setSoloSubPanel('graph');
-          }}
-          collapseNextTitle="Minimize Cards (Show Graph)"
-          collapseNextIcon="right"
-        />
-      )}
-
-      {/* RIGHT: Dual Card Column (Top Card & Bottom Card) */}
+      {/* RIGHT: Unified Lexical Inspector Workspace */}
       {showRightCards && (
         <div
           ref={rightColumnRef}
-          className={`h-full relative flex flex-col gap-1.5 min-w-[140px] sm:min-w-[170px] transition-all ${
-            !showLeftGraph ? 'flex-1' : 'shrink-0'
-          } ${isDragging || isCardDragging ? 'duration-0' : 'duration-300 ease-out'}`}
-          style={{
-            width: !showLeftGraph
-              ? '100%'
-              : `calc(${(1 - splitRatio) * 100}% - 7px)`,
-          }}
+          className="flex-1 min-w-0 h-full relative flex flex-col bg-white border-2 border-black rounded-xl sm:rounded-2xl overflow-hidden shadow-xs"
         >
-          {/* MINIMIZED HORIZONTAL PILL FOR SUGGESTIONS ON TOP */}
-          {isSuggestionsMinimized && (
-            <div
-              onClick={() => setIsSuggestionsMinimized(false)}
-              className="w-full h-9 sm:h-10 bg-[#111114] hover:bg-[#18181c] border border-zinc-800 hover:border-zinc-700 rounded-[14px] flex items-center justify-between px-3 cursor-pointer transition-all shrink-0 text-white select-none shadow-sm group"
-              title="Expand Suggestions"
-            >
-              <div className="flex items-center gap-2 min-w-0 pr-2">
-                <span className="p-1 rounded-md bg-zinc-800/80 text-zinc-400 group-hover:text-zinc-200 transition-colors shrink-0">
-                  <ChevronDown className="w-3.5 h-3.5 group-hover:translate-y-0.5 transition-transform" />
-                </span>
-                <span className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-200 group-hover:text-white transition-colors truncate">
-                  Suggestions
-                </span>
-                <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-zinc-800/90 text-zinc-400 border border-zinc-700/60 shrink-0">
-                  MINIMIZED
-                </span>
-              </div>
-              <div className="flex items-center gap-1 text-zinc-400 group-hover:text-zinc-200 transition-colors shrink-0">
-                <span className="text-[9.5px] font-mono font-bold uppercase tracking-wider">
-                  Expand
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* TOP CARD (Red Box 1): Solved Anagrams, Exact Closers & Suggestions */}
-          {!isSuggestionsMinimized && (
-            <div
-              className="w-full bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-0 shadow-sm transition-all min-h-0"
-              style={{
-                height: isHistogramMinimized
-                  ? '100%'
-                  : `calc(${cardSplitRatio * 100}% - 8px)`,
-                minHeight: '120px',
-              }}
-            >
-              {/* Body: Floating Part of Speech Filter Bubbles */}
-              <div className="flex-1 min-h-0 flex flex-col p-1.5 sm:p-2 select-none overflow-hidden relative">
-                {/* Floating Filter Bubbles Container */}
-                {candidateWords.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center p-2 text-center select-none">
-                    <span className="text-[10px] font-mono text-zinc-400">No words available</span>
-                  </div>
-                ) : (
-                  <div
-                    ref={bubbleContainerRef}
-                    className="flex-1 min-h-0 relative w-full h-full flex flex-col overflow-y-auto overflow-x-hidden p-1.5 sm:p-2 select-none scrollbar-none"
-                  >
-                    <style>{`
-                      @keyframes bubbleFloat1 {
-                        0%, 100% { transform: translateY(0px) translateX(0px); }
-                        50% { transform: translateY(-4px) translateX(2px); }
-                      }
-                      @keyframes bubbleFloat2 {
-                        0%, 100% { transform: translateY(0px) translateX(0px); }
-                        50% { transform: translateY(3px) translateX(-2px); }
-                      }
-                      @keyframes bubbleFloat3 {
-                        0%, 100% { transform: translateY(0px) translateX(0px); }
-                        50% { transform: translateY(-3px) translateX(-2px); }
-                      }
-                      @keyframes bubbleFloat4 {
-                        0%, 100% { transform: translateY(0px) translateX(0px); }
-                        50% { transform: translateY(4px) translateX(2px); }
-                      }
-                      @keyframes bubbleFloat5 {
-                        0%, 100% { transform: translateY(0px) translateX(0px); }
-                        50% { transform: translateY(-3px) translateX(2px); }
-                      }
-                      @keyframes bubbleFloat6 {
-                        0%, 100% { transform: translateY(0px) translateX(0px); }
-                        50% { transform: translateY(3px) translateX(-2px); }
-                      }
-                    `}</style>
-                    {(() => {
-                      const visibleFilters = POS_FILTERS.filter(
-                        filter => (posCounts[filter.id] || 0) > 0
-                      );
-                      const counts = visibleFilters.map(f => posCounts[f.id] || 0);
-                      const maxCount = Math.max(...counts, 1);
-                      const minCount = Math.min(...counts, 1);
-                      const hasVariation = maxCount > minCount;
-
-                      const availW = Math.max(130, bubbleBoxSize.width);
-                      const availH = Math.max(90, bubbleBoxSize.height);
-
-                      // Determine rows and columns based on aspect ratio of the card
-                      const rowEstimate = availW >= 280 ? 2 : availH < 170 ? 2 : 3;
-                      const colEstimate = Math.max(2, Math.ceil(visibleFilters.length / rowEstimate));
-
-                      const maxPossibleH = Math.floor((availH - 20) / rowEstimate);
-                      const maxPossibleW = Math.floor((availW - 20) / colEstimate);
-                      const safeMaxDiam = Math.max(34, Math.min(maxPossibleH, maxPossibleW, 76));
-
-                      const minDiameter = Math.max(32, Math.min(50, Math.round(safeMaxDiam * 0.74)));
-                      const maxDiameter = Math.max(minDiameter + 6, safeMaxDiam);
-
-                      return (
-                        <div className="m-auto flex flex-wrap items-center justify-center content-center gap-2 sm:gap-2.5 w-full py-1">
-                          {visibleFilters.map((filter, idx) => {
-                            const count = posCounts[filter.id] || 0;
-                            const isSelected =
-                              activePosFilter === filter.id ||
-                              (filter.id === 'all' && (!activePosFilter || activePosFilter === 'all'));
-                            const animName = `bubbleFloat${(idx % 6) + 1}`;
-                            const animDuration = `${3.2 + (idx % 3) * 0.8}s`;
-                            const animDelay = `${(idx * 0.4).toFixed(2)}s`;
-
-                            const ratio = hasVariation
-                              ? Math.sqrt((count - minCount) / (maxCount - minCount))
-                              : 0.5;
-                            const diameter = Math.round(minDiameter + ratio * (maxDiameter - minDiameter));
-
-                            const displayLabel =
-                              diameter < 52
-                                ? filter.id === 'adj'
-                                  ? 'ADJ'
-                                  : filter.id === 'adv'
-                                  ? 'ADV'
-                                  : filter.id === 'noun'
-                                  ? 'NOUN'
-                                  : filter.label
-                                : filter.label;
-
-                            return (
-                              <button
-                                key={filter.id}
-                                type="button"
-                                onClick={() => {
-                                  if (filter.id === 'all' || activePosFilter === filter.id) {
-                                    handlePosFilterChange(null);
-                                  } else {
-                                    handlePosFilterChange(filter.id as POS);
-                                  }
-                                }}
-                                style={{
-                                  width: `${diameter}px`,
-                                  height: `${diameter}px`,
-                                  animation: `${animName} ${animDuration} ease-in-out infinite alternate`,
-                                  animationDelay: animDelay,
-                                }}
-                                className={`group rounded-full border-2 transition-transform duration-200 cursor-pointer select-none flex flex-col items-center justify-center p-1 relative shadow-xs hover:scale-110 active:scale-95 shrink-0 ${
-                                  isSelected
-                                    ? `${filter.activeBg} font-bold shadow-md ring-2 ring-offset-1`
-                                    : `bg-white hover:bg-zinc-50 ${filter.borderColor} ${filter.textColor}`
-                                }`}
-                                title={
-                                  filter.id === 'other'
-                                    ? `OTHER (${count} words)\nNon-content grammatical words:\n• Pronouns (pron): ${otherSubtypeCounts.pron}\n• Prepositions (prep): ${otherSubtypeCounts.prep}\n• Articles/Determiners (art): ${otherSubtypeCounts.art}\n• Conjunctions (conj): ${otherSubtypeCounts.conj}\n• Miscellaneous (other): ${otherSubtypeCounts.other}`
-                                    : `${filter.label} (${count} words) — ${filter.desc}`
-                                }
-                              >
-                                <span
-                                  className={`font-mono font-bold uppercase leading-none mb-0.5 text-center px-0.5 max-w-full ${
-                                    displayLabel.length >= 8
-                                      ? diameter >= 66
-                                        ? 'text-[8.5px] sm:text-[9px] tracking-tighter'
-                                        : 'text-[7px] tracking-tighter'
-                                      : displayLabel.length >= 6
-                                      ? diameter >= 66
-                                        ? 'text-[9.5px] sm:text-[10px] tracking-tight'
-                                        : 'text-[7.5px] tracking-tight'
-                                      : diameter >= 64
-                                      ? 'text-[11px] sm:text-xs tracking-wider'
-                                      : diameter >= 48
-                                      ? 'text-[9px] sm:text-[9.5px] tracking-wide'
-                                      : 'text-[7.5px] tracking-normal'
-                                  }`}
-                                >
-                                  {displayLabel}
-                                </span>
-                                <span
-                                  className={`font-mono font-bold rounded-full leading-tight shrink-0 ${
-                                    diameter >= 64
-                                      ? 'text-xs sm:text-[13px] px-2 py-0.5'
-                                      : diameter >= 48
-                                      ? 'text-[9.5px] sm:text-[10.5px] px-1.5 py-0.2'
-                                      : 'text-[8.5px] px-1 py-0.1'
-                                  } ${
-                                    isSelected
-                                      ? 'bg-white/25 text-white'
-                                      : 'bg-zinc-100 text-zinc-700 group-hover:bg-zinc-200 group-hover:text-zinc-900'
-                                  }`}
-                                >
-                                  {count}
-                                </span>
-                                {filter.id === 'other' && diameter >= 66 && (
-                                  <span
-                                    className={`text-[7px] font-mono leading-none mt-0.5 text-center truncate max-w-full ${
-                                      isSelected ? 'text-slate-200/90' : 'text-slate-500'
-                                    }`}
-                                  >
-                                    pron·prep·conj
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* HORIZONTAL DRAGGABLE DIVIDER BETWEEN TOP & BOTTOM CARD */}
-          {!isSuggestionsMinimized && !isHistogramMinimized && (
-            <SplitDivider
-              orientation="horizontal"
-              isDragging={isCardDragging}
-              onPointerDown={startCardDrag}
-              onDoubleClick={() => setCardSplitRatio(0.5)}
-              title="Drag to resize (Double-click to reset 50/50)"
-              onCollapsePrev={(e) => {
-                e.stopPropagation();
-                setIsSuggestionsMinimized(true);
-              }}
-              collapsePrevTitle="Minimize Suggestions"
-              collapsePrevIcon="up"
-              onCollapseNext={(e) => {
-                e.stopPropagation();
-                setIsHistogramMinimized(true);
-              }}
-              collapseNextTitle="Minimize Histogram"
-              collapseNextIcon="down"
-              className="-my-1.5 !py-0 !my-0 !h-1"
-            />
-          )}
-
-          {/* BOTTOM CARD (Red Box 2): Word Length Histogram */}
-          {!isHistogramMinimized && (
-            <div
-              className="w-full bg-white border-2 border-black rounded-[18px] sm:rounded-[22px] overflow-hidden flex flex-col p-0 shadow-sm transition-all min-h-0 flex-1 relative"
-              style={{
-                height: isSuggestionsMinimized
-                  ? '100%'
-                  : `calc(${(1 - cardSplitRatio) * 100}% - 8px)`,
-                minHeight: '70px',
-              }}
-            >
-              {/* Active Filter Label (Top-Left) */}
-              {activePosFilter && activePosFilter !== 'all' && (
-                <div className="absolute top-1.5 left-2.5 z-10 text-[9.5px] font-mono font-bold text-zinc-600 uppercase tracking-wider flex items-center gap-1.5 pointer-events-none select-none">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span>{POS_FILTERS.find(f => f.id === activePosFilter)?.label || activePosFilter}</span>
-                  <span className="text-zinc-400">({totalFilteredWords})</span>
-                </div>
-              )}
-
-              {selectedLengthFilter !== null && (
-                <button
-                  type="button"
-                  onClick={onClearLengthFilter}
-                  className="absolute top-1.5 right-1.5 z-10 text-[9px] font-mono font-bold text-emerald-700 hover:text-emerald-950 px-1.5 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 transition-colors shadow-xs"
-                >
-                  Clear Filter
-                </button>
-              )}
-
-              {/* Vertical Histogram Bars */}
-              <div
-                className="flex-1 min-h-0 flex items-end justify-between gap-1 pt-2 pb-1 select-none touch-none"
-                onDoubleClick={onClearLengthFilter}
-              >
-                {effectiveHistogramData.map(item => {
-                  const isSelected = activeLengthsSet.has(item.length);
-                  const heightPercent = item.count > 0 ? Math.max(14, (item.count / maxHistogramCount) * 100) : 0;
-
-                  return (
-                    <div
-                      key={item.length}
-                      data-bar-length={item.length}
-                      onPointerDown={(e) => handleBarPointerDown(e, item.length)}
-                      onPointerEnter={() => {
-                        if (isRangeDraggingRef.current && rangeDragStartRef.current !== null) {
-                          if (rangeDragCurrentRef.current !== item.length) {
-                            dragMovedRef.current = true;
-                            rangeDragCurrentRef.current = item.length;
-                            setDragPreview({ start: rangeDragStartRef.current, current: item.length });
-                          }
-                        }
-                      }}
-                      className={`flex-1 flex flex-col items-center justify-end h-full group cursor-pointer transition-all rounded py-1 select-none ${
-                        isSelected
-                          ? 'bg-emerald-100/90 ring-1 ring-emerald-500 shadow-xs'
-                          : item.count > 0
-                          ? 'hover:bg-zinc-100'
-                          : 'opacity-40 hover:bg-transparent'
-                      }`}
-                    >
-                      {/* Count Label */}
-                      <span
-                        className={`text-[9px] font-mono mb-1 transition-colors ${
-                          isSelected
-                            ? 'text-emerald-950 font-bold'
-                            : item.count > 0
-                            ? 'text-zinc-700 group-hover:text-zinc-950 font-semibold'
-                            : 'text-zinc-300'
-                        }`}
-                      >
-                        {item.count}
-                      </span>
-
-                      {/* Vertical Bar */}
-                      <div
-                        className={`w-full max-w-[18px] rounded-t-sm transition-all duration-300 ease-out ${
-                          isSelected
-                            ? 'bg-emerald-600 shadow-[0_0_8px_rgba(5,150,105,0.4)]'
-                            : item.count > 0
-                            ? 'bg-zinc-400 group-hover:bg-zinc-700'
-                            : 'bg-zinc-200'
-                        }`}
-                        style={{ height: `${heightPercent}%` }}
-                      />
-
-                      {/* Length Label */}
-                      <span
-                        className={`text-[9.5px] font-mono mt-1 ${
-                          isSelected
-                            ? 'text-emerald-950 font-bold'
-                            : item.count > 0
-                            ? 'text-zinc-600 group-hover:text-zinc-900 font-medium'
-                            : 'text-zinc-400'
-                        }`}
-                      >
-                        {item.length}L
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* MINIMIZED HORIZONTAL PILL FOR HISTOGRAM AT BOTTOM */}
-          {isHistogramMinimized && (
-            <div
-              onClick={() => setIsHistogramMinimized(false)}
-              className="w-full h-9 sm:h-10 bg-[#111114] hover:bg-[#18181c] border border-zinc-800 hover:border-zinc-700 rounded-[14px] flex items-center justify-between px-3 cursor-pointer transition-all shrink-0 text-white select-none shadow-sm group"
-              title="Expand Histogram"
-            >
-              <div className="flex items-center gap-2 min-w-0 pr-2">
-                <span className="p-1 rounded-md bg-zinc-800/80 text-zinc-400 group-hover:text-zinc-200 group-hover:-translate-y-0.5 transition-transform shrink-0">
-                  <ChevronUp className="w-3.5 h-3.5" />
-                </span>
-                <span className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-200 group-hover:text-white transition-colors truncate">
-                  Histogram
-                </span>
-                <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-zinc-800/90 text-zinc-400 border border-zinc-700/60 shrink-0">
-                  MINIMIZED
-                </span>
-              </div>
-              <div className="flex items-center gap-1 text-zinc-400 group-hover:text-zinc-200 transition-colors shrink-0">
-                <span className="text-[9.5px] font-mono font-bold uppercase tracking-wider">
-                  Expand
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* MINIMIZED VERTICAL PILL FOR CARDS ON RIGHT */}
-      {totalWords > 0 && soloSubPanel === 'graph' && (
-        <div
-          onClick={() => setSoloSubPanel(null)}
-          className="h-full w-7 bg-zinc-900 hover:bg-zinc-800 border-2 border-black rounded-[14px] flex flex-col items-center justify-between py-3 cursor-pointer transition-colors shrink-0 text-white select-none shadow-md group"
-          title="Expand Suggestions & Histogram"
-        >
-          <div className="flex flex-col items-center gap-1.5 [writing-mode:vertical-lr]">
-            <ChevronRight className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-200 -rotate-90 transition-colors" />
-            <span className="text-[9.5px] font-mono text-zinc-400 group-hover:text-zinc-200 font-bold uppercase tracking-widest transition-colors">
-              Suggestions & Histogram
-            </span>
+          {/* UNIFIED FULL-HEIGHT LEXICAL INSPECTOR SURFACE */}
+          <div className="flex-1 w-full min-h-0 p-1 overflow-hidden relative">
+            {inspectorCategory === 'pos' ? (
+              posViewMode === 'treemap' ? (
+                <PosTreemap
+                  posCounts={posCounts}
+                  otherSubtypeCounts={otherSubtypeCounts}
+                  activePosFilter={activePosFilter}
+                  onPosFilterChange={handlePosFilterChange}
+                  hoveredWordInfo={hoveredWordInfo}
+                  compatiblePosCounts={compatibleData?.compatiblePosCounts}
+                  onHoverPosChange={setHoveredTreemapPos}
+                />
+              ) : posViewMode === 'histogram' ? (
+                <PosHistogram
+                  posCounts={posCounts}
+                  otherSubtypeCounts={otherSubtypeCounts}
+                  activePosFilter={activePosFilter}
+                  onPosFilterChange={handlePosFilterChange}
+                  hoveredWordInfo={hoveredWordInfo}
+                  compatiblePosCounts={compatibleData?.compatiblePosCounts}
+                  onHoverPosChange={setHoveredTreemapPos}
+                />
+              ) : (
+                <PosLabels
+                  posCounts={posCounts}
+                  otherSubtypeCounts={otherSubtypeCounts}
+                  activePosFilter={activePosFilter}
+                  onPosFilterChange={handlePosFilterChange}
+                  hoveredWordInfo={hoveredWordInfo}
+                  compatiblePosCounts={compatibleData?.compatiblePosCounts}
+                  onHoverPosChange={setHoveredTreemapPos}
+                />
+              )
+            ) : (
+              lengthViewMode === 'treemap' ? (
+                <WordLengthTreemap
+                  histogramData={effectiveHistogramData}
+                  selectedLengthFilter={selectedLengthFilter}
+                  onSelectLengthFilter={onSelectLengthFilter}
+                  onClearLengthFilter={onClearLengthFilter}
+                  hoveredWordInfo={hoveredWordInfo}
+                  compatibleLengthCounts={compatibleData?.compatibleLengthCounts}
+                  onHoverLengthChange={setHoveredTreemapLength}
+                />
+              ) : lengthViewMode === 'histogram' ? (
+                <WordLengthHistogramSlider
+                  histogramData={effectiveHistogramData}
+                  selectedLengthFilter={selectedLengthFilter}
+                  onSelectLengthFilter={onSelectLengthFilter}
+                  onClearLengthFilter={onClearLengthFilter}
+                  hoveredWordInfo={hoveredWordInfo}
+                  compatibleLengthCounts={compatibleData?.compatibleLengthCounts}
+                  onHoverLengthChange={setHoveredTreemapLength}
+                />
+              ) : (
+                <WordLengthLabels
+                  histogramData={effectiveHistogramData}
+                  selectedLengthFilter={selectedLengthFilter}
+                  onSelectLengthFilter={onSelectLengthFilter}
+                  onClearLengthFilter={onClearLengthFilter}
+                  hoveredWordInfo={hoveredWordInfo}
+                  compatibleLengthCounts={compatibleData?.compatibleLengthCounts}
+                  onHoverLengthChange={setHoveredTreemapLength}
+                />
+              )
+            )}
           </div>
-          <span className="text-[9px] font-mono text-zinc-400 group-hover:text-zinc-200 font-bold uppercase [writing-mode:vertical-lr] transition-colors">
-            Expand
-          </span>
         </div>
       )}
     </div>
