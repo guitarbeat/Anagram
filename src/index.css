@@ -143,6 +143,30 @@
   }
 }
 
+@keyframes targetWordPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(4px);
+    filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.4));
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.08) translateY(-1px);
+    filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.2));
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: drop-shadow(0 0 0px transparent);
+  }
+}
+
+.animate-word-pop {
+  animation: targetWordPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  display: inline-block;
+  will-change: transform, opacity;
+}
+
 .animate-shimmer {
   animation: shimmer 2s infinite linear;
 }

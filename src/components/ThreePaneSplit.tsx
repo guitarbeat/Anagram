@@ -109,6 +109,8 @@ export interface ThreePaneSplitProps {
   countsByMode?: Record<WordFilterMode, number>;
   activeModeFilter?: 'all' | 'closers' | 'pairs';
   onSelectModeFilter?: (mode: 'all' | 'closers' | 'pairs') => void;
+  explorerViewMode?: 'both' | 'graph' | 'inspector';
+  onCycleExplorerView?: () => void;
   showGraphPanel?: boolean;
   onToggleGraphPanel?: () => void;
   showInspectorPanel?: boolean;
@@ -153,6 +155,8 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   countsByMode,
   activeModeFilter = 'all',
   onSelectModeFilter,
+  explorerViewMode,
+  onCycleExplorerView,
   showGraphPanel = true,
   onToggleGraphPanel,
   showInspectorPanel = true,
@@ -214,72 +218,106 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     onDetentChange,
   });
 
-  // DIVIDER 1 LEADING: Kinetic Rearrangement Scrubber Slider (Play, Rewind, Range Slider, %)
-  const resolvedDivider1Leading: SplitAccessory[] = [
-    ...(hasStage && progressBus
-      ? [
-          {
-            id: 'stageScrubber',
-            title: 'Kinetic Rearrangement Scrubber',
-            action: () => {},
-            customContent: (
-              <div
-                className="flex items-center gap-1.5 sm:gap-2 select-none"
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                {onToggleStagePlay && (
-                  <button
-                    type="button"
-                    onClick={onToggleStagePlay}
-                    aria-label={isStagePlaying ? 'Pause animation' : 'Play animation'}
-                    title={isStagePlaying ? 'Pause Animation (Space)' : 'Play Animation (Space)'}
-                    className="h-6 w-6 flex items-center justify-center rounded-md text-white hover:bg-white/15 transition-all cursor-pointer active:scale-[0.88] active:opacity-80"
-                  >
-                    {isStagePlaying ? (
-                      <Pause className="w-3.5 h-3.5 fill-current text-emerald-400" />
-                    ) : (
-                      <Play className="w-3.5 h-3.5 fill-current text-white ml-0.5" />
-                    )}
-                  </button>
-                )}
+  // DIVIDER 1 MERGED CENTER WIDGET: Unified Bar-Integrated Scrubber & Tactile Drag Handle
+  const divider1CenterContent =
+    hasStage && progressBus ? (
+      <div
+        className="flex items-center justify-center gap-2 sm:gap-3 h-full select-none"
+        onPointerDown={(e) => {
+          // Allow interactive elements to stopPropagation, while non-interactive parts permit divider dragging
+        }}
+      >
+        {/* Transport controls */}
+        <div className="flex items-center gap-0.5" onPointerDown={(e) => e.stopPropagation()}>
+          {onToggleStagePlay && (
+            <button
+              type="button"
+              onClick={onToggleStagePlay}
+              aria-label={isStagePlaying ? 'Pause animation' : 'Play animation'}
+              title={isStagePlaying ? 'Pause Animation (Space)' : 'Play Animation (Space)'}
+              className="h-5 w-5 flex items-center justify-center rounded text-zinc-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer active:scale-90"
+            >
+              {isStagePlaying ? (
+                <Pause className="w-3 h-3 fill-current text-emerald-400" />
+              ) : (
+                <Play className="w-3 h-3 fill-current text-white ml-0.5" />
+              )}
+            </button>
+          )}
 
-                {onResetStage && (
-                  <button
-                    type="button"
-                    onClick={onResetStage}
-                    aria-label="Reset animation"
-                    title="Rewind Letter Tiles to Start (Key R)"
-                    className="h-6 w-6 flex items-center justify-center rounded-md text-zinc-400 hover:text-white hover:bg-white/15 transition-all cursor-pointer active:scale-[0.88] active:opacity-80"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                )}
+          {onResetStage && (
+            <button
+              type="button"
+              onClick={onResetStage}
+              aria-label="Reset animation"
+              title="Rewind Letter Tiles to Start (Key R)"
+              className="h-5 w-5 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer active:scale-90"
+            >
+              <RotateCcw className="w-3 h-3" />
+            </button>
+          )}
+        </div>
 
-                <div className="w-24 sm:w-36 md:w-48 flex items-center px-1">
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.001}
-                    value={stageProgress}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      progressBus.set(val);
-                    }}
-                    aria-label="Kinetic rearrangement animation progress"
-                    className="w-full h-1.5 bg-zinc-700/80 rounded-full appearance-none cursor-pointer accent-white focus:outline-none"
-                  />
-                </div>
+        {/* Center: Integrated Bar Scrubber with Visible Track and Glowing Thumb */}
+        <div
+          className="flex items-center gap-2 w-36 sm:w-56 md:w-72 lg:w-80 group/slider"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <div className="relative w-full h-1 sm:h-1.5 bg-zinc-800/90 hover:bg-zinc-700/80 rounded-full flex items-center cursor-ew-resize">
+            {/* Filled track portion */}
+            <div
+              className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-zinc-300 via-white to-zinc-200 rounded-full pointer-events-none transition-all duration-75"
+              style={{ width: `${Math.max(0, Math.min(1, stageProgress)) * 100}%` }}
+            />
+            {/* Hidden native input capturing dragging & scrubbing */}
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.001}
+              value={stageProgress}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                progressBus.set(val);
+              }}
+              aria-label="Kinetic rearrangement animation progress"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize z-10"
+            />
+            {/* Smooth glowing thumb */}
+            <div
+              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-white rounded-full shadow-[0_0_6px_rgba(255,255,255,0.9)] pointer-events-none group-hover/slider:scale-125 transition-transform"
+              style={{ left: `${Math.max(0, Math.min(1, stageProgress)) * 100}%` }}
+            />
+          </div>
+        </div>
 
-                <span className="text-[10px] font-mono text-zinc-300 min-w-[28px] text-right font-medium tabular-nums">
-                  {Math.round(stageProgress * 100)}%
-                </span>
-              </div>
-            ),
-          },
-        ]
-      : []),
-  ];
+        {/* Merged Percentage & Minimize Button (Replaces disjointed pipe and duplicate notch) */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleMinimizeCard1();
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          title={
+            isCard1Minimized
+              ? 'Click to expand Kinetic Stage (Drag divider to resize)'
+              : 'Click to minimize Kinetic Stage (Drag divider to resize)'
+          }
+          className="flex items-center justify-center py-0.5 px-1.5 h-4 sm:h-4.5 rounded-full text-zinc-400 hover:text-white bg-zinc-800/60 hover:bg-zinc-700/80 border border-zinc-700/40 hover:border-zinc-500/60 cursor-pointer select-none group/notch active:scale-95 transition-all shadow-xs shrink-0"
+        >
+          <span
+            className={`text-[9.5px] font-mono font-medium tabular-nums transition-colors ${
+              activeDrag === 1 ? 'text-white font-bold' : ''
+            }`}
+          >
+            {Math.round(stageProgress * 100)}%
+          </span>
+        </button>
+      </div>
+    ) : null;
+
+  const resolvedDivider1Leading: SplitAccessory[] = [];
 
   // DIVIDER 1 TRAILING: Clean status (Solved badge when exact match)
   const resolvedDivider1Trailing: SplitAccessory[] = [
@@ -308,29 +346,41 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     long: 0,
   };
 
-  // DIVIDER 2 LEADING (Left Side): Graph Toggle (spatially aligned with Left Graph View) + Word Filter Mode
+  // Current Explorer View Mode (Graph / Inspector / Both)
+  const currentExplorerView =
+    explorerViewMode ||
+    (showGraphPanel && showInspectorPanel ? 'both' : showGraphPanel ? 'graph' : 'inspector');
+
+  const viewConfigs: Record<
+    'both' | 'graph' | 'inspector',
+    { label: string; icon: React.ReactNode; title: string }
+  > = {
+    both: {
+      label: 'Both',
+      icon: <LayoutGrid className="w-3.5 h-3.5 text-cyan-400" />,
+      title: 'Current view: Both (Graph + Inspector together). Click to switch to Graph.',
+    },
+    graph: {
+      label: 'Graph',
+      icon: <Network className="w-3.5 h-3.5 text-emerald-400" />,
+      title: 'Current view: Graph only. Click to switch to Inspector.',
+    },
+    inspector: {
+      label: 'Inspector',
+      icon: <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />,
+      title: 'Current view: Inspector only. Click to switch to Both.',
+    },
+  };
+
+  const activeViewConfig = viewConfigs[currentExplorerView];
+
+  // DIVIDER 2 LEADING: Mode Filter (Cycles between Safe, All, Closers, Pairs, Common, Long) - Minimal Single Icon Button
   const resolvedDivider2Leading: SplitAccessory[] = [
-    ...(onToggleGraphPanel
-      ? [
-          {
-            id: 'graphPanelToggle',
-            title: showGraphPanel
-              ? 'Constellation Graph: Active (Click to Hide)'
-              : 'Constellation Graph: Hidden (Click to Show)',
-            icon: <Network className="w-3.5 h-3.5" />,
-            label: 'Graph',
-            shortcut: 'G',
-            action: onToggleGraphPanel,
-            active: showGraphPanel,
-          },
-        ]
-      : []),
     {
       id: 'wordsFilterToggle',
       title: MODE_CONFIGS[currentMode].getDescription(safeCounts[currentMode]),
       icon: MODE_CONFIGS[currentMode].icon,
-      label: MODE_CONFIGS[currentMode].label,
-      badge: safeCounts[currentMode],
+      // Minimal: No text label or count badge, just the single iconic toggle
       shortcut: 'S',
       action: onCycleWordFilter
         ? onCycleWordFilter
@@ -345,23 +395,28 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     },
   ];
 
-  // DIVIDER 2 TRAILING (Right Side): Inspector Toggle (spatially aligned with Right Lexical Inspector)
+  // DIVIDER 2 TRAILING: Single Merged View Mode Button (Toggles between Graph, Inspector, and Both) - Minimal Single Icon
   const resolvedDivider2Trailing: SplitAccessory[] = [
-    ...(onToggleInspectorPanel
-      ? [
-          {
-            id: 'inspectorPanelToggle',
-            title: showInspectorPanel
-              ? 'Lexical Inspector: Active (Click to Hide)'
-              : 'Lexical Inspector: Hidden (Click to Show)',
-            icon: <BarChart3 className="w-3.5 h-3.5" />,
-            label: 'Inspector',
-            shortcut: 'I',
-            action: onToggleInspectorPanel,
-            active: showInspectorPanel,
+    {
+      id: 'explorerViewToggle',
+      title: activeViewConfig.title,
+      icon: activeViewConfig.icon,
+      // Minimal: No text label, just the iconic toggle
+      shortcut: 'V',
+      action: onCycleExplorerView
+        ? onCycleExplorerView
+        : () => {
+            if (showGraphPanel && showInspectorPanel) {
+              onToggleInspectorPanel?.();
+            } else if (showGraphPanel) {
+              onToggleGraphPanel?.();
+              onToggleInspectorPanel?.();
+            } else {
+              onToggleGraphPanel?.();
+            }
           },
-        ]
-      : []),
+      active: true,
+    },
   ];
 
   // Filter only visible panels
@@ -403,7 +458,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             }}
             style={
               isStageMinimized
-                ? { height: '38px', flex: 'none' }
+                ? { height: '34px', flex: 'none' }
                 : isExplorerMinimized || !hasCard3
                 ? { flex: '1 1 0%', minHeight: '120px' }
                 : { flex: `${Math.max(0.18, Math.min(0.82, ratio1))} 1 0%`, minHeight: '100px' }
@@ -468,7 +523,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             }}
             style={
               isExplorerMinimized
-                ? { height: '38px', flex: 'none' }
+                ? { height: '34px', flex: 'none' }
                 : isStageMinimized || !hasStage
                 ? { flex: '1 1 0%', minHeight: '120px' }
                 : { flex: `${Math.max(0.18, Math.min(0.82, 1 - ratio1))} 1 0%`, minHeight: '100px' }
@@ -547,6 +602,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                       : 'Drag to resize panel split'
                     : 'Drag to resize panel split'
                 }
+                centerContent={isDivider1 ? divider1CenterContent : undefined}
                 leadingAccessories={isDivider1 ? resolvedDivider1Leading : resolvedDivider2Leading}
                 trailingAccessories={isDivider1 ? resolvedDivider1Trailing : resolvedDivider2Trailing}
               />

@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { ChevronDown, ChevronUp, Sparkles, Layers, Zap, ArrowRight, ShieldCheck } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  Layers,
+  Zap,
+  ArrowRight,
+  ShieldCheck,
+  Play,
+  Pause,
+  RotateCcw,
+} from 'lucide-react';
 import type { AnagramResult, SolveMetrics, POS } from './engine/types';
 import type { SplitDetent, WordFilterMode } from './types/split';
 import { SplitDetents } from './types/split';
@@ -147,25 +158,37 @@ export function App() {
   const [showGraphPanel, setShowGraphPanel] = useState<boolean>(true);
   const [showInspectorPanel, setShowInspectorPanel] = useState<boolean>(true);
 
+  // 3-Way Explorer View Mode: Graph (One view) -> Inspector (Two views) -> Both (Together)
+  const explorerViewMode = useMemo<'both' | 'graph' | 'inspector'>(() => {
+    if (showGraphPanel && showInspectorPanel) return 'both';
+    if (showGraphPanel) return 'graph';
+    return 'inspector';
+  }, [showGraphPanel, showInspectorPanel]);
+
+  const handleCycleExplorerView = useCallback(() => {
+    haptics.light();
+    if (showGraphPanel && showInspectorPanel) {
+      // Both -> Graph only (One view)
+      setShowGraphPanel(true);
+      setShowInspectorPanel(false);
+    } else if (showGraphPanel && !showInspectorPanel) {
+      // Graph -> Inspector only (Second view)
+      setShowGraphPanel(false);
+      setShowInspectorPanel(true);
+    } else {
+      // Inspector -> Both together
+      setShowGraphPanel(true);
+      setShowInspectorPanel(true);
+    }
+  }, [showGraphPanel, showInspectorPanel, haptics]);
+
   const handleToggleGraphPanel = useCallback(() => {
-    setShowGraphPanel((prev) => {
-      const next = !prev;
-      if (!next && !showInspectorPanel) {
-        setShowInspectorPanel(true);
-      }
-      return next;
-    });
-  }, [showInspectorPanel]);
+    handleCycleExplorerView();
+  }, [handleCycleExplorerView]);
 
   const handleToggleInspectorPanel = useCallback(() => {
-    setShowInspectorPanel((prev) => {
-      const next = !prev;
-      if (!next && !showGraphPanel) {
-        setShowGraphPanel(true);
-      }
-      return next;
-    });
-  }, [showGraphPanel]);
+    handleCycleExplorerView();
+  }, [handleCycleExplorerView]);
 
   // Stage Playback & Mode Controller
   const [isStagePlaying, setIsStagePlaying] = useState<boolean>(false);
@@ -246,12 +269,9 @@ export function App() {
       } else if (e.key === '3') {
         e.preventDefault();
         setSplitDetent(SplitDetents.focusBottom);
-      } else if (e.key === 'g' || e.key === 'G') {
+      } else if (e.key === 'v' || e.key === 'V' || e.key === 'g' || e.key === 'G' || e.key === 'i' || e.key === 'I') {
         e.preventDefault();
-        handleToggleGraphPanel();
-      } else if (e.key === 'i' || e.key === 'I') {
-        e.preventDefault();
-        handleToggleInspectorPanel();
+        handleCycleExplorerView();
       } else if (e.key === 's' || e.key === 'S') {
         e.preventDefault();
         handleCycleWordFilter();
@@ -387,6 +407,8 @@ export function App() {
         wordFilterMode={wordFilterMode}
         onCycleWordFilter={handleCycleWordFilter}
         countsByMode={countsByMode}
+        explorerViewMode={explorerViewMode}
+        onCycleExplorerView={handleCycleExplorerView}
         showGraphPanel={showGraphPanel}
         onToggleGraphPanel={handleToggleGraphPanel}
         showInspectorPanel={showInspectorPanel}
@@ -405,44 +427,37 @@ export function App() {
             />
           ) : null
         }
-        /* IDLE PEEK 1: Minimized Stage Peek (Clean, Scannable Status) */
+        /* IDLE PEEK 1: Minimized Stage Peek (Clean, Centered & Minimal) */
         card1Idle={
-          <div className="flex items-center justify-between w-full h-full min-w-0 px-2 gap-2">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-800/90 text-zinc-200 border border-white/10 shadow-xs shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-                <span className="text-[11px] font-semibold tracking-wide">Kinetic Stage</span>
+          <div className="flex items-center justify-center w-full h-full min-w-0 px-3 gap-2.5 sm:gap-3 select-none text-zinc-300">
+            {/* Center: Source or Target phrase with placement count */}
+            <span className="font-mono text-xs tracking-wider text-zinc-100 truncate uppercase font-semibold">
+              {targetPhrase.trim() ? targetPhrase : sourceName}
+            </span>
+            <span className="text-zinc-600">·</span>
+            <span className="font-mono text-[11px] text-zinc-400 tabular-nums shrink-0">
+              {placedLetterCount}/{sourceLetterCount} placed
+            </span>
+            {isExactMatch ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 shrink-0">
+                <Sparkles className="w-3 h-3 text-emerald-400" /> Solved
               </span>
-
-              {/* Clean Live Progress Metric */}
-              <div className="flex items-center gap-2 text-xs min-w-0 truncate">
-                <span className="text-zinc-200 font-medium truncate">
-                  {placedLetterCount}/{sourceLetterCount} tiles placed
-                </span>
-                <span className="text-zinc-600 shrink-0">·</span>
-                {/* Mini progress bar track */}
-                <div className="w-12 sm:w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden border border-white/10 shrink-0 hidden sm:block">
-                  <div
-                    className="h-full bg-indigo-500 rounded-full transition-all duration-300"
-                    style={{ width: `${solveProgressPercent}%` }}
-                  />
+            ) : (
+              <>
+                <span className="text-zinc-600 hidden sm:inline">·</span>
+                <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+                  <div className="w-12 md:w-16 h-1 bg-zinc-800 rounded-full overflow-hidden shrink-0">
+                    <div
+                      className="h-full bg-zinc-400 rounded-full transition-all duration-300"
+                      style={{ width: `${solveProgressPercent}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-500 tabular-nums">
+                    {solveProgressPercent}%
+                  </span>
                 </div>
-                <span className="text-zinc-400 font-mono text-[10px] shrink-0">
-                  {solveProgressPercent}%
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {isExactMatch && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-700/60 shadow-xs">
-                  <Sparkles className="w-3 h-3 text-emerald-400" /> Exact Match
-                </span>
-              )}
-              <span className="w-6 h-6 rounded-full bg-zinc-800/90 group-hover:bg-zinc-700 text-zinc-400 group-hover:text-white flex items-center justify-center transition-colors shadow-xs">
-                <ChevronDown className="w-3.5 h-3.5 group-hover:translate-y-0.5 transition-transform" />
-              </span>
-            </div>
+              </>
+            )}
           </div>
         }
         /* WINDOW 2: MIDDLE TARGET WORD, CONTROLS & STATUS */
@@ -492,93 +507,76 @@ export function App() {
               onAvoidDeadEndsChange={setAvoidDeadEnds}
               showGraphPanel={showGraphPanel}
               showInspectorPanel={showInspectorPanel}
+              wordFilterMode={wordFilterMode}
+              countsByMode={countsByMode}
+              onCycleWordFilter={handleCycleWordFilter}
             />
           ) : null
         }
-        /* IDLE PEEK 3: Minimized Explorer Peek (MapsExample Idea 1: Next Immediate Action) */
+        /* IDLE PEEK 3: Minimized Explorer Peek (Centered & Minimal) */
         card3Idle={
-          <div className="flex items-center justify-between w-full h-full min-w-0 px-1 gap-2">
-            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-800/90 text-zinc-200 border border-zinc-700/60 shadow-xs shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span className="text-[11px] font-semibold tracking-wide">Word Explorer</span>
-              </span>
-
-              {/* Immediate Next Action (like Maps: "Walk to South Kensington Museums stop") */}
-              {nextRecommendedCloser ? (
-                <div className="flex items-center gap-1.5 min-w-0 truncate">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-600/60 shrink-0">
-                    <Zap className="w-3 h-3 text-amber-400 fill-amber-400" />
-                    Exact Closer:
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAddWordToTarget(nextRecommendedCloser);
-                    }}
-                    title={`Click to add finishing closer "${nextRecommendedCloser}"`}
-                    className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/50 hover:border-amber-400 transition-colors cursor-pointer truncate shadow-xs"
-                  >
-                    +{nextRecommendedCloser}
-                  </button>
-                  <span className="text-[10px] text-zinc-400 hidden md:inline truncate">
-                    (Finishes entire anagram)
-                  </span>
+          <div className="flex items-center justify-center w-full h-full min-w-0 px-3 gap-2.5 select-none text-zinc-300">
+            {nextRecommendedCloser ? (
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-600/60 shrink-0">
+                  <Zap className="w-3 h-3 text-amber-400 fill-amber-400" />
+                  Exact Closer:
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAddWordToTarget(nextRecommendedCloser);
+                  }}
+                  title={`Click to add finishing closer "${nextRecommendedCloser}"`}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/50 hover:border-amber-400 transition-colors cursor-pointer truncate shadow-xs"
+                >
+                  +{nextRecommendedCloser}
+                </button>
+              </div>
+            ) : nextRecommendedPair ? (
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-950/80 text-indigo-300 border border-indigo-700/60 shrink-0">
+                  Pair:
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAddWordToTarget(nextRecommendedPair.word1);
+                  }}
+                  title={`Click to add "${nextRecommendedPair.word1}"`}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer truncate shadow-xs"
+                >
+                  +{nextRecommendedPair.word1}
+                </button>
+                <span className="text-zinc-500 text-xs">+</span>
+                <span className="text-zinc-400 text-[10px] font-mono truncate">{nextRecommendedPair.word2}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 min-w-0 truncate">
+                <span className="font-mono text-[11px] text-zinc-400 shrink-0">
+                  {candidateWords.length} words available
+                </span>
+                {/* Quick-add candidate word preview chips */}
+                <div className="hidden sm:flex items-center gap-1 min-w-0 overflow-hidden">
+                  {candidateWords.slice(0, 3).map((cand) => (
+                    <button
+                      key={cand.word}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddWordToTarget(cand.word);
+                      }}
+                      title={`Click to add "${cand.word}" to target phrase`}
+                      className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 hover:border-zinc-500 transition-colors cursor-pointer truncate max-w-[105px] shadow-xs"
+                    >
+                      +{cand.word}
+                    </button>
+                  ))}
                 </div>
-              ) : nextRecommendedPair ? (
-                <div className="flex items-center gap-1.5 min-w-0 truncate">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-950/80 text-indigo-300 border border-indigo-700/60 shrink-0">
-                    Pair Closer:
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAddWordToTarget(nextRecommendedPair.word1);
-                    }}
-                    title={`Click to add "${nextRecommendedPair.word1}"`}
-                    className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer truncate shadow-xs"
-                  >
-                    +{nextRecommendedPair.word1}
-                  </button>
-                  <span className="text-zinc-500 text-xs">+</span>
-                  <span className="text-zinc-400 text-[10px] font-mono truncate">{nextRecommendedPair.word2}</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 min-w-0 truncate">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono text-zinc-300 bg-zinc-800/80 border border-zinc-700/50 shrink-0">
-                    {candidateWords.length} words
-                  </span>
-                  {/* Quick-add candidate word preview chips */}
-                  <div className="hidden sm:flex items-center gap-1 min-w-0 overflow-hidden">
-                    {candidateWords.slice(0, 3).map((cand) => (
-                      <button
-                        key={cand.word}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAddWordToTarget(cand.word);
-                        }}
-                        title={`Click to add "${cand.word}" to target phrase`}
-                        className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 hover:border-zinc-500 transition-colors cursor-pointer truncate max-w-[105px] shadow-xs"
-                      >
-                        +{cand.word}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[10px] font-mono text-zinc-400 group-hover:text-zinc-200 hidden sm:inline">
-                Tap to expand
-              </span>
-              <span className="w-6 h-6 rounded-full bg-zinc-800/90 group-hover:bg-zinc-700 text-zinc-400 group-hover:text-white flex items-center justify-center transition-colors shadow-xs">
-                <ChevronUp className="w-3.5 h-3.5 group-hover:-translate-y-0.5 transition-transform" />
-              </span>
-            </div>
+              </div>
+            )}
           </div>
         }
       />

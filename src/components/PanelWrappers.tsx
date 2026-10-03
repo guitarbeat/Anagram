@@ -39,7 +39,7 @@ export const TopWrapper: React.FC<PanelWrapperProps> = ({
   const activeBg =
     bgColorClass ||
     (isMinimized
-      ? 'bg-[#121217] hover:bg-[#16161f] border border-zinc-800/90 hover:border-zinc-700 shadow-md group'
+      ? 'bg-[#0c0c0f] hover:bg-[#111116] border border-white/[0.07] hover:border-white/15 group'
       : 'bg-white border-2 border-black shadow-sm');
 
   return (
@@ -74,24 +74,20 @@ export const TopWrapper: React.FC<PanelWrapperProps> = ({
         </div>
       </div>
 
-      {/* Mini Overlay Layer (Amie style) */}
+      {/* Mini Overlay Layer */}
       <div
         onClick={onRestore}
-        className={`absolute inset-x-0 bottom-0 z-20 flex flex-col justify-center px-3 transition-all duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`absolute inset-x-0 bottom-0 z-20 flex items-center justify-center px-2.5 transition-all duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isMinimized ? 'cursor-pointer hover:bg-white/[0.02]' : 'pointer-events-none'
         }`}
         style={{
-          height: '38px',
+          height: '34px',
           opacity: 1 - progress,
-          transform: `translateY(${14 * progress}px) scale(${1 + progress * 0.08})`,
+          transform: `translateY(${10 * progress}px) scale(${1 + progress * 0.05})`,
           filter: progress > 0 ? `blur(${progress * 3}px)` : 'none',
           pointerEvents: isMinimized ? 'auto' : 'none',
         }}
       >
-        {/* Amie grab notch */}
-        <div className="w-full flex justify-center mb-0.5 pointer-events-none">
-          <div className="w-8 h-[2.5px] rounded-full bg-zinc-600/70 group-hover:bg-zinc-400 group-hover:w-10 transition-all duration-200" />
-        </div>
         {overlay}
       </div>
     </div>
@@ -115,7 +111,7 @@ export const BottomWrapper: React.FC<PanelWrapperProps> = ({
   const activeBg =
     bgColorClass ||
     (isMinimized
-      ? 'bg-[#121217] hover:bg-[#16161f] border border-zinc-800/90 hover:border-zinc-700 shadow-md group'
+      ? 'bg-[#0c0c0f] hover:bg-[#111116] border border-white/[0.07] hover:border-white/15 group'
       : 'bg-[#09090b] border-2 border-black shadow-sm');
 
   return (
@@ -150,24 +146,20 @@ export const BottomWrapper: React.FC<PanelWrapperProps> = ({
         </div>
       </div>
 
-      {/* Mini Overlay Layer (Amie style) */}
+      {/* Mini Overlay Layer */}
       <div
         onClick={onRestore}
-        className={`absolute inset-x-0 top-0 z-20 flex flex-col justify-center px-3 transition-all duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`absolute inset-x-0 top-0 z-20 flex items-center justify-center px-2.5 transition-all duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isMinimized ? 'cursor-pointer hover:bg-white/[0.02]' : 'pointer-events-none'
         }`}
         style={{
-          height: '38px',
+          height: '34px',
           opacity: 1 - progress,
-          transform: `translateY(${-14 * progress}px) scale(${1 + progress * 0.08})`,
+          transform: `translateY(${-10 * progress}px) scale(${1 + progress * 0.05})`,
           filter: progress > 0 ? `blur(${progress * 3}px)` : 'none',
           pointerEvents: isMinimized ? 'auto' : 'none',
         }}
       >
-        {/* Amie grab notch */}
-        <div className="w-full flex justify-center mb-0.5 pointer-events-none">
-          <div className="w-8 h-[2.5px] rounded-full bg-zinc-600/70 group-hover:bg-zinc-400 group-hover:w-10 transition-all duration-200" />
-        </div>
         {overlay}
       </div>
     </div>

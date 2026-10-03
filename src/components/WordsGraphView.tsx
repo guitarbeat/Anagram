@@ -3,6 +3,7 @@ import { ZoomIn, ZoomOut, Maximize2, Sparkles, CheckCircle2 } from 'lucide-react
 import type { CandidateWordItem } from './CandidateWordsList';
 import { LETTER_COUNTS, LETTER_MASKS, WORDS, pos, isMatchingPos } from '../engine/lexicon';
 import type { POS } from '../engine/types';
+import type { WordFilterMode } from '../types/split';
 
 export interface WordsGraphViewProps {
   sourceText: string;
@@ -16,6 +17,9 @@ export interface WordsGraphViewProps {
   onHoverWordChange?: (word: string | null) => void;
   hoveredPosFilter?: POS | null;
   hoveredLengthFilter?: number | null;
+  wordFilterMode?: WordFilterMode;
+  wordFilterCount?: number;
+  onCycleWordFilter?: () => void;
 }
 
 interface TagNode {
@@ -304,8 +308,20 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
   onHoverWordChange,
   hoveredPosFilter,
   hoveredLengthFilter,
+  wordFilterMode = 'safe',
+  wordFilterCount,
+  onCycleWordFilter,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const wordFilterModeRef = useRef(wordFilterMode);
+  wordFilterModeRef.current = wordFilterMode;
+
+  const wordFilterCountRef = useRef(wordFilterCount);
+  wordFilterCountRef.current = wordFilterCount;
+
+  const onCycleWordFilterRef = useRef(onCycleWordFilter);
+  onCycleWordFilterRef.current = onCycleWordFilter;
 
   const lastTargetWord = useMemo(() => {
     const words = activeTargetPhrase.trim().split(/\s+/).filter(Boolean);
@@ -1354,6 +1370,42 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
       }
 
       ctx.restore();
+
+      // Minimal In-Canvas Watermark Label for Active Word Filter Mode
+      ctx.save();
+      ctx.scale(dpr, dpr);
+
+      const mode = wordFilterModeRef.current || 'safe';
+      const modeLabel =
+        mode === 'safe'
+          ? 'SAFE WORDS'
+          : mode === 'all'
+          ? 'ALL WORDS'
+          : mode === 'closers'
+          ? 'EXACT CLOSERS'
+          : mode === 'pairs'
+          ? 'FINISHER PAIRS'
+          : mode === 'common'
+          ? 'COMMON WORDS'
+          : mode === 'long'
+          ? 'LONG WORDS'
+          : 'WORDS';
+
+      const countVal =
+        wordFilterCountRef.current !== undefined
+          ? wordFilterCountRef.current
+          : activeWords.length;
+      const watermarkText = `${modeLabel} · ${countVal} WORDS`;
+
+      // Render crisp, understated monospace text directly on the canvas surface in top-left
+      ctx.font = '700 10.5px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+      ctx.fillStyle = 'rgba(24, 24, 27, 0.45)';
+      ctx.textBaseline = 'top';
+      ctx.textAlign = 'left';
+      ctx.fillText(watermarkText, 14, 14);
+
+      ctx.restore();
+
       animationFrameId = requestAnimationFrame(render);
     };
 
@@ -1388,6 +1440,18 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
   }, []);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+      // If clicking near the top-left in-canvas label watermark, cycle filter mode!
+      if (clickX < 210 && clickY < 32 && onCycleWordFilterRef.current) {
+        onCycleWordFilterRef.current();
+        return;
+      }
+    }
+
     const world = screenToWorld(e.clientX, e.clientY);
     const node = getNodeAt(world.x, world.y);
     dragMovedRef.current = false;

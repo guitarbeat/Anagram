@@ -8,6 +8,7 @@ import { WordLengthHistogramSlider } from './WordLengthHistogramSlider';
 import { PosHistogram } from './PosHistogram';
 import { WordLengthLabels } from './WordLengthLabels';
 import { PosLabels } from './PosLabels';
+import type { WordFilterMode } from '../types/split';
 
 export type LexicalViewMode = 'treemap' | 'histogram' | 'labels';
 
@@ -40,6 +41,9 @@ export interface CandidateWordsListProps {
   onAvoidDeadEndsChange?: (val: boolean) => void;
   showGraphPanel?: boolean;
   showInspectorPanel?: boolean;
+  wordFilterMode?: WordFilterMode;
+  countsByMode?: Record<WordFilterMode, number>;
+  onCycleWordFilter?: () => void;
 }
 
 export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
@@ -67,6 +71,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   onAvoidDeadEndsChange,
   showGraphPanel = true,
   showInspectorPanel = true,
+  wordFilterMode,
+  countsByMode,
+  onCycleWordFilter,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const rightColumnRef = useRef<HTMLDivElement>(null);
@@ -297,6 +304,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
               onHoverWordChange={setHoveredGraphWord}
               hoveredPosFilter={hoveredTreemapPos}
               hoveredLengthFilter={hoveredTreemapLength}
+              wordFilterMode={wordFilterMode}
+              wordFilterCount={countsByMode ? countsByMode[wordFilterMode || 'safe'] : safeCandidateWords.length}
+              onCycleWordFilter={onCycleWordFilter}
             />
           </div>
         </div>

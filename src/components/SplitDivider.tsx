@@ -22,6 +22,9 @@ export interface SplitDividerProps {
   /** Buttons shown to the right (or bottom) of the drag indicator */
   trailingAccessories?: SplitAccessory[];
 
+  /** Custom center content that unifies accessories and handle (e.g. merged scrubber & collapse notch) */
+  centerContent?: React.ReactNode;
+
   /** Preferred container background color */
   bgColor?: string;
 
@@ -69,16 +72,22 @@ const AccessoryItem: React.FC<{ accessory: SplitAccessory }> = ({ accessory }) =
     );
   }
 
+  const isIconOnly = !accessory.label && (accessory.badge === undefined || accessory.badge === null);
+
   return (
     <button
       type="button"
       onClick={accessory.action}
       title={accessory.title}
-      className={`h-6 sm:h-6.5 px-2 min-w-[24px] sm:min-w-[26px] flex items-center justify-center gap-1.5 rounded-full sm:rounded-md border border-white/5 transition-all duration-150 ease-out cursor-pointer shrink-0 select-none active:scale-[0.88] active:opacity-80 ${
-        accessory.active
-          ? 'text-white bg-white/20 border-white/25 shadow-xs ring-1 ring-white/15 font-semibold'
-          : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.07] hover:border-white/10'
-      }`}
+      className={
+        isIconOnly
+          ? 'p-1 flex items-center justify-center bg-transparent border-0 ring-0 shadow-none outline-none transition-all duration-150 ease-out cursor-pointer shrink-0 select-none active:scale-[0.85] text-zinc-400 hover:text-white hover:scale-110'
+          : `h-6 sm:h-6.5 px-2 min-w-[24px] sm:min-w-[26px] flex items-center justify-center gap-1.5 rounded-full sm:rounded-md border border-white/5 transition-all duration-150 ease-out cursor-pointer shrink-0 select-none active:scale-[0.88] active:opacity-80 ${
+              accessory.active
+                ? 'text-white bg-white/20 border-white/25 shadow-xs ring-1 ring-white/15 font-semibold'
+                : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.07] hover:border-white/10'
+            }`
+      }
     >
       {accessory.icon}
       {accessory.label && (
@@ -91,7 +100,7 @@ const AccessoryItem: React.FC<{ accessory: SplitAccessory }> = ({ accessory }) =
           {accessory.badge}
         </span>
       )}
-      {accessory.shortcut && (
+      {accessory.shortcut && !isIconOnly && (
         <kbd className="hidden lg:inline text-[8.5px] font-mono font-semibold px-1 py-0.2 rounded bg-white/10 text-zinc-300 border border-white/10 leading-none">
           {accessory.shortcut}
         </kbd>
@@ -109,6 +118,7 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
   className = '',
   leadingAccessories,
   trailingAccessories,
+  centerContent,
   isBusy = false,
   isSuccess = false,
   statusTooltip,
@@ -174,14 +184,14 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
       style={{ touchAction: 'none' }}
       className={`SplitDivider relative select-none shrink-0 z-30 touch-none group transition-colors duration-150 ${
         isHorizontal
-          ? 'w-full h-8 sm:h-8.5 bg-[#09090b] flex items-center justify-between px-3 cursor-row-resize border-y border-white/[0.06]'
-          : 'h-full w-8 sm:w-8.5 bg-[#09090b] flex flex-col items-center justify-between py-3 cursor-col-resize border-x border-white/[0.06]'
+          ? 'w-full h-5 sm:h-5.5 bg-[#09090b] flex items-center justify-between px-2.5 cursor-row-resize border-y border-white/[0.06]'
+          : 'h-full w-5 sm:w-5.5 bg-[#09090b] flex flex-col items-center justify-between py-2.5 cursor-col-resize border-x border-white/[0.06]'
       } ${isDragging ? 'bg-[#121217]' : 'hover:bg-[#0e0e12]'} ${className}`}
     >
       {/* LEADING ACCESSORIES (Left / Top) */}
       <div
         className={`flex items-center shrink-0 z-30 ${
-          isHorizontal ? 'gap-1.5' : 'flex-col gap-1.5'
+          isHorizontal ? 'gap-1' : 'flex-col gap-1'
         }`}
         onPointerDown={(e) => e.stopPropagation()}
       >
@@ -190,15 +200,17 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
         ))}
       </div>
 
-      {/* CENTER TACTILE DRAG NOTCH & COMBINED SHOW/HIDE HANDLE */}
+      {/* CENTER TACTILE DRAG NOTCH & COMBINED SHOW/HIDE HANDLE OR UNIFIED CENTER CONTENT */}
       <div
-        className={`flex items-center justify-center z-20 pointer-events-auto ${
+        className={`flex items-center justify-center z-20 pointer-events-auto h-full ${
           isHorizontal
             ? 'absolute left-1/2 -translate-x-1/2'
             : 'absolute top-1/2 -translate-y-1/2'
         }`}
       >
-        {onToggleCollapse ? (
+        {centerContent ? (
+          centerContent
+        ) : onToggleCollapse ? (
           <button
             type="button"
             onClick={(e) => {
@@ -215,18 +227,13 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
                 ? 'Click to expand panel (Drag to resize, double-click to reset)'
                 : 'Click to minimize panel (Drag to resize, double-click to reset)')
             }
-            className="flex items-center justify-center gap-1.5 py-1 px-1 bg-transparent border-0 ring-0 shadow-none outline-none cursor-pointer select-none group/notch active:scale-95 transition-all duration-150"
+            className="flex items-center justify-center py-0.5 px-1.5 bg-transparent border-0 ring-0 shadow-none outline-none cursor-pointer select-none group/notch active:scale-95 transition-all duration-150"
           >
-            {isCollapsed ? (
-              <ChevronDown className="w-3 h-3 text-zinc-400 group-hover/notch:text-white transition-transform group-hover/notch:translate-y-0.5" />
-            ) : (
-              <ChevronUp className="w-3 h-3 text-zinc-400 group-hover/notch:text-white transition-transform group-hover/notch:-translate-y-0.5" />
-            )}
             <span
               className={`rounded-full transition-all duration-200 block ${
                 isDragging
-                  ? 'w-16 h-1 bg-white shadow-[0_0_8px_rgba(255,255,255,0.7)]'
-                  : 'w-10 sm:w-12 h-1 bg-zinc-600/80 group-hover/notch:bg-zinc-200 group-hover/notch:w-14'
+                  ? 'w-12 h-1 bg-white shadow-[0_0_8px_rgba(255,255,255,0.7)]'
+                  : 'w-7 sm:w-8 h-0.5 sm:h-1 bg-zinc-600/80 group-hover/notch:bg-zinc-200 group-hover/notch:w-10'
               }`}
             />
           </button>
@@ -236,11 +243,11 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
             className={`rounded-full transition-all duration-200 pointer-events-none block ${
               isHorizontal
                 ? isDragging
-                  ? 'w-16 h-1 bg-white shadow-[0_0_8px_rgba(255,255,255,0.7)]'
-                  : 'w-10 sm:w-12 h-1 bg-zinc-600/80 group-hover:bg-zinc-300 group-hover:w-14'
+                  ? 'w-12 h-1 bg-white shadow-[0_0_8px_rgba(255,255,255,0.7)]'
+                  : 'w-7 sm:w-8 h-0.5 sm:h-1 bg-zinc-600/80 group-hover:bg-zinc-300 group-hover:w-10'
                 : isDragging
-                  ? 'w-1 h-16 bg-white shadow-[0_0_8px_rgba(255,255,255,0.7)]'
-                  : 'w-1 h-10 sm:h-12 bg-zinc-600/80 group-hover:bg-zinc-300 group-hover:h-14'
+                  ? 'w-1 h-12 bg-white shadow-[0_0_8px_rgba(255,255,255,0.7)]'
+                  : 'w-0.5 sm:w-1 h-7 sm:h-8 bg-zinc-600/80 group-hover:bg-zinc-300 group-hover:h-10'
             }`}
           />
         )}
@@ -249,7 +256,7 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
       {/* TRAILING ACCESSORIES (Right / Bottom) + PRESETS MENU */}
       <div
         className={`flex items-center shrink-0 z-30 relative ${
-          isHorizontal ? 'gap-1.5' : 'flex-col gap-1.5'
+          isHorizontal ? 'gap-1' : 'flex-col gap-1'
         }`}
         onPointerDown={(e) => e.stopPropagation()}
       >
