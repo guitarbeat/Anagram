@@ -295,7 +295,7 @@ export function solveAnagrams(opts: SolveOptions): {
   const seenCombos = new Set<string>();
   let nodesVisited = 0;
   const MAX_NODES = 400_000;
-  const TIME_BUDGET_MS = 3500;
+  const TIME_BUDGET_MS = 2500;
   const MAX_SOLUTIONS = Math.max(2500, resultLimit);
 
   function dfs(remainingLen: number): void {

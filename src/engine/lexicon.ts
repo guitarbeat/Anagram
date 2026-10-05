@@ -86,14 +86,41 @@ export function getFrequencyTier(freq: number): FrequencyTier {
   return 'obscure';
 }
 
+export const EVERYDAY_2_LETTER_WORDS = new Set<string>([
+  'am', 'an', 'as', 'at', 'be', 'by', 'do', 'go', 'he', 'if', 'in', 'is', 'it',
+  'me', 'my', 'no', 'of', 'on', 'or', 'so', 'to', 'up', 'us', 'we',
+  'ox', 'ok', 'ax', 'ex', 'id', 'ad', 'hi', 'ah', 'oh', 'eh', 'pi',
+]);
+
+export const COMMON_FUNCTION_WORDS = new Set<string>([
+  'a', 'i',
+  'am', 'an', 'as', 'at', 'be', 'by', 'do', 'go', 'he', 'if', 'in', 'is', 'it',
+  'me', 'my', 'no', 'of', 'on', 'or', 'so', 'to', 'up', 'us', 'we',
+  'the', 'and', 'for', 'but', 'nor', 'yet',
+]);
+
 // Full English Lexicon without hardcoded frequency cuts (~272,000 real words)
 const validWords: string[] = [];
+const wordsSet = new Set<string>();
+
 for (let i = 0; i < rawWords.length; i++) {
   const w = rawWords[i].toLowerCase();
   if (!/^[a-z]+$/.test(w)) continue;
   if (w.length > 16) continue;
   if (w.length === 1 && w !== 'a' && w !== 'i') continue;
-  validWords.push(w);
+  if (w.length === 2 && !EVERYDAY_2_LETTER_WORDS.has(w)) continue;
+  if (!wordsSet.has(w)) {
+    wordsSet.add(w);
+    validWords.push(w);
+  }
+}
+
+// Ensure all recognized everyday 2-letter words (such as 'ok') are included
+for (const w of EVERYDAY_2_LETTER_WORDS) {
+  if (!wordsSet.has(w)) {
+    wordsSet.add(w);
+    validWords.push(w);
+  }
 }
 
 export const WORDS: readonly string[] = validWords;

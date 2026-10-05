@@ -91,6 +91,22 @@ const MODE_CONFIGS: Record<WordFilterMode, ModeConfig> = {
     dotColor: 'bg-purple-400',
     getDescription: (count) => `Long Words (${count}): Words with 5 or more letters. Click to cycle, right-click for menu.`,
   },
+  top: {
+    label: 'Top Everyday',
+    sublabel: 'Most frequent',
+    icon: <Star className="w-3.5 h-3.5 text-emerald-400" />,
+    color: 'text-emerald-400',
+    dotColor: 'bg-emerald-400',
+    getDescription: (count) => `Top Everyday Words (${count}): High-frequency spoken vocabulary. Click to cycle, right-click for menu.`,
+  },
+  rare: {
+    label: 'Rare & Literary',
+    sublabel: 'Specialized words',
+    icon: <Sparkles className="w-3.5 h-3.5 text-purple-400" />,
+    color: 'text-purple-400',
+    dotColor: 'bg-purple-400',
+    getDescription: (count) => `Rare & Literary Words (${count}): Less common or poetic words. Click to cycle, right-click for menu.`,
+  },
 };
 
 export interface ThreePaneSplitProps {
@@ -374,16 +390,18 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
 
   // DIVIDER 2 LEADING: Mode Filter (Cycles between Safe, All, Closers, Pairs, Common, Long)
   const currentMode = wordFilterMode || (avoidDeadEnds ? 'safe' : 'all');
-  const safeCounts = countsByMode || {
+  const safeCounts: Record<WordFilterMode, number> = countsByMode || {
     safe: solvableWordsCount || candidateWordsCount || 0,
     all: candidateWordsCount || 0,
+    top: 0,
+    common: 0,
+    rare: 0,
     closers: exactClosersCount || 0,
     pairs: finisherPairsCount || 0,
-    common: 0,
     long: 0,
   };
 
-  const ALL_MODES: WordFilterMode[] = ['safe', 'all', 'closers', 'pairs', 'common', 'long'];
+  const ALL_MODES: WordFilterMode[] = ['safe', 'all', 'top', 'common', 'rare', 'closers', 'pairs', 'long'];
 
   // Word Filter Quick-Select Menu state & interaction handlers
   const [showFilterMenu, setShowFilterMenu] = useState(false);
