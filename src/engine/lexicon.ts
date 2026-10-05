@@ -10,108 +10,93 @@ import type { POS } from './types';
 
 export type { POS };
 
-// Contraction fragments rule (not a dictionary)
-const CONTRACTION_FRAGMENTS = new Set([
-  'don',
-  'didn',
-  'doesn',
-  'isn',
-  'wasn',
-  'couldn',
-  'shouldn',
-  'wouldn',
-  'hasn',
-  'haven',
-  'aren',
-  'weren',
-  'ain',
-]);
-
-// Common function words (1-2 letters)
-export const COMMON_FUNCTION_WORDS = new Set([
-  'a', 'i', 'an', 'am', 'as', 'at', 'be', 'by', 'do', 'go', 'he', 'if', 'in', 'is', 'it', 'me', 'my', 'no', 'of', 'on', 'or', 'so', 'to', 'up', 'us', 'we'
-]);
-
-// Real everyday 2-letter words allowed in anagrams
-export const EVERYDAY_2_LETTER_WORDS = new Set([
-  ...COMMON_FUNCTION_WORDS,
-  'ox',
-  'ok'
-]);
-
-// Protected 3-letter words that must remain even if frequency is moderate
-const PROTECTED_3_LETTER_WORDS = new Set([
-  'roo', 'zoo'
-]);
-
-// Build frequency map from subtlex-word-frequencies
+// Build frequency map from subtlex-word-frequencies (51M word corpus)
 export const FREQ = new Map<string, number>();
 for (let i = 0; i < subtlexEntries.length; i++) {
   const entry = subtlexEntries[i];
   FREQ.set(entry.word.toLowerCase(), entry.count);
 }
 
-// Minimum SUBTLEX frequency for candidate words
-// 3-letter words need a higher threshold (120+) to weed out rare abbreviations
-export const MIN_SUBTLEX_FREQ_3_LETTER = 120;
-// Longer words (>= 4 letters): threshold is ~0.15 per million (~6 count in 51M corpus),
-// preserving real common words like 'veils' (19) and 'levis' (7) while dropping zero-frequency junk (adoze, airwise, vleis)
-export const MIN_SUBTLEX_FREQ = 6;
+/**
+ * Returns raw SUBTLEX-US frequency count for any word (0 if rare/dictionary-only).
+ */
+export function getWordFrequency(word: string): number {
+  return FREQ.get(word.toLowerCase()) || 0;
+}
 
-// Filter WORDS according to quality rules
-const filteredWords: string[] = [];
+export type FrequencyTier = 'all' | 'top' | 'common' | 'uncommon' | 'rare' | 'obscure';
+
+export interface FrequencyTierInfo {
+  id: FrequencyTier;
+  label: string;
+  shortLabel: string;
+  minFreq: number;
+  maxFreq: number;
+  description: string;
+}
+
+export const FREQUENCY_TIERS: readonly FrequencyTierInfo[] = [
+  {
+    id: 'top',
+    label: 'Top Everyday',
+    shortLabel: 'TOP',
+    minFreq: 1000,
+    maxFreq: Infinity,
+    description: 'High-frequency everyday words (1,000+ occurrences in 51M subtitles)',
+  },
+  {
+    id: 'common',
+    label: 'Common',
+    shortLabel: 'COMMON',
+    minFreq: 100,
+    maxFreq: 999,
+    description: 'Regular spoken vocabulary (100–999 occurrences)',
+  },
+  {
+    id: 'uncommon',
+    label: 'Uncommon',
+    shortLabel: 'UNCOMMON',
+    minFreq: 10,
+    maxFreq: 99,
+    description: 'Recognizable but less frequent vocabulary (10–99 occurrences)',
+  },
+  {
+    id: 'rare',
+    label: 'Rare',
+    shortLabel: 'RARE',
+    minFreq: 1,
+    maxFreq: 9,
+    description: 'Literary, technical, or specialized words (1–9 occurrences)',
+  },
+  {
+    id: 'obscure',
+    label: 'Obscure / Scrabble',
+    shortLabel: 'OBSCURE',
+    minFreq: 0,
+    maxFreq: 0,
+    description: 'Dictionary & Scrabble words absent from modern subtitle dialogue',
+  },
+] as const;
+
+export function getFrequencyTier(freq: number): FrequencyTier {
+  if (freq >= 1000) return 'top';
+  if (freq >= 100) return 'common';
+  if (freq >= 10) return 'uncommon';
+  if (freq >= 1) return 'rare';
+  return 'obscure';
+}
+
+// Full English Lexicon without hardcoded frequency cuts (~272,000 real words)
+const validWords: string[] = [];
 for (let i = 0; i < rawWords.length; i++) {
   const w = rawWords[i].toLowerCase();
   if (!/^[a-z]+$/.test(w)) continue;
   if (w.length > 16) continue;
-  if (CONTRACTION_FRAGMENTS.has(w)) continue;
-
-  if (w.length === 1) {
-    if (w === 'a' || w === 'i') {
-      filteredWords.push(w);
-    }
-    continue;
-  }
-
-  if (w.length === 2) {
-    // Only allow real everyday 2-letter words (removes st, er, re, es, aw, mm, ka, pa, el)
-    if (EVERYDAY_2_LETTER_WORDS.has(w)) {
-      filteredWords.push(w);
-    }
-    continue;
-  }
-
-  const f = FREQ.get(w) || 0;
-
-  if (w.length === 3) {
-    if (PROTECTED_3_LETTER_WORDS.has(w) || f >= MIN_SUBTLEX_FREQ_3_LETTER) {
-      filteredWords.push(w);
-    }
-    continue;
-  }
-
-  // Length >= 4
-  if (f >= MIN_SUBTLEX_FREQ) {
-    filteredWords.push(w);
-  }
+  if (w.length === 1 && w !== 'a' && w !== 'i') continue;
+  validWords.push(w);
 }
 
-// Ensure all allowed everyday 2-letter words (e.g. 'ok', 'ox') and protected words are included
-const wordSet = new Set(filteredWords);
-for (const w2 of EVERYDAY_2_LETTER_WORDS) {
-  if (!wordSet.has(w2)) {
-    filteredWords.push(w2);
-    wordSet.add(w2);
-  }
-}
-for (const p3 of PROTECTED_3_LETTER_WORDS) {
-  if (!wordSet.has(p3)) {
-    filteredWords.push(p3);
-    wordSet.add(p3);
-  }
-}
-
-export const WORDS: readonly string[] = filteredWords;
+export const WORDS: readonly string[] = validWords;
 
 // Precompute flat Uint8Array letter-count buffer (WORDS.length * 26) and 26-bit masks
 export const LETTER_COUNTS = new Uint8Array(WORDS.length * 26);

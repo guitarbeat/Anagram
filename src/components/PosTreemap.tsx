@@ -156,15 +156,15 @@ export const PosTreemap: React.FC<PosTreemapProps> = ({
             'OTH'
           ) : label.toUpperCase();
 
-          let tileColorClass = 'bg-white hover:bg-zinc-100 text-zinc-900 border-black hover:border-black shadow-xs';
+          let tileColorClass = 'bg-white hover:bg-zinc-50 text-zinc-900 border-black shadow-[1.5px_1.5px_0px_#000000] hover:shadow-[2.5px_2.5px_0px_#000000]';
           if (isHoveredMatch) {
-            tileColorClass = 'bg-zinc-950 text-white border-black shadow-md ring-2 ring-zinc-800 z-20';
+            tileColorClass = 'bg-zinc-950 text-white border-black shadow-[3px_3px_0px_#000000] ring-2 ring-zinc-800 z-20';
           } else if (isSelected) {
-            tileColorClass = 'bg-zinc-900 text-white border-black z-10';
+            tileColorClass = 'bg-black text-white border-black shadow-[2px_2px_0px_#000000] z-10';
           } else if (isCompatZero) {
-            tileColorClass = 'bg-zinc-50/70 text-zinc-400 border-black/40 opacity-30';
+            tileColorClass = 'bg-zinc-50/70 text-zinc-400 border-black/40 opacity-30 shadow-none';
           } else if (isDimmed) {
-            tileColorClass = 'bg-zinc-100/60 hover:bg-zinc-200/80 text-zinc-400 border-black/60 opacity-60 hover:opacity-100';
+            tileColorClass = 'bg-zinc-100/60 hover:bg-zinc-200/80 text-zinc-400 border-black/60 opacity-60 hover:opacity-100 shadow-none';
           }
 
           return (
@@ -187,25 +187,25 @@ export const PosTreemap: React.FC<PosTreemapProps> = ({
                 height: `${tileH}px`,
                 borderRadius: getBlobBorderRadius(tile.id, tileW < 45 || tileH < 30 ? 'compact' : 'tile'),
               }}
-              className={`absolute border-[1.5px] border-black flex flex-col items-center justify-center cursor-pointer select-none transition-all duration-75 ease-out overflow-hidden p-1 ${tileColorClass}`}
+              className={`absolute border-2 border-black flex flex-col items-center justify-center cursor-pointer select-none transition-all duration-75 ease-out overflow-hidden p-1 ${tileColorClass}`}
               title={tooltip}
             >
               {isExtraLarge ? (
                 <div className="flex flex-col items-center justify-center text-center gap-0.5">
                   <span
-                    className={`font-mono text-[11px] font-bold uppercase tracking-wider ${
-                      isHoveredMatch ? 'text-white' : isSelected ? 'text-zinc-200' : 'text-zinc-700'
+                    className={`font-mono text-[11px] font-black uppercase tracking-wider ${
+                      isHoveredMatch ? 'text-white' : isSelected ? 'text-zinc-200' : 'text-zinc-800'
                     }`}
                   >
                     {displayLabel}
                   </span>
                   {isHoveredMatch && hoveredWordInfo ? (
-                    <span className="font-mono text-[9px] font-bold uppercase tracking-wider bg-black/25 text-white px-1.5 py-0.5 rounded-full my-0.5">
+                    <span className="font-mono text-[9.5px] font-black uppercase tracking-wider text-amber-400 my-0.5">
                       ✦ {hoveredWordInfo.word}
                     </span>
                   ) : null}
                   <div className="flex items-baseline gap-1 my-0.5">
-                    <span className="font-mono text-base font-bold tabular-nums leading-none">
+                    <span className="font-mono text-lg font-black tabular-nums leading-none">
                       {tile.count}
                     </span>
                     {hoveredWordInfo && compatCount !== null ? (

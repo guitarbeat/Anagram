@@ -20,6 +20,8 @@ export interface WordsGraphViewProps {
   wordFilterMode?: WordFilterMode;
   wordFilterCount?: number;
   onCycleWordFilter?: () => void;
+  selectedWord?: CandidateWordItem | null;
+  onSelectWord?: (word: CandidateWordItem) => void;
 }
 
 interface TagNode {
@@ -311,8 +313,13 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
   wordFilterMode = 'safe',
   wordFilterCount,
   onCycleWordFilter,
+  selectedWord,
+  onSelectWord,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const selectedWordRef = useRef(selectedWord);
+  selectedWordRef.current = selectedWord;
 
   const wordFilterModeRef = useRef(wordFilterMode);
   wordFilterModeRef.current = wordFilterMode;
@@ -1303,10 +1310,33 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
           ctx.restore();
         }
 
+        const isSelected = selectedWordRef.current?.word.toLowerCase() === node.word.toLowerCase();
+
+        // 0. Selected Halo Aura for word being inspected in Contextual Lens
+        if (isSelected) {
+          ctx.save();
+          drawBlob(ctx, node.x, node.y, curW, curH, nodeSeed, nodeTime, 7);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+          ctx.fill();
+          ctx.strokeStyle = '#09090b';
+          ctx.lineWidth = 2.2;
+          ctx.stroke();
+          ctx.restore();
+        }
+
         // 3. Fluid Blob Body (High-contrast pure Black & White)
         drawBlob(ctx, node.x, node.y, curW, curH, nodeSeed, nodeTime, 0);
 
-        if (isTarget) {
+        if (isSelected) {
+          // Word currently inspected in Contextual Lens: solid deep black with crisp shadow
+          ctx.fillStyle = '#09090b';
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+          ctx.shadowBlur = 8;
+          ctx.fill();
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 2.2;
+          ctx.stroke();
+        } else if (isTarget) {
           // Words already placed in the target phrase: solid black inverted
           ctx.fillStyle = '#18181b';
           ctx.shadowColor = 'rgba(0, 0, 0, 0.16)';
@@ -1359,7 +1389,7 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        if (isTarget || activeHighlightT > 0.35) {
+        if (isSelected || isTarget || activeHighlightT > 0.35) {
           ctx.fillStyle = '#ffffff'; // White text on dark node
         } else {
           ctx.fillStyle = '#09090b'; // Crisp black text on white node
@@ -1368,41 +1398,6 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
         ctx.fillText(node.word, node.x, node.y + 0.5);
         ctx.restore();
       }
-
-      ctx.restore();
-
-      // Minimal In-Canvas Watermark Label for Active Word Filter Mode
-      ctx.save();
-      ctx.scale(dpr, dpr);
-
-      const mode = wordFilterModeRef.current || 'safe';
-      const modeLabel =
-        mode === 'safe'
-          ? 'SAFE WORDS'
-          : mode === 'all'
-          ? 'ALL WORDS'
-          : mode === 'closers'
-          ? 'EXACT CLOSERS'
-          : mode === 'pairs'
-          ? 'FINISHER PAIRS'
-          : mode === 'common'
-          ? 'COMMON WORDS'
-          : mode === 'long'
-          ? 'LONG WORDS'
-          : 'WORDS';
-
-      const countVal =
-        wordFilterCountRef.current !== undefined
-          ? wordFilterCountRef.current
-          : activeWords.length;
-      const watermarkText = `${modeLabel} · ${countVal} WORDS`;
-
-      // Render crisp, understated monospace text directly on the canvas surface in top-left
-      ctx.font = '700 10.5px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
-      ctx.fillStyle = 'rgba(24, 24, 27, 0.45)';
-      ctx.textBaseline = 'top';
-      ctx.textAlign = 'left';
-      ctx.fillText(watermarkText, 14, 14);
 
       ctx.restore();
 
@@ -1440,18 +1435,6 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
   }, []);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const rect = canvas.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const clickY = e.clientY - rect.top;
-      // If clicking near the top-left in-canvas label watermark, cycle filter mode!
-      if (clickX < 210 && clickY < 32 && onCycleWordFilterRef.current) {
-        onCycleWordFilterRef.current();
-        return;
-      }
-    }
-
     const world = screenToWorld(e.clientX, e.clientY);
     const node = getNodeAt(world.x, world.y);
     dragMovedRef.current = false;
@@ -1485,6 +1468,8 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
     }
   };
 
+  const lastClickTimeRef = useRef<{ time: number; word: string }>({ time: 0, word: '' });
+
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (draggedNodeRef.current) {
       const node = draggedNodeRef.current;
@@ -1493,8 +1478,28 @@ export const WordsGraphView: React.FC<WordsGraphViewProps> = ({
       if (dragMovedRef.current) {
         masterPositionsRef.current.set(node.id, { x: node.x, y: node.y });
       } else {
+        const now = Date.now();
+        const isDoubleClick =
+          lastClickTimeRef.current.word === node.word &&
+          now - lastClickTimeRef.current.time < 350;
+
+        lastClickTimeRef.current = { time: now, word: node.word };
+
         onAddWordToTarget(node.word);
-        onShowToast(`Added "${node.word}" to target phrase`, 'success');
+        const item = candidateWords.find(
+          (c) => c.word.toLowerCase() === node.word.toLowerCase()
+        ) || {
+          word: node.word,
+          length: node.length,
+          freq: node.freq,
+          isExactCloser: node.isExactCloser,
+          isSolvable: node.isSolvable,
+        };
+
+        if (onSelectWord) {
+          onSelectWord(item);
+        }
+        onShowToast(`Added "${node.word}" to sentence`, 'success');
       }
     }
   };

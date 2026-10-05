@@ -130,15 +130,15 @@ export const WordLengthTreemap: React.FC<WordLengthTreemapProps> = ({
           const compatCount = compatibleLengthCounts ? (compatibleLengthCounts[tile.length] ?? 0) : null;
           const isCompatZero = Boolean(hoveredWordInfo && compatCount === 0 && !isHoveredMatch);
 
-          let tileColorClass = 'bg-white hover:bg-zinc-100 text-zinc-900 border-black hover:border-black shadow-xs';
+          let tileColorClass = 'bg-white hover:bg-zinc-50 text-zinc-900 border-black shadow-[1.5px_1.5px_0px_#000000] hover:shadow-[2.5px_2.5px_0px_#000000]';
           if (isHoveredMatch) {
-            tileColorClass = 'bg-zinc-950 text-white border-black shadow-md ring-2 ring-zinc-800 z-20';
+            tileColorClass = 'bg-zinc-950 text-white border-black shadow-[3px_3px_0px_#000000] ring-2 ring-zinc-800 z-20';
           } else if (isSelected) {
-            tileColorClass = 'bg-zinc-900 text-white border-black z-10';
+            tileColorClass = 'bg-black text-white border-black shadow-[2px_2px_0px_#000000] z-10';
           } else if (isCompatZero) {
-            tileColorClass = 'bg-zinc-50/70 text-zinc-400 border-black/40 opacity-30';
+            tileColorClass = 'bg-zinc-50/70 text-zinc-400 border-black/40 opacity-30 shadow-none';
           } else if (isDimmed) {
-            tileColorClass = 'bg-zinc-100/60 hover:bg-zinc-200/80 text-zinc-400 border-black/60 opacity-60 hover:opacity-100';
+            tileColorClass = 'bg-zinc-100/60 hover:bg-zinc-200/80 text-zinc-400 border-black/60 opacity-60 hover:opacity-100 shadow-none';
           }
 
           let tooltip = `${tile.length}-letter words: ${tile.count} (${tile.percentage.toFixed(1)}% of available words)`;
@@ -173,21 +173,21 @@ export const WordLengthTreemap: React.FC<WordLengthTreemapProps> = ({
                 height: `${tileH}px`,
                 borderRadius: getBlobBorderRadius(tile.length, tileW < 45 || tileH < 30 ? 'compact' : 'tile'),
               }}
-              className={`absolute border-[1.5px] border-black flex flex-col items-center justify-center cursor-pointer select-none transition-all duration-75 ease-out overflow-hidden ${tileColorClass}`}
+              className={`absolute border-2 border-black flex flex-col items-center justify-center cursor-pointer select-none transition-all duration-75 ease-out overflow-hidden ${tileColorClass}`}
               title={tooltip}
             >
               {isExtraLarge ? (
                 <div className="flex flex-col items-center justify-center p-1.5 leading-tight text-center">
-                  <span className={`font-mono font-bold text-xs sm:text-[13px] tracking-tight uppercase ${isHoveredMatch ? 'text-zinc-200' : ''}`}>
+                  <span className={`font-mono font-black text-xs sm:text-[13px] tracking-tight uppercase ${isHoveredMatch ? 'text-zinc-200' : ''}`}>
                     {tile.length} {letterLabel}
                   </span>
                   {isHoveredMatch && hoveredWordInfo ? (
-                    <span className="font-mono text-[9px] font-bold uppercase tracking-wider bg-black/25 text-white px-1.5 py-0.5 rounded-full my-0.5">
+                    <span className="font-mono text-[9.5px] font-black uppercase tracking-wider text-amber-400 mt-0.5">
                       ✦ {hoveredWordInfo.word}
                     </span>
                   ) : null}
-                  <div className="flex items-baseline gap-1 mt-0.5">
-                    <span className="font-mono font-bold text-base sm:text-xl opacity-95">
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="font-mono font-black text-lg sm:text-2xl opacity-95 leading-none">
                       {tile.count}
                     </span>
                     {hoveredWordInfo && compatCount !== null ? (
@@ -195,7 +195,7 @@ export const WordLengthTreemap: React.FC<WordLengthTreemapProps> = ({
                         ({compatCount} fit)
                       </span>
                     ) : (
-                      <span className="text-[8.5px] sm:text-[9.5px] font-mono opacity-70 font-medium">
+                      <span className="text-[9px] font-mono opacity-70 font-semibold">
                         {tile.percentage.toFixed(0)}%
                       </span>
                     )}
@@ -203,16 +203,16 @@ export const WordLengthTreemap: React.FC<WordLengthTreemapProps> = ({
                 </div>
               ) : isLarge ? (
                 <div className="flex flex-col items-center justify-center p-1 leading-tight text-center">
-                  <span className={`font-mono font-bold text-[10px] sm:text-[11px] tracking-tight uppercase truncate max-w-full px-0.5 ${isHoveredMatch ? 'text-white' : ''}`}>
-                    {canFitFullLetters ? `${tile.length} ${letterLabel}` : `${tile.length} ltrs`}
+                  <span className={`font-mono font-black text-[10px] sm:text-[11px] tracking-tight uppercase truncate max-w-full px-0.5 ${isHoveredMatch ? 'text-white' : ''}`}>
+                    {canFitFullLetters ? `${tile.length} ${letterLabel}` : `${tile.length}L`}
                   </span>
                   {isHoveredMatch && hoveredWordInfo ? (
-                    <span className="font-mono text-[8.5px] font-bold uppercase tracking-wider bg-black/20 text-white px-1 py-0.5 rounded-full truncate max-w-full my-0.5">
+                    <span className="font-mono text-[9px] font-black uppercase tracking-wider text-amber-400 truncate max-w-full my-0.5">
                       ✦ {hoveredWordInfo.word}
                     </span>
                   ) : null}
                   <div className="flex items-baseline gap-1 mt-0.5">
-                    <span className="font-mono font-semibold text-xs sm:text-sm opacity-90">
+                    <span className="font-mono font-black text-sm sm:text-base opacity-90 leading-none">
                       {tile.count}
                     </span>
                     {hoveredWordInfo && compatCount !== null ? (
@@ -220,8 +220,8 @@ export const WordLengthTreemap: React.FC<WordLengthTreemapProps> = ({
                         ({compatCount} fit)
                       </span>
                     ) : (
-                      tileH >= 48 && (
-                        <span className="text-[8px] font-mono opacity-65">
+                      tileH >= 44 && (
+                        <span className="text-[8.5px] font-mono opacity-65 font-semibold">
                           {tile.percentage.toFixed(0)}%
                         </span>
                       )

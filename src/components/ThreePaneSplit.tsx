@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   BookOpen,
   Hash,
@@ -20,7 +20,10 @@ import {
   Link2,
   Star,
   Zap,
+  Check,
+  Layers,
 } from 'lucide-react';
+import { triggerHaptic } from '../hooks/useHaptics';
 import { SplitDivider } from './SplitDivider';
 import { TopWrapper, BottomWrapper } from './PanelWrappers';
 import { IdlePeekDock } from './IdlePeekDock';
@@ -32,40 +35,61 @@ import type { ProgressBus } from '../hooks/useProgressBus';
 
 interface ModeConfig {
   label: string;
+  sublabel: string;
   icon: React.ReactNode;
+  color: string;
+  dotColor: string;
   getDescription: (count: number) => string;
 }
 
 const MODE_CONFIGS: Record<WordFilterMode, ModeConfig> = {
   safe: {
-    label: 'Safe Words',
+    label: 'Solvable Words',
+    sublabel: 'No dead ends',
     icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />,
-    getDescription: (count) => `Safe Words: Showing ${count} solvable words (avoids dead ends). Click to toggle modes.`,
+    color: 'text-emerald-400',
+    dotColor: 'bg-emerald-400',
+    getDescription: (count) => `Solvable Words (${count}): Words you can win with. Click to cycle, right-click for menu.`,
   },
   all: {
     label: 'All Words',
+    sublabel: 'All matches',
     icon: <BookOpen className="w-3.5 h-3.5 text-zinc-300" />,
-    getDescription: (count) => `All Words: Showing all ${count} candidate words. Click to toggle modes.`,
+    color: 'text-zinc-300',
+    dotColor: 'bg-zinc-400',
+    getDescription: (count) => `All Words (${count}): Complete dictionary. Click to cycle, right-click for menu.`,
   },
   closers: {
-    label: 'Closers',
+    label: '1-Word Solutions',
+    sublabel: 'Instant wins',
     icon: <Sparkles className="w-3.5 h-3.5 text-amber-400" />,
-    getDescription: (count) => `Exact Closers: ${count} instant 1-word solutions! Click to toggle modes.`,
+    color: 'text-amber-400',
+    dotColor: 'bg-amber-400',
+    getDescription: (count) => `1-Word Solutions (${count}): Words that finish the puzzle right now. Click to cycle, right-click for menu.`,
   },
   pairs: {
-    label: 'Pairs',
+    label: '2-Word Solutions',
+    sublabel: 'Two-word finishes',
     icon: <Link2 className="w-3.5 h-3.5 text-cyan-400" />,
-    getDescription: (count) => `Finisher Pairs: ${count} 2-word combinations. Click to toggle modes.`,
+    color: 'text-cyan-400',
+    dotColor: 'bg-cyan-400',
+    getDescription: (count) => `2-Word Solutions (${count}): Word pairs that finish the puzzle. Click to cycle, right-click for menu.`,
   },
   common: {
-    label: 'Common',
+    label: 'Common Words',
+    sublabel: 'Everyday English',
     icon: <Star className="w-3.5 h-3.5 text-yellow-400" />,
-    getDescription: (count) => `Common Words: ${count} top everyday English words. Click to toggle modes.`,
+    color: 'text-yellow-400',
+    dotColor: 'bg-yellow-400',
+    getDescription: (count) => `Common Words (${count}): Familiar everyday words. Click to cycle, right-click for menu.`,
   },
   long: {
     label: 'Long Words',
+    sublabel: '5+ letters',
     icon: <Zap className="w-3.5 h-3.5 text-purple-400" />,
-    getDescription: (count) => `Long Words: ${count} words with 5+ letters. Click to toggle modes.`,
+    color: 'text-purple-400',
+    dotColor: 'bg-purple-400',
+    getDescription: (count) => `Long Words (${count}): Words with 5 or more letters. Click to cycle, right-click for menu.`,
   },
 };
 
@@ -106,11 +130,22 @@ export interface ThreePaneSplitProps {
   solvableWordsCount?: number;
   wordFilterMode?: WordFilterMode;
   onCycleWordFilter?: () => void;
+  onSelectWordFilterMode?: (mode: WordFilterMode) => void;
   countsByMode?: Record<WordFilterMode, number>;
   activeModeFilter?: 'all' | 'closers' | 'pairs';
   onSelectModeFilter?: (mode: 'all' | 'closers' | 'pairs') => void;
-  explorerViewMode?: 'both' | 'graph' | 'inspector';
+  explorerViewMode?:
+    | 'both'
+    | 'graph'
+    | 'inspector'
+    | 'blocks'
+    | 'pebbles'
+    | 'solutions'
+    | 'cards';
   onCycleExplorerView?: () => void;
+  onSelectExplorerView?: (
+    mode: 'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions'
+  ) => void;
   showGraphPanel?: boolean;
   onToggleGraphPanel?: () => void;
   showInspectorPanel?: boolean;
@@ -152,11 +187,13 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   solvableWordsCount = 0,
   wordFilterMode,
   onCycleWordFilter,
+  onSelectWordFilterMode,
   countsByMode,
   activeModeFilter = 'all',
   onSelectModeFilter,
   explorerViewMode,
   onCycleExplorerView,
+  onSelectExplorerView,
   showGraphPanel = true,
   onToggleGraphPanel,
   showInspectorPanel = true,
@@ -301,8 +338,8 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           onPointerDown={(e) => e.stopPropagation()}
           title={
             isCard1Minimized
-              ? 'Click to expand Kinetic Stage (Drag divider to resize)'
-              : 'Click to minimize Kinetic Stage (Drag divider to resize)'
+              ? 'Expand stage'
+              : 'Minimize stage'
           }
           className="flex items-center justify-center py-0.5 px-1.5 h-4 sm:h-4.5 rounded-full text-zinc-400 hover:text-white bg-zinc-800/60 hover:bg-zinc-700/80 border border-zinc-700/40 hover:border-zinc-500/60 cursor-pointer select-none group/notch active:scale-95 transition-all shadow-xs shrink-0"
         >
@@ -346,78 +383,383 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     long: 0,
   };
 
-  // Current Explorer View Mode (Graph / Inspector / Both)
-  const currentExplorerView =
+  const ALL_MODES: WordFilterMode[] = ['safe', 'all', 'closers', 'pairs', 'common', 'long'];
+
+  // Word Filter Quick-Select Menu state & interaction handlers
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const filterMenuRef = useRef<HTMLDivElement>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!showFilterMenu) return;
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
+        setShowFilterMenu(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => document.removeEventListener('pointerdown', handleClickOutside);
+  }, [showFilterMenu]);
+
+  const handleSelectFilterMode = (mode: WordFilterMode) => {
+    triggerHaptic('snap');
+    setShowFilterMenu(false);
+    if (onSelectWordFilterMode) {
+      onSelectWordFilterMode(mode);
+    } else if (onSelectModeFilter && (mode === 'all' || mode === 'closers' || mode === 'pairs')) {
+      onSelectModeFilter(mode);
+    }
+  };
+
+  // Current Explorer View Mode (Graph / Inspector / Both / Blocks / Pebbles / Solutions)
+  const rawExplorerView =
     explorerViewMode ||
     (showGraphPanel && showInspectorPanel ? 'both' : showGraphPanel ? 'graph' : 'inspector');
+  const currentExplorerView: 'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions' =
+    rawExplorerView === 'cards' ? 'blocks' : rawExplorerView;
+
+  const ALL_VIEWS: ('both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions')[] = [
+    'both',
+    'graph',
+    'inspector',
+    'blocks',
+    'pebbles',
+    'solutions',
+  ];
 
   const viewConfigs: Record<
-    'both' | 'graph' | 'inspector',
-    { label: string; icon: React.ReactNode; title: string }
+    'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions',
+    {
+      label: string;
+      sublabel: string;
+      icon: React.ReactNode;
+      color: string;
+      dotColor: string;
+      title: string;
+    }
   > = {
     both: {
-      label: 'Both',
+      label: 'Split View',
+      sublabel: 'Graph and stats',
       icon: <LayoutGrid className="w-3.5 h-3.5 text-cyan-400" />,
-      title: 'Current view: Both (Graph + Inspector together). Click to switch to Graph.',
+      color: 'text-cyan-400',
+      dotColor: 'bg-cyan-400',
+      title: 'Split View: Word graph and stats side by side. Click to cycle, right-click for menu.',
     },
     graph: {
-      label: 'Graph',
+      label: 'Word Graph',
+      sublabel: 'Physics cloud',
       icon: <Network className="w-3.5 h-3.5 text-emerald-400" />,
-      title: 'Current view: Graph only. Click to switch to Inspector.',
+      color: 'text-emerald-400',
+      dotColor: 'bg-emerald-400',
+      title: 'Word Graph: Interactive physics-based word cloud. Click to cycle, right-click for menu.',
     },
     inspector: {
-      label: 'Inspector',
+      label: 'Word Stats',
+      sublabel: 'Length & letter charts',
       icon: <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />,
-      title: 'Current view: Inspector only. Click to switch to Both.',
+      color: 'text-indigo-400',
+      dotColor: 'bg-indigo-400',
+      title: 'Word Stats: Length and letter charts. Click to cycle, right-click for menu.',
+    },
+    blocks: {
+      label: 'Word Blocks',
+      sublabel: 'Squarified treemap',
+      icon: <LayoutGrid className="w-3.5 h-3.5 text-amber-400" />,
+      color: 'text-amber-400',
+      dotColor: 'bg-amber-400',
+      title: 'Word Blocks: Squarified word treemap. Click to cycle, right-click for menu.',
+    },
+    pebbles: {
+      label: 'Word Pebbles',
+      sublabel: 'Organic word field',
+      icon: <Layers className="w-3.5 h-3.5 text-teal-400" />,
+      color: 'text-teal-400',
+      dotColor: 'bg-teal-400',
+      title: 'Word Pebbles: Organic word bubbles. Click to cycle, right-click for menu.',
+    },
+    solutions: {
+      label: 'Solutions',
+      sublabel: 'Winning finishes',
+      icon: <Sparkles className="w-3.5 h-3.5 text-rose-400" />,
+      color: 'text-rose-400',
+      dotColor: 'bg-rose-400',
+      title: 'Solutions: Direct 1-word and 2-word finishes. Click to cycle, right-click for menu.',
     },
   };
 
-  const activeViewConfig = viewConfigs[currentExplorerView];
+  const activeViewConfig = viewConfigs[currentExplorerView] || viewConfigs.both;
 
-  // DIVIDER 2 LEADING: Mode Filter (Cycles between Safe, All, Closers, Pairs, Common, Long) - Minimal Single Icon Button
+  // Explorer View Quick-Select Menu state & interaction handlers
+  const [showViewMenu, setShowViewMenu] = useState(false);
+  const viewMenuRef = useRef<HTMLDivElement>(null);
+  const viewLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Close view menu when clicking outside
+  useEffect(() => {
+    if (!showViewMenu) return;
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) {
+        setShowViewMenu(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => document.removeEventListener('pointerdown', handleClickOutside);
+  }, [showViewMenu]);
+
+  const handleSelectViewMode = (
+    mode: 'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions'
+  ) => {
+    triggerHaptic('snap');
+    setShowViewMenu(false);
+    if (onSelectExplorerView) {
+      onSelectExplorerView(mode);
+    } else {
+      if (mode === 'both') {
+        if (!showGraphPanel) onToggleGraphPanel?.();
+        if (!showInspectorPanel) onToggleInspectorPanel?.();
+      } else if (mode === 'graph') {
+        if (!showGraphPanel) onToggleGraphPanel?.();
+        if (showInspectorPanel) onToggleInspectorPanel?.();
+      } else if (mode === 'inspector') {
+        if (showGraphPanel) onToggleGraphPanel?.();
+        if (!showInspectorPanel) onToggleInspectorPanel?.();
+      }
+    }
+  };
+
+  // DIVIDER 2 LEADING: Mode Filter with rich multi-action functionality
   const resolvedDivider2Leading: SplitAccessory[] = [
     {
       id: 'wordsFilterToggle',
       title: MODE_CONFIGS[currentMode].getDescription(safeCounts[currentMode]),
-      icon: MODE_CONFIGS[currentMode].icon,
-      // Minimal: No text label or count badge, just the single iconic toggle
+      icon: (
+        <div className="relative flex items-center justify-center group/filtericon">
+          {MODE_CONFIGS[currentMode].icon}
+          {/* Micro active mode accent indicator dot */}
+          <span
+            className={`absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${MODE_CONFIGS[currentMode].dotColor} ring-1 ring-black/80 transition-all group-hover/filtericon:scale-125`}
+          />
+        </div>
+      ),
       shortcut: 'S',
-      action: onCycleWordFilter
-        ? onCycleWordFilter
-        : () => {
-            if (activeModeFilter !== 'all') {
-              onSelectModeFilter?.('all');
-            } else {
-              onAvoidDeadEndsChange?.(!avoidDeadEnds);
-            }
-          },
+      action: (e?: React.MouseEvent) => {
+        if (e?.shiftKey) {
+          // Shift-Click: cycle backwards!
+          const idx = ALL_MODES.indexOf(currentMode);
+          const prevIdx = (idx - 1 + ALL_MODES.length) % ALL_MODES.length;
+          handleSelectFilterMode(ALL_MODES[prevIdx]);
+          return;
+        }
+        if (onCycleWordFilter) {
+          onCycleWordFilter();
+        } else {
+          const idx = ALL_MODES.indexOf(currentMode);
+          const nextIdx = (idx + 1) % ALL_MODES.length;
+          handleSelectFilterMode(ALL_MODES[nextIdx]);
+        }
+      },
+      onContextMenu: (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerHaptic('medium');
+        setShowFilterMenu((prev) => !prev);
+      },
+      onDoubleClick: (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerHaptic('snap');
+        handleSelectFilterMode('safe');
+      },
+      onPointerDown: () => {
+        longPressTimerRef.current = setTimeout(() => {
+          triggerHaptic('medium');
+          setShowFilterMenu(true);
+        }, 420);
+      },
+      onPointerUp: () => {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+      },
+      onPointerLeave: () => {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+      },
       active: true,
     },
   ];
 
-  // DIVIDER 2 TRAILING: Single Merged View Mode Button (Toggles between Graph, Inspector, and Both) - Minimal Single Icon
+  // DIVIDER 2 LEADING MENU: Quick-Select Mode Popover (Deslopped, minimal, high-craft)
+  const divider2LeadingMenu = showFilterMenu ? (
+    <div
+      ref={filterMenuRef}
+      className="absolute bottom-full left-0 mb-2 w-52 bg-[#18181b]/98 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-1 z-50 select-none animate-in fade-in zoom-in-95 duration-100"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between px-2 py-1 mb-0.5 border-b border-white/5">
+        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+          Filter Words
+        </span>
+        <kbd className="text-[9px] font-mono text-zinc-400 bg-white/5 border border-white/10 px-1 py-0.2 rounded">
+          S
+        </kbd>
+      </div>
+
+      <div className="flex flex-col gap-0.5">
+        {ALL_MODES.map((modeKey) => {
+          const config = MODE_CONFIGS[modeKey];
+          const count = safeCounts[modeKey] || 0;
+          const isActive = currentMode === modeKey;
+
+          return (
+            <button
+              key={modeKey}
+              type="button"
+              onClick={() => handleSelectFilterMode(modeKey)}
+              className={`flex items-center justify-between w-full h-7.5 px-2 rounded-lg text-left transition-colors cursor-pointer group ${
+                isActive
+                  ? 'bg-white/10 text-white font-medium'
+                  : 'text-zinc-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`shrink-0 ${config.color}`}>{config.icon}</span>
+                <span className="text-[12px] truncate">{config.label}</span>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                <span className="text-[11px] font-mono tabular-nums text-zinc-400 group-hover:text-zinc-300">
+                  {count}
+                </span>
+                {isActive && (
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
+
+  // DIVIDER 2 TRAILING: Single Merged View Mode Button with rich multi-action functionality
   const resolvedDivider2Trailing: SplitAccessory[] = [
     {
       id: 'explorerViewToggle',
       title: activeViewConfig.title,
-      icon: activeViewConfig.icon,
-      // Minimal: No text label, just the iconic toggle
+      icon: (
+        <div className="relative flex items-center justify-center group/viewicon">
+          {activeViewConfig.icon}
+          {/* Micro active layout accent indicator dot */}
+          <span
+            className={`absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${activeViewConfig.dotColor} ring-1 ring-black/80 transition-all group-hover/viewicon:scale-125`}
+          />
+        </div>
+      ),
       shortcut: 'V',
-      action: onCycleExplorerView
-        ? onCycleExplorerView
-        : () => {
-            if (showGraphPanel && showInspectorPanel) {
-              onToggleInspectorPanel?.();
-            } else if (showGraphPanel) {
-              onToggleGraphPanel?.();
-              onToggleInspectorPanel?.();
-            } else {
-              onToggleGraphPanel?.();
-            }
-          },
+      action: (e?: React.MouseEvent) => {
+        if (e?.shiftKey) {
+          // Shift-Click: cycle backward!
+          const idx = ALL_VIEWS.indexOf(currentExplorerView);
+          const prevIdx = (idx - 1 + ALL_VIEWS.length) % ALL_VIEWS.length;
+          handleSelectViewMode(ALL_VIEWS[prevIdx]);
+          return;
+        }
+        if (onCycleExplorerView) {
+          onCycleExplorerView();
+        } else {
+          const idx = ALL_VIEWS.indexOf(currentExplorerView);
+          const nextIdx = (idx + 1) % ALL_VIEWS.length;
+          handleSelectViewMode(ALL_VIEWS[nextIdx]);
+        }
+      },
+      onContextMenu: (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerHaptic('medium');
+        setShowViewMenu((prev) => !prev);
+      },
+      onDoubleClick: (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerHaptic('snap');
+        handleSelectViewMode('both');
+      },
+      onPointerDown: () => {
+        viewLongPressTimerRef.current = setTimeout(() => {
+          triggerHaptic('medium');
+          setShowViewMenu(true);
+        }, 420);
+      },
+      onPointerUp: () => {
+        if (viewLongPressTimerRef.current) {
+          clearTimeout(viewLongPressTimerRef.current);
+          viewLongPressTimerRef.current = null;
+        }
+      },
+      onPointerLeave: () => {
+        if (viewLongPressTimerRef.current) {
+          clearTimeout(viewLongPressTimerRef.current);
+          viewLongPressTimerRef.current = null;
+        }
+      },
       active: true,
     },
   ];
+
+  // DIVIDER 2 TRAILING MENU: Quick-Select Explorer Layout Popover (Deslopped, minimal, high-craft)
+  const divider2TrailingMenu = showViewMenu ? (
+    <div
+      ref={viewMenuRef}
+      className="absolute bottom-full right-0 mb-2 w-48 bg-[#18181b]/98 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-1 z-50 select-none animate-in fade-in zoom-in-95 duration-100"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between px-2 py-1 mb-0.5 border-b border-white/5">
+        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+          View Layout
+        </span>
+        <kbd className="text-[9px] font-mono text-zinc-400 bg-white/5 border border-white/10 px-1 py-0.2 rounded">
+          V
+        </kbd>
+      </div>
+
+      <div className="flex flex-col gap-0.5">
+        {ALL_VIEWS.map((viewKey) => {
+          const config = viewConfigs[viewKey];
+          const isActive = currentExplorerView === viewKey;
+
+          return (
+            <button
+              key={viewKey}
+              type="button"
+              onClick={() => handleSelectViewMode(viewKey)}
+              className={`flex items-center justify-between w-full h-7.5 px-2 rounded-lg text-left transition-colors cursor-pointer group ${
+                isActive
+                  ? 'bg-white/10 text-white font-medium'
+                  : 'text-zinc-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`shrink-0 ${config.color}`}>{config.icon}</span>
+                <span className="text-[12px] truncate">{config.label}</span>
+              </div>
+
+              {isActive && (
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 ml-2" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
 
   // Filter only visible panels
   const visiblePanels = panelOrder.filter((id) => {
@@ -579,32 +921,34 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                 isDragging={isDivider1 ? activeDrag === 1 : activeDrag === 2}
                 onPointerDown={isDivider1 ? startDrag1 : startDrag2}
                 onDoubleClick={cyclePresets}
-                title="Drag to resize panel split"
+                title="Drag to resize (Double-click to reset)"
                 onToggleCollapse={isDivider1 ? toggleMinimizeCard1 : toggleMinimizeCard3}
                 isCollapsed={isDivider1 ? isCard1Minimized : isCard3Minimized}
                 collapseTooltip={
                   isDivider1
                     ? isCard1Minimized
-                      ? 'Click to expand Kinetic Stage (Drag to resize)'
-                      : 'Click to minimize Kinetic Stage (Drag to resize)'
+                      ? 'Expand stage'
+                      : 'Minimize stage'
                     : isCard3Minimized
-                    ? 'Click to expand Word Explorer (Drag to resize)'
-                    : 'Click to minimize Word Explorer (Drag to resize)'
+                    ? 'Expand word panel'
+                    : 'Minimize word panel'
                 }
                 isBusy={isExplorerDivider && isSolving}
                 isSuccess={isExplorerDivider && justFoundResults}
                 statusTooltip={
                   isExplorerDivider
                     ? isSolving
-                      ? 'Solver calculating anagram permutations...'
+                      ? 'Finding words...'
                       : justFoundResults
-                      ? 'New anagram candidates found!'
-                      : 'Drag to resize panel split'
-                    : 'Drag to resize panel split'
+                      ? 'New words found!'
+                      : 'Drag to resize'
+                    : 'Drag to resize'
                 }
                 centerContent={isDivider1 ? divider1CenterContent : undefined}
-                leadingAccessories={isDivider1 ? resolvedDivider1Leading : resolvedDivider2Leading}
-                trailingAccessories={isDivider1 ? resolvedDivider1Trailing : resolvedDivider2Trailing}
+                leadingAccessories={undefined}
+                leadingMenu={undefined}
+                trailingAccessories={undefined}
+                trailingMenu={undefined}
               />
             );
           })()}

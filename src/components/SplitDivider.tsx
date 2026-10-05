@@ -19,8 +19,14 @@ export interface SplitDividerProps {
   /** Buttons shown to the left (or top) of the drag indicator */
   leadingAccessories?: SplitAccessory[];
 
+  /** Optional floating menu or popover anchored to the leading accessories */
+  leadingMenu?: React.ReactNode;
+
   /** Buttons shown to the right (or bottom) of the drag indicator */
   trailingAccessories?: SplitAccessory[];
+
+  /** Optional floating menu or popover anchored to the trailing accessories */
+  trailingMenu?: React.ReactNode;
 
   /** Custom center content that unifies accessories and handle (e.g. merged scrubber & collapse notch) */
   centerContent?: React.ReactNode;
@@ -78,6 +84,11 @@ const AccessoryItem: React.FC<{ accessory: SplitAccessory }> = ({ accessory }) =
     <button
       type="button"
       onClick={accessory.action}
+      onContextMenu={accessory.onContextMenu}
+      onDoubleClick={accessory.onDoubleClick}
+      onPointerDown={accessory.onPointerDown}
+      onPointerUp={accessory.onPointerUp}
+      onPointerLeave={accessory.onPointerLeave}
       title={accessory.title}
       className={
         isIconOnly
@@ -117,7 +128,9 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
   title,
   className = '',
   leadingAccessories,
+  leadingMenu,
   trailingAccessories,
+  trailingMenu,
   centerContent,
   isBusy = false,
   isSuccess = false,
@@ -190,7 +203,7 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
     >
       {/* LEADING ACCESSORIES (Left / Top) */}
       <div
-        className={`flex items-center shrink-0 z-30 ${
+        className={`flex items-center shrink-0 z-30 relative ${
           isHorizontal ? 'gap-1' : 'flex-col gap-1'
         }`}
         onPointerDown={(e) => e.stopPropagation()}
@@ -198,6 +211,7 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
         {resolvedLeading?.map((accessory) => (
           <AccessoryItem key={accessory.id} accessory={accessory} />
         ))}
+        {leadingMenu}
       </div>
 
       {/* CENTER TACTILE DRAG NOTCH & COMBINED SHOW/HIDE HANDLE OR UNIFIED CENTER CONTENT */}
@@ -263,6 +277,7 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
         {resolvedTrailing?.map((accessory) => (
           <AccessoryItem key={accessory.id} accessory={accessory} />
         ))}
+        {trailingMenu}
 
         {/* Backwards compatible presets slot */}
         {presets && <div className="hidden sm:flex items-center">{presets}</div>}

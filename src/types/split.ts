@@ -119,10 +119,15 @@ export interface SplitAccessory {
   label?: React.ReactNode;
   badge?: React.ReactNode;
   shortcut?: string;
-  action: () => void;
+  action: (e?: React.MouseEvent) => void;
   color?: string;
   active?: boolean;
   customContent?: React.ReactNode;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
+  onPointerDown?: (e: React.PointerEvent) => void;
+  onPointerUp?: (e: React.PointerEvent) => void;
+  onPointerLeave?: (e: React.PointerEvent) => void;
 }
 
 /**
@@ -196,7 +201,7 @@ export type PresetType = 'balanced' | 'focusStage' | 'focusExplorer';
 
 export type PanelId = 'stage' | 'composer' | 'explorer';
 
-export type WordFilterMode = 'safe' | 'all' | 'closers' | 'pairs' | 'common' | 'long';
+export type WordFilterMode = 'safe' | 'all' | 'closers' | 'pairs' | 'common' | 'long' | 'top' | 'rare';
 
 export interface PanelConfig {
   id: PanelId;

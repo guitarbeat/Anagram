@@ -130,14 +130,6 @@ export function buildCandidates(
     // Only run isSpicy on words that pass mask and letter count checks
     if (!allowSpicy && isSpicy(w)) continue;
 
-    // Drop obscure proper names (freq > 50 per million, ~2500 count in 51M corpus)
-    if (!customSet.has(w) && (FREQ.get(w) || 0) < 2500) {
-      const doc = nlp(w);
-      if (doc.has('#Person') && !doc.has('#Noun') && !doc.has('#Verb') && !doc.has('#Adjective')) {
-        continue;
-      }
-    }
-
     const cnt = new Uint8Array(26);
     for (let c = 0; c < 26; c++) {
       cnt[c] = LETTER_COUNTS[offset + c];

@@ -137,7 +137,7 @@ export function computeMultisetDelta(sourceText: string, targetText: string): Mu
  * Searches the lexicon for single words whose character multiset EXACTLY matches
  * the leftover remaining letters. These are 1-click 100% completion words.
  */
-export function findExactClosers(remainingLetters: string[], limit = 30): string[] {
+export function findExactClosers(remainingLetters: string[], limit = 150): string[] {
   if (remainingLetters.length === 0) return [];
   const clean = remainingLetters.join('');
   const targetLen = clean.length;
@@ -176,7 +176,7 @@ export function findExactClosers(remainingLetters: string[], limit = 30): string
 /**
  * Computes all dictionary candidate sub-words that can be formed from the given letter pool
  */
-export function findCandidateWords(letterPool: string, limit = 1200): CandidateWordItem[] {
+export function findCandidateWords(letterPool: string, limit = 5000): CandidateWordItem[] {
   const clean = normalizeLetters(letterPool);
   if (!clean) return [];
 

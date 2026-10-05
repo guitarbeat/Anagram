@@ -12,6 +12,8 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { AnagramResult, SolveMetrics, POS } from './engine/types';
+import type { FrequencyTier } from './engine/lexicon';
+import { getFrequencyTier } from './engine/lexicon';
 import type { SplitDetent, WordFilterMode } from './types/split';
 import { SplitDetents } from './types/split';
 import { NameAnagramStage } from './components/NameAnagramStage';
@@ -97,6 +99,7 @@ export function App() {
 
   const [selectedLengthFilter, setSelectedLengthFilter] = useState<number[] | null>(null);
   const [selectedPosFilter, setSelectedPosFilter] = useState<POS | 'all' | null>(null);
+  const [selectedFreqFilter, setSelectedFreqFilter] = useState<FrequencyTier | 'all' | null>(null);
 
   // Reactive multiset delta & construction state (Source \ Target)
   const {
@@ -158,29 +161,59 @@ export function App() {
   const [showGraphPanel, setShowGraphPanel] = useState<boolean>(true);
   const [showInspectorPanel, setShowInspectorPanel] = useState<boolean>(true);
 
-  // 3-Way Explorer View Mode: Graph (One view) -> Inspector (Two views) -> Both (Together)
-  const explorerViewMode = useMemo<'both' | 'graph' | 'inspector'>(() => {
-    if (showGraphPanel && showInspectorPanel) return 'both';
-    if (showGraphPanel) return 'graph';
-    return 'inspector';
-  }, [showGraphPanel, showInspectorPanel]);
+  // 6-Way Explorer View Mode: Both -> Graph -> Inspector -> Blocks -> Pebbles -> Solutions
+  const [explorerViewMode, setExplorerViewMode] = useState<
+    'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions'
+  >('both');
+
+  const ALL_EXPLORER_VIEWS = useMemo(
+    () => ['both', 'graph', 'inspector', 'blocks', 'pebbles', 'solutions'] as const,
+    []
+  );
 
   const handleCycleExplorerView = useCallback(() => {
     haptics.light();
-    if (showGraphPanel && showInspectorPanel) {
-      // Both -> Graph only (One view)
-      setShowGraphPanel(true);
-      setShowInspectorPanel(false);
-    } else if (showGraphPanel && !showInspectorPanel) {
-      // Graph -> Inspector only (Second view)
-      setShowGraphPanel(false);
-      setShowInspectorPanel(true);
-    } else {
-      // Inspector -> Both together
-      setShowGraphPanel(true);
-      setShowInspectorPanel(true);
-    }
-  }, [showGraphPanel, showInspectorPanel, haptics]);
+    setExplorerViewMode((prev) => {
+      const idx = ALL_EXPLORER_VIEWS.indexOf(prev);
+      const nextIdx = (idx + 1) % ALL_EXPLORER_VIEWS.length;
+      const nextMode = ALL_EXPLORER_VIEWS[nextIdx];
+      if (nextMode === 'both') {
+        setShowGraphPanel(true);
+        setShowInspectorPanel(true);
+      } else if (nextMode === 'graph') {
+        setShowGraphPanel(true);
+        setShowInspectorPanel(false);
+      } else if (nextMode === 'inspector') {
+        setShowGraphPanel(false);
+        setShowInspectorPanel(true);
+      } else {
+        setShowGraphPanel(false);
+        setShowInspectorPanel(false);
+      }
+      return nextMode;
+    });
+  }, [ALL_EXPLORER_VIEWS, haptics]);
+
+  const handleSelectExplorerView = useCallback(
+    (view: 'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions') => {
+      haptics.snap();
+      setExplorerViewMode(view);
+      if (view === 'both') {
+        setShowGraphPanel(true);
+        setShowInspectorPanel(true);
+      } else if (view === 'graph') {
+        setShowGraphPanel(true);
+        setShowInspectorPanel(false);
+      } else if (view === 'inspector') {
+        setShowGraphPanel(false);
+        setShowInspectorPanel(true);
+      } else {
+        setShowGraphPanel(false);
+        setShowInspectorPanel(false);
+      }
+    },
+    [haptics]
+  );
 
   const handleToggleGraphPanel = useCallback(() => {
     handleCycleExplorerView();
@@ -214,14 +247,13 @@ export function App() {
   const [wordFilterMode, setWordFilterMode] = useState<WordFilterMode>('safe');
 
   const availableModes = useMemo((): WordFilterMode[] => {
-    const list: WordFilterMode[] = ['safe', 'all'];
+    const list: WordFilterMode[] = ['safe', 'all', 'top', 'common', 'rare'];
     if (exactClosers && exactClosers.length > 0) {
       list.push('closers');
     }
     if (finisherPairs && finisherPairs.length > 0) {
       list.push('pairs');
     }
-    list.push('common');
     list.push('long');
     return list;
   }, [exactClosers, finisherPairs]);
@@ -240,6 +272,16 @@ export function App() {
       return nextMode;
     });
   }, [availableModes, haptics]);
+
+  const handleSelectWordFilterMode = useCallback((mode: WordFilterMode) => {
+    haptics.snap();
+    setWordFilterMode(mode);
+    if (mode === 'all') {
+      setAvoidDeadEnds(false);
+    } else {
+      setAvoidDeadEnds(true);
+    }
+  }, [haptics]);
 
   // Global Keyboard Navigation Shortcuts (Space, R, 1, 2, 3, G, I, S, Esc)
   useEffect(() => {
@@ -292,6 +334,11 @@ export function App() {
   ]);
 
   const effectiveCandidateWords = useMemo(() => {
+    // 1. Explicit frequency tier filter (from frequency treemap click)
+    if (selectedFreqFilter && selectedFreqFilter !== 'all') {
+      const filtered = candidateWords.filter(w => getFrequencyTier(w.freq) === selectedFreqFilter);
+      return filtered.length > 0 ? filtered : candidateWords;
+    }
     if (wordFilterMode === 'closers' && exactClosers && exactClosers.length > 0) {
       const closerSet = new Set(exactClosers.map(c => c.toLowerCase()));
       const filtered = candidateWords.filter(w => closerSet.has(w.word.toLowerCase()));
@@ -306,8 +353,16 @@ export function App() {
       const filtered = candidateWords.filter(w => pairSet.has(w.word.toLowerCase()));
       return filtered.length > 0 ? filtered : candidateWords;
     }
+    if (wordFilterMode === 'top') {
+      const filtered = candidateWords.filter(w => (w.freq || 0) >= 1000);
+      return filtered.length > 0 ? filtered : candidateWords;
+    }
     if (wordFilterMode === 'common') {
-      const filtered = candidateWords.filter(w => (w.freq || 0) >= 0.55);
+      const filtered = candidateWords.filter(w => (w.freq || 0) >= 100);
+      return filtered.length > 0 ? filtered : candidateWords;
+    }
+    if (wordFilterMode === 'rare') {
+      const filtered = candidateWords.filter(w => (w.freq || 0) < 10);
       return filtered.length > 0 ? filtered : candidateWords;
     }
     if (wordFilterMode === 'long') {
@@ -315,10 +370,12 @@ export function App() {
       return filtered.length > 0 ? filtered : candidateWords;
     }
     return candidateWords;
-  }, [wordFilterMode, exactClosers, finisherPairs, candidateWords]);
+  }, [wordFilterMode, selectedFreqFilter, exactClosers, finisherPairs, candidateWords]);
 
   const countsByMode = useMemo(() => {
-    const commonCount = candidateWords.filter(w => (w.freq || 0) >= 0.55 && (avoidDeadEnds ? w.isSolvable !== false : true)).length;
+    const topCount = candidateWords.filter(w => (w.freq || 0) >= 1000 && (avoidDeadEnds ? w.isSolvable !== false : true)).length;
+    const commonCount = candidateWords.filter(w => (w.freq || 0) >= 100 && (avoidDeadEnds ? w.isSolvable !== false : true)).length;
+    const rareCount = candidateWords.filter(w => (w.freq || 0) < 10 && (avoidDeadEnds ? w.isSolvable !== false : true)).length;
     const longCount = candidateWords.filter(w => w.length >= 5 && (avoidDeadEnds ? w.isSolvable !== false : true)).length;
     const pairWordSet = new Set<string>();
     if (finisherPairs) {
@@ -330,9 +387,11 @@ export function App() {
     return {
       safe: solvableWordsCount || candidateWords.length,
       all: candidateWords.length,
+      top: topCount,
+      common: commonCount,
+      rare: rareCount,
       closers: exactClosers?.length || 0,
       pairs: pairWordSet.size || finisherPairs?.length || 0,
-      common: commonCount,
       long: longCount,
     };
   }, [candidateWords, solvableWordsCount, exactClosers, finisherPairs, avoidDeadEnds]);
@@ -406,9 +465,11 @@ export function App() {
         solvableWordsCount={solvableWordsCount}
         wordFilterMode={wordFilterMode}
         onCycleWordFilter={handleCycleWordFilter}
+        onSelectWordFilterMode={handleSelectWordFilterMode}
         countsByMode={countsByMode}
         explorerViewMode={explorerViewMode}
         onCycleExplorerView={handleCycleExplorerView}
+        onSelectExplorerView={handleSelectExplorerView}
         showGraphPanel={showGraphPanel}
         onToggleGraphPanel={handleToggleGraphPanel}
         showInspectorPanel={showInspectorPanel}
@@ -490,6 +551,9 @@ export function App() {
               onClearLengthFilter={() => setSelectedLengthFilter(null)}
               selectedPosFilter={selectedPosFilter}
               onSelectPosFilter={setSelectedPosFilter}
+              selectedFreqFilter={selectedFreqFilter}
+              onSelectFreqFilter={setSelectedFreqFilter}
+              onClearFreqFilter={() => setSelectedFreqFilter(null)}
               histogramData={histogramData}
               onAddWordToTarget={handleAddWordToTarget}
               onSetWordAsTarget={handleSetWordAsTarget}
@@ -507,6 +571,7 @@ export function App() {
               onAvoidDeadEndsChange={setAvoidDeadEnds}
               showGraphPanel={showGraphPanel}
               showInspectorPanel={showInspectorPanel}
+              explorerViewMode={explorerViewMode}
               wordFilterMode={wordFilterMode}
               countsByMode={countsByMode}
               onCycleWordFilter={handleCycleWordFilter}
