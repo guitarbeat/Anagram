@@ -41,7 +41,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       return (
         <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] flex items-center justify-center p-6 font-sans">
           <div className="max-w-md w-full bg-[#121214] border border-[#27272a] rounded-2xl p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 mx-auto flex items-center justify-center text-xl font-mono font-bold">
+            <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 text-white mx-auto flex items-center justify-center text-xl font-mono font-bold">
               !
             </div>
             <div>
@@ -52,7 +52,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             </div>
             {this.state.error && (
               <div className="bg-[#09090b] border border-[#27272a] rounded-lg p-3 text-left overflow-x-auto max-h-32">
-                <p className="text-[11px] font-mono text-red-400 break-words">
+                <p className="text-[11px] font-mono text-zinc-300 break-words">
                   {this.state.error.message}
                 </p>
               </div>
@@ -60,7 +60,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             <button
               type="button"
               onClick={this.handleReset}
-              className="w-full py-2.5 px-4 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-medium tracking-wide transition-colors cursor-pointer shadow-md"
+              className="w-full py-2.5 px-4 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-medium tracking-wide transition-colors cursor-pointer shadow-md"
             >
               Reload Application
             </button>

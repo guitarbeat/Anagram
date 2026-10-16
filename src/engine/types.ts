@@ -45,6 +45,8 @@ export interface CandidateWordItem {
   isSolvable?: boolean;
   isExactCloser?: boolean;
   completionSample?: string[];
+  isTLD?: boolean;
+  isCustom?: boolean;
 }
 
 export interface HistogramBin {

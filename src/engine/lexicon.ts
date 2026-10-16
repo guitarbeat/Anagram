@@ -90,7 +90,10 @@ export const EVERYDAY_2_LETTER_WORDS = new Set<string>([
   'am', 'an', 'as', 'at', 'be', 'by', 'do', 'go', 'he', 'if', 'in', 'is', 'it',
   'me', 'my', 'no', 'of', 'on', 'or', 'so', 'to', 'up', 'us', 'we',
   'ox', 'ok', 'ax', 'ex', 'id', 'ad', 'hi', 'ah', 'oh', 'eh', 'pi',
+  'st', 'er', 're', 'es', 'aw', 'mm', 'ka', 'pa', 'el',
 ]);
+
+import { GLOBAL_TLDS, isTLD } from './tlds';
 
 export const COMMON_FUNCTION_WORDS = new Set<string>([
   'a', 'i',
@@ -99,49 +102,122 @@ export const COMMON_FUNCTION_WORDS = new Set<string>([
   'the', 'and', 'for', 'but', 'nor', 'yet',
 ]);
 
-// Full English Lexicon without hardcoded frequency cuts (~272,000 real words)
-const validWords: string[] = [];
-const wordsSet = new Set<string>();
+const CUSTOM_WORDS_STORAGE_KEY = 'anagram_custom_words';
 
-for (let i = 0; i < rawWords.length; i++) {
-  const w = rawWords[i].toLowerCase();
-  if (!/^[a-z]+$/.test(w)) continue;
-  if (w.length > 16) continue;
-  if (w.length === 1 && w !== 'a' && w !== 'i') continue;
-  if (w.length === 2 && !EVERYDAY_2_LETTER_WORDS.has(w)) continue;
-  if (!wordsSet.has(w)) {
-    wordsSet.add(w);
-    validWords.push(w);
+export function getStoredCustomWords(): string[] {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_WORDS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.map((w) => String(w).toLowerCase().trim()).filter((w) => /^[a-z]{2,16}$/.test(w))
+      : [];
+  } catch {
+    return [];
   }
 }
 
-// Ensure all recognized everyday 2-letter words (such as 'ok') are included
-for (const w of EVERYDAY_2_LETTER_WORDS) {
-  if (!wordsSet.has(w)) {
-    wordsSet.add(w);
-    validWords.push(w);
+export function saveStoredCustomWords(words: string[]): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const clean = Array.from(
+      new Set(words.map((w) => String(w).toLowerCase().trim()).filter((w) => /^[a-z]{2,16}$/.test(w)))
+    );
+    localStorage.setItem(CUSTOM_WORDS_STORAGE_KEY, JSON.stringify(clean));
+  } catch {
+    // ignore
   }
 }
 
-export const WORDS: readonly string[] = validWords;
+export const CUSTOM_WORDS_SET = new Set<string>();
 
-// Precompute flat Uint8Array letter-count buffer (WORDS.length * 26) and 26-bit masks
-export const LETTER_COUNTS = new Uint8Array(WORDS.length * 26);
-export const LETTER_MASKS = new Uint32Array(WORDS.length);
+export function isCustomWord(word: string): boolean {
+  if (!word) return false;
+  return CUSTOM_WORDS_SET.has(word.toLowerCase());
+}
 
-for (let i = 0; i < WORDS.length; i++) {
-  const w = WORDS[i];
-  let mask = 0;
-  const offset = i * 26;
-  for (let j = 0; j < w.length; j++) {
-    const code = w.charCodeAt(j) - 97;
-    if (code >= 0 && code < 26) {
-      LETTER_COUNTS[offset + code]++;
-      mask |= 1 << code;
+export { isTLD };
+
+// Full Lexicon with English words, 2-letter words, Global ccTLDs/gTLDs, and Custom Words
+export let WORDS: string[] = [];
+export let LETTER_COUNTS: Uint8Array = new Uint8Array(0);
+export let LETTER_MASKS: Uint32Array = new Uint32Array(0);
+
+export function rebuildLexicon(customWordsList?: string[]): string[] {
+  const customList = customWordsList !== undefined ? customWordsList : getStoredCustomWords();
+  CUSTOM_WORDS_SET.clear();
+  for (const cw of customList) {
+    const clean = cw.toLowerCase().trim();
+    if (/^[a-z]{2,16}$/.test(clean)) {
+      CUSTOM_WORDS_SET.add(clean);
     }
   }
-  LETTER_MASKS[i] = mask;
+
+  const wordsSet = new Set<string>();
+  const list: string[] = [];
+
+  // 1. Raw English words (~272,000 words)
+  for (let i = 0; i < rawWords.length; i++) {
+    const w = rawWords[i].toLowerCase();
+    if (!/^[a-z]+$/.test(w)) continue;
+    if (w.length > 16) continue;
+    if (w.length === 1 && w !== 'a' && w !== 'i') continue;
+    if (w.length === 2 && !EVERYDAY_2_LETTER_WORDS.has(w)) continue;
+    if (!wordsSet.has(w)) {
+      wordsSet.add(w);
+      list.push(w);
+    }
+  }
+
+  // 2. Everyday 2-letter words
+  for (const w of EVERYDAY_2_LETTER_WORDS) {
+    if (!wordsSet.has(w)) {
+      wordsSet.add(w);
+      list.push(w);
+    }
+  }
+
+  // 3. Global ccTLDs and gTLDs (all ~1,200 country codes and domains)
+  for (const tld of GLOBAL_TLDS) {
+    const w = tld.toLowerCase();
+    if (/^[a-z]{2,16}$/.test(w) && !wordsSet.has(w)) {
+      wordsSet.add(w);
+      list.push(w);
+    }
+  }
+
+  // 4. User Custom Words
+  for (const cw of CUSTOM_WORDS_SET) {
+    if (!wordsSet.has(cw)) {
+      wordsSet.add(cw);
+      list.push(cw);
+    }
+  }
+
+  WORDS = list;
+  LETTER_COUNTS = new Uint8Array(WORDS.length * 26);
+  LETTER_MASKS = new Uint32Array(WORDS.length);
+
+  for (let i = 0; i < WORDS.length; i++) {
+    const w = WORDS[i];
+    let mask = 0;
+    const offset = i * 26;
+    for (let j = 0; j < w.length; j++) {
+      const code = w.charCodeAt(j) - 97;
+      if (code >= 0 && code < 26) {
+        LETTER_COUNTS[offset + code]++;
+        mask |= 1 << code;
+      }
+    }
+    LETTER_MASKS[i] = mask;
+  }
+
+  return WORDS;
 }
+
+// Initial bootstrap
+rebuildLexicon();
 
 // Obscenity profanity matcher
 const obscenityMatcher = new RegExpMatcher({

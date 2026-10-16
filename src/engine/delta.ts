@@ -1,4 +1,4 @@
-import { WORDS, LETTER_COUNTS, LETTER_MASKS, FREQ } from './lexicon';
+import { WORDS, LETTER_COUNTS, LETTER_MASKS, FREQ, isTLD, isCustomWord } from './lexicon';
 import type {
   CandidateWordItem,
   HistogramBin,
@@ -204,6 +204,8 @@ export function findCandidateWords(letterPool: string, limit = 5000): CandidateW
         word,
         length: word.length,
         freq: FREQ.get(word) || 1,
+        isTLD: isTLD(word),
+        isCustom: isCustomWord(word),
       });
     }
   }

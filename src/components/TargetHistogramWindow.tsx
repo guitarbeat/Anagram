@@ -62,18 +62,18 @@ const EditableBox: React.FC<EditableBoxProps> = ({ value, onChange, placeholder,
           const text = e.currentTarget.innerText.replace(/\n/g, ' ');
           onChange(text);
         }}
-        className={`w-full text-center bg-transparent text-zinc-900 font-black uppercase tracking-widest outline-none select-text break-words cursor-text py-1 px-3 max-h-full overflow-y-auto no-scrollbar unified-app-text transition-all duration-300 ${
+        className={`w-full text-center bg-transparent text-zinc-900 font-black uppercase tracking-widest outline-none select-text break-words cursor-text py-0.5 px-1.5 sm:px-3 max-h-full overflow-y-auto no-scrollbar unified-app-text transition-all duration-300 ${
           isHero
-            ? 'text-4xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl'
-            : 'text-base sm:text-base md:text-lg font-extrabold tracking-wider'
+            ? 'text-2xl sm:text-5xl md:text-7xl lg:text-8xl'
+            : 'text-xs sm:text-sm md:text-base font-extrabold tracking-wider'
         }`}
       />
       {!value && (
         <span
-          className={`absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-300 font-black uppercase tracking-widest text-center px-4 sm:px-6 select-none unified-app-text transition-all duration-300 ${
+          className={`absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-300 font-black uppercase tracking-widest text-center px-2 sm:px-6 select-none unified-app-text transition-all duration-300 ${
             isHero
-              ? 'text-3xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl'
-              : 'text-xs sm:text-sm font-extrabold tracking-wider'
+              ? 'text-xl sm:text-4xl md:text-6xl lg:text-7xl'
+              : 'text-[11px] sm:text-xs md:text-sm font-extrabold tracking-wider'
           }`}
         >
           {placeholder}
@@ -280,12 +280,12 @@ const TargetPhraseBox: React.FC<TargetPhraseBoxProps> = ({
               onToggleEditing(false);
             }
           }}
-          className="w-full text-center bg-transparent text-zinc-900 font-black uppercase tracking-widest outline-none select-text break-words cursor-text py-1 px-3 max-h-full overflow-y-auto no-scrollbar unified-app-text transition-all duration-300 text-base sm:text-base md:text-lg font-extrabold tracking-wider"
+          className="w-full text-center bg-transparent text-zinc-900 font-black uppercase tracking-widest outline-none select-text break-words cursor-text py-0.5 px-1.5 sm:px-3 max-h-full overflow-y-auto no-scrollbar unified-app-text transition-all duration-300 text-xs sm:text-sm md:text-base font-extrabold tracking-wider"
         />
       ) : (
         <div
           onDoubleClick={() => onToggleEditing(true)}
-          className="w-full h-full flex flex-wrap items-center justify-center content-center gap-x-1 sm:gap-x-1.5 gap-y-1.5 px-2 sm:px-4 max-h-full overflow-y-auto no-scrollbar py-1"
+          className="w-full h-full flex flex-wrap items-center justify-center content-center gap-x-1 sm:gap-x-1.5 gap-y-1 px-1 sm:px-4 max-h-full overflow-y-auto no-scrollbar py-0.5"
         >
           <AnimatePresence mode="popLayout" initial={false}>
             {tokens.flatMap((token, index) => {
@@ -347,7 +347,7 @@ const TargetPhraseBox: React.FC<TargetPhraseBoxProps> = ({
                       ? `"${token.text}" · Click to swap, drag to reorder (Double-click to edit)`
                       : 'Double-click to edit text'
                   }
-                  className="px-2.5 py-1 rounded-lg text-zinc-900 font-black uppercase tracking-widest cursor-grab active:cursor-grabbing hover:bg-zinc-100 hover:shadow-2xs active:bg-zinc-200 transition-colors select-none text-base sm:text-base md:text-lg font-extrabold unified-app-text"
+                  className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-zinc-900 font-black uppercase tracking-widest cursor-grab active:cursor-grabbing hover:bg-zinc-100 hover:shadow-2xs active:bg-zinc-200 transition-colors select-none text-xs sm:text-sm md:text-base font-extrabold unified-app-text"
                 >
                   {token.text}
                 </motion.div>
@@ -387,9 +387,9 @@ const TargetPhraseBox: React.FC<TargetPhraseBoxProps> = ({
                       rotate: { type: 'spring', stiffness: 400, damping: 20 },
                     }}
                     title={`Swap "${token.text}" and "${tokens[index + 1]?.text}"`}
-                    className="p-1 rounded-full text-zinc-300 hover:text-zinc-900 hover:bg-zinc-100 transition-all cursor-pointer select-none shrink-0"
+                    className="p-0.5 sm:p-1 rounded-full text-zinc-300 hover:text-zinc-900 hover:bg-zinc-100 transition-all cursor-pointer select-none shrink-0"
                   >
-                    <ArrowLeftRight className="w-3.5 h-3.5" />
+                    <ArrowLeftRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   </motion.button>
                 );
               }
@@ -511,7 +511,7 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
               isCardDragOver
                 ? 'border-black ring-2 ring-black bg-zinc-50 border-dashed scale-[1.01]'
                 : cardPulse
-                ? 'border-emerald-500 ring-2 ring-emerald-500/30 scale-[1.008] shadow-md'
+                ? 'border-black ring-2 ring-black scale-[1.008] shadow-md'
                 : 'border-black'
             }`}
           >
@@ -543,7 +543,7 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
                     title={isEditingTarget ? 'Done editing' : 'Edit phrase text'}
                     className={`p-1 rounded-full cursor-pointer transition-all duration-150 ${
                       isEditingTarget
-                        ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
+                        ? 'text-black bg-zinc-200 hover:bg-zinc-300'
                         : 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 opacity-60 group-hover:opacity-100 focus:opacity-100'
                     }`}
                   >

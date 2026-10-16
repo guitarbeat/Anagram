@@ -22,6 +22,7 @@ import {
   Zap,
   Check,
   Layers,
+  Globe,
 } from 'lucide-react';
 import { triggerHaptic } from '../hooks/useHaptics';
 import { SplitDivider } from './SplitDivider';
@@ -46,10 +47,18 @@ const MODE_CONFIGS: Record<WordFilterMode, ModeConfig> = {
   safe: {
     label: 'Solvable Words',
     sublabel: 'No dead ends',
-    icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />,
-    color: 'text-emerald-400',
-    dotColor: 'bg-emerald-400',
+    icon: <ShieldCheck className="w-3.5 h-3.5 text-white" />,
+    color: 'text-white',
+    dotColor: 'bg-white',
     getDescription: (count) => `Solvable Words (${count}): Words you can win with. Click to cycle, right-click for menu.`,
+  },
+  domains: {
+    label: 'Domains & TLDs',
+    sublabel: 'Global extensions',
+    icon: <Globe className="w-3.5 h-3.5 text-white" />,
+    color: 'text-white',
+    dotColor: 'bg-white',
+    getDescription: (count) => `Domains & TLDs (${count}): Global ccTLDs and web extensions. Click to cycle.`,
   },
   all: {
     label: 'All Words',
@@ -62,49 +71,49 @@ const MODE_CONFIGS: Record<WordFilterMode, ModeConfig> = {
   closers: {
     label: '1-Word Solutions',
     sublabel: 'Instant wins',
-    icon: <Sparkles className="w-3.5 h-3.5 text-amber-400" />,
-    color: 'text-amber-400',
-    dotColor: 'bg-amber-400',
+    icon: <Sparkles className="w-3.5 h-3.5 text-white" />,
+    color: 'text-white',
+    dotColor: 'bg-white',
     getDescription: (count) => `1-Word Solutions (${count}): Words that finish the puzzle right now. Click to cycle, right-click for menu.`,
   },
   pairs: {
     label: '2-Word Solutions',
     sublabel: 'Two-word finishes',
-    icon: <Link2 className="w-3.5 h-3.5 text-cyan-400" />,
-    color: 'text-cyan-400',
-    dotColor: 'bg-cyan-400',
+    icon: <Link2 className="w-3.5 h-3.5 text-zinc-200" />,
+    color: 'text-zinc-200',
+    dotColor: 'bg-zinc-300',
     getDescription: (count) => `2-Word Solutions (${count}): Word pairs that finish the puzzle. Click to cycle, right-click for menu.`,
   },
   common: {
     label: 'Common Words',
     sublabel: 'Everyday English',
-    icon: <Star className="w-3.5 h-3.5 text-yellow-400" />,
-    color: 'text-yellow-400',
-    dotColor: 'bg-yellow-400',
+    icon: <Star className="w-3.5 h-3.5 text-zinc-200" />,
+    color: 'text-zinc-200',
+    dotColor: 'bg-zinc-300',
     getDescription: (count) => `Common Words (${count}): Familiar everyday words. Click to cycle, right-click for menu.`,
   },
   long: {
     label: 'Long Words',
     sublabel: '5+ letters',
-    icon: <Zap className="w-3.5 h-3.5 text-purple-400" />,
-    color: 'text-purple-400',
-    dotColor: 'bg-purple-400',
+    icon: <Zap className="w-3.5 h-3.5 text-zinc-200" />,
+    color: 'text-zinc-200',
+    dotColor: 'bg-zinc-300',
     getDescription: (count) => `Long Words (${count}): Words with 5 or more letters. Click to cycle, right-click for menu.`,
   },
   top: {
     label: 'Top Everyday',
     sublabel: 'Most frequent',
-    icon: <Star className="w-3.5 h-3.5 text-emerald-400" />,
-    color: 'text-emerald-400',
-    dotColor: 'bg-emerald-400',
+    icon: <Star className="w-3.5 h-3.5 text-white" />,
+    color: 'text-white',
+    dotColor: 'bg-white',
     getDescription: (count) => `Top Everyday Words (${count}): High-frequency spoken vocabulary. Click to cycle, right-click for menu.`,
   },
   rare: {
     label: 'Rare & Literary',
     sublabel: 'Specialized words',
-    icon: <Sparkles className="w-3.5 h-3.5 text-purple-400" />,
-    color: 'text-purple-400',
-    dotColor: 'bg-purple-400',
+    icon: <Sparkles className="w-3.5 h-3.5 text-zinc-300" />,
+    color: 'text-zinc-300',
+    dotColor: 'bg-zinc-400',
     getDescription: (count) => `Rare & Literary Words (${count}): Less common or poetic words. Click to cycle, right-click for menu.`,
   },
 };
@@ -128,6 +137,7 @@ export interface ThreePaneSplitProps {
   isStagePlaying?: boolean;
   onToggleStagePlay?: () => void;
   onResetStage?: () => void;
+  onExportStageVideo?: () => void;
   solveProgressPercent?: number;
   placedLetterCount?: number;
   sourceLetterCount?: number;
@@ -187,6 +197,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   isStagePlaying = false,
   onToggleStagePlay,
   onResetStage,
+  onExportStageVideo,
   solveProgressPercent = 0,
   placedLetterCount = 0,
   sourceLetterCount = 0,
@@ -275,23 +286,22 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   const divider1CenterContent =
     hasStage && progressBus ? (
       <div
-        className="flex items-center justify-center gap-2 sm:gap-3 h-full select-none"
+        className="flex items-center justify-center gap-1 sm:gap-2.5 h-full select-none max-w-full px-0.5"
         onPointerDown={(e) => {
           // Allow interactive elements to stopPropagation, while non-interactive parts permit divider dragging
         }}
       >
         {/* Transport controls */}
-        <div className="flex items-center gap-0.5" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-0.5 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
           {onToggleStagePlay && (
             <button
               type="button"
               onClick={onToggleStagePlay}
               aria-label={isStagePlaying ? 'Pause animation' : 'Play animation'}
-              title={isStagePlaying ? 'Pause Animation (Space)' : 'Play Animation (Space)'}
-              className="h-5 w-5 flex items-center justify-center rounded text-zinc-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer active:scale-90"
+              className="h-4.5 w-4.5 sm:h-5 sm:w-5 flex items-center justify-center rounded text-zinc-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer active:scale-90"
             >
               {isStagePlaying ? (
-                <Pause className="w-3 h-3 fill-current text-emerald-400" />
+                <Pause className="w-3 h-3 fill-current text-white" />
               ) : (
                 <Play className="w-3 h-3 fill-current text-white ml-0.5" />
               )}
@@ -302,9 +312,8 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             <button
               type="button"
               onClick={onResetStage}
-              aria-label="Reset animation"
-              title="Rewind Letter Tiles to Start (Key R)"
-              className="h-5 w-5 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer active:scale-90"
+              aria-label="Rewind letter tiles"
+              className="h-4.5 w-4.5 sm:h-5 sm:w-5 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer active:scale-90"
             >
               <RotateCcw className="w-3 h-3" />
             </button>
@@ -313,7 +322,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
 
         {/* Center: Integrated Bar Scrubber with Visible Track and Glowing Thumb */}
         <div
-          className="flex items-center gap-2 w-36 sm:w-56 md:w-72 lg:w-80 group/slider"
+          className="flex items-center gap-1 w-20 sm:w-44 md:w-60 lg:w-72 shrink max-w-[280px] group/slider"
           onPointerDown={(e) => e.stopPropagation()}
         >
           <div className="relative w-full h-1 sm:h-1.5 bg-zinc-800/90 hover:bg-zinc-700/80 rounded-full flex items-center cursor-ew-resize">
@@ -344,7 +353,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           </div>
         </div>
 
-        {/* Merged Percentage & Minimize Button (Replaces disjointed pipe and duplicate notch) */}
+        {/* Merged Percentage & Minimize Button */}
         <button
           type="button"
           onClick={(e) => {
@@ -352,21 +361,37 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             toggleMinimizeCard1();
           }}
           onPointerDown={(e) => e.stopPropagation()}
-          title={
-            isCard1Minimized
-              ? 'Expand stage'
-              : 'Minimize stage'
-          }
-          className="flex items-center justify-center py-0.5 px-1.5 h-4 sm:h-4.5 rounded-full text-zinc-400 hover:text-white bg-zinc-800/60 hover:bg-zinc-700/80 border border-zinc-700/40 hover:border-zinc-500/60 cursor-pointer select-none group/notch active:scale-95 transition-all shadow-xs shrink-0"
+          aria-label={isCard1Minimized ? 'Expand stage' : 'Minimize stage'}
+          className="flex items-center justify-center py-0.5 px-1 sm:px-1.5 h-4 sm:h-4.5 rounded-full text-zinc-400 hover:text-white bg-zinc-800/60 hover:bg-zinc-700/80 border border-zinc-700/40 hover:border-zinc-500/60 cursor-pointer select-none group/notch active:scale-95 transition-all shadow-xs shrink-0"
         >
           <span
-            className={`text-[9.5px] font-mono font-medium tabular-nums transition-colors ${
+            className={`text-[9px] sm:text-[9.5px] font-mono font-medium tabular-nums transition-colors ${
               activeDrag === 1 ? 'text-white font-bold' : ''
             }`}
           >
             {Math.round(stageProgress * 100)}%
           </span>
         </button>
+
+        {/* Tactile drag-handle indicator notch on Divider 1 */}
+        <div
+          aria-label="Drag edge to resize panels"
+          data-drag-handle="split-divider-notch"
+          style={{ touchAction: 'none' }}
+          className="flex items-center justify-center py-0.5 px-0.5 cursor-row-resize touch-none select-none group/divider-handle shrink-0"
+        >
+          <div
+            className={`rounded-full transition-all duration-200 flex items-center justify-center gap-0.5 sm:gap-1 border ${
+              activeDrag === 1
+                ? 'w-10 sm:w-14 h-2 bg-white border-white shadow-[0_0_12px_rgba(255,255,255,0.9)] scale-105'
+                : 'w-6 sm:w-8 h-1.5 bg-zinc-800 hover:bg-zinc-700 border-zinc-700 hover:border-zinc-500 group-hover/divider-handle:w-10 group-hover/divider-handle:bg-zinc-600'
+            }`}
+          >
+            <span className={`w-0.5 sm:w-1 h-0.5 sm:h-1 rounded-full transition-colors ${activeDrag === 1 ? 'bg-black' : 'bg-zinc-400 group-hover/divider-handle:bg-white'}`} />
+            <span className={`w-0.5 sm:w-1 h-0.5 sm:h-1 rounded-full transition-colors ${activeDrag === 1 ? 'bg-black' : 'bg-zinc-400 group-hover/divider-handle:bg-white'}`} />
+            <span className={`w-0.5 sm:w-1 h-0.5 sm:h-1 rounded-full transition-colors ${activeDrag === 1 ? 'bg-black' : 'bg-zinc-400 group-hover/divider-handle:bg-white'}`} />
+          </div>
+        </div>
       </div>
     ) : null;
 
@@ -379,8 +404,8 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           {
             id: 'solvedBanner',
             title: 'Exact Anagram Solved!',
-            icon: <Sparkles className="w-3.5 h-3.5 text-emerald-400" />,
-            label: <span className="text-emerald-300 font-semibold text-[11px]">Exact Match</span>,
+            icon: <Sparkles className="w-3.5 h-3.5 text-white" />,
+            label: <span className="text-white font-mono font-bold text-[11px]">Exact Match</span>,
             action: () => {},
             active: true,
           },
@@ -392,6 +417,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   const currentMode = wordFilterMode || (avoidDeadEnds ? 'safe' : 'all');
   const safeCounts: Record<WordFilterMode, number> = countsByMode || {
     safe: solvableWordsCount || candidateWordsCount || 0,
+    domains: 0,
     all: candidateWordsCount || 0,
     top: 0,
     common: 0,
@@ -401,7 +427,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     long: 0,
   };
 
-  const ALL_MODES: WordFilterMode[] = ['safe', 'all', 'top', 'common', 'rare', 'closers', 'pairs', 'long'];
+  const ALL_MODES: WordFilterMode[] = ['safe', 'domains', 'all', 'top', 'common', 'rare', 'closers', 'pairs', 'long'];
 
   // Word Filter Quick-Select Menu state & interaction handlers
   const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -460,49 +486,49 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     both: {
       label: 'Split View',
       sublabel: 'Graph and stats',
-      icon: <LayoutGrid className="w-3.5 h-3.5 text-cyan-400" />,
-      color: 'text-cyan-400',
-      dotColor: 'bg-cyan-400',
+      icon: <LayoutGrid className="w-3.5 h-3.5 text-zinc-100" />,
+      color: 'text-zinc-100',
+      dotColor: 'bg-white',
       title: 'Split View: Word graph and stats side by side. Click to cycle, right-click for menu.',
     },
     graph: {
       label: 'Word Graph',
       sublabel: 'Physics cloud',
-      icon: <Network className="w-3.5 h-3.5 text-emerald-400" />,
-      color: 'text-emerald-400',
-      dotColor: 'bg-emerald-400',
+      icon: <Network className="w-3.5 h-3.5 text-zinc-100" />,
+      color: 'text-zinc-100',
+      dotColor: 'bg-white',
       title: 'Word Graph: Interactive physics-based word cloud. Click to cycle, right-click for menu.',
     },
     inspector: {
       label: 'Word Stats',
       sublabel: 'Length & letter charts',
-      icon: <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />,
-      color: 'text-indigo-400',
-      dotColor: 'bg-indigo-400',
+      icon: <BarChart3 className="w-3.5 h-3.5 text-zinc-200" />,
+      color: 'text-zinc-200',
+      dotColor: 'bg-zinc-300',
       title: 'Word Stats: Length and letter charts. Click to cycle, right-click for menu.',
     },
     blocks: {
       label: 'Word Blocks',
       sublabel: 'Squarified treemap',
-      icon: <LayoutGrid className="w-3.5 h-3.5 text-amber-400" />,
-      color: 'text-amber-400',
-      dotColor: 'bg-amber-400',
+      icon: <LayoutGrid className="w-3.5 h-3.5 text-zinc-200" />,
+      color: 'text-zinc-200',
+      dotColor: 'bg-zinc-300',
       title: 'Word Blocks: Squarified word treemap. Click to cycle, right-click for menu.',
     },
     pebbles: {
       label: 'Word Pebbles',
       sublabel: 'Organic word field',
-      icon: <Layers className="w-3.5 h-3.5 text-teal-400" />,
-      color: 'text-teal-400',
-      dotColor: 'bg-teal-400',
+      icon: <Layers className="w-3.5 h-3.5 text-zinc-200" />,
+      color: 'text-zinc-200',
+      dotColor: 'bg-zinc-300',
       title: 'Word Pebbles: Organic word bubbles. Click to cycle, right-click for menu.',
     },
     solutions: {
       label: 'Solutions',
       sublabel: 'Winning finishes',
-      icon: <Sparkles className="w-3.5 h-3.5 text-rose-400" />,
-      color: 'text-rose-400',
-      dotColor: 'bg-rose-400',
+      icon: <Sparkles className="w-3.5 h-3.5 text-white" />,
+      color: 'text-white',
+      dotColor: 'bg-white',
       title: 'Solutions: Direct 1-word and 2-word finishes. Click to cycle, right-click for menu.',
     },
   };
@@ -656,7 +682,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                   {count}
                 </span>
                 {isActive && (
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <Check className="w-3.5 h-3.5 text-white shrink-0" />
                 )}
               </div>
             </button>
@@ -770,7 +796,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
               </div>
 
               {isActive && (
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 ml-2" />
+                <Check className="w-3.5 h-3.5 text-white shrink-0 ml-2" />
               )}
             </button>
           );
@@ -843,7 +869,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
         return (
           <div
             key="composer"
-            className={`w-full relative overflow-hidden flex flex-col min-h-0 flex-none shrink-0 bg-transparent ${
+            className={`w-full relative overflow-hidden flex flex-col min-h-0 flex-none shrink-0 bg-transparent px-1 sm:px-1.5 ${
               activeDrag ? 'duration-0' : 'duration-350 ease-[cubic-bezier(0.16,1,0.3,1)]'
             } ${
               isBeingDragged
@@ -939,7 +965,6 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                 isDragging={isDivider1 ? activeDrag === 1 : activeDrag === 2}
                 onPointerDown={isDivider1 ? startDrag1 : startDrag2}
                 onDoubleClick={cyclePresets}
-                title="Drag to resize (Double-click to reset)"
                 onToggleCollapse={isDivider1 ? toggleMinimizeCard1 : toggleMinimizeCard3}
                 isCollapsed={isDivider1 ? isCard1Minimized : isCard3Minimized}
                 collapseTooltip={

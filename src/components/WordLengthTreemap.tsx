@@ -182,7 +182,7 @@ export const WordLengthTreemap: React.FC<WordLengthTreemapProps> = ({
                     {tile.length} {letterLabel}
                   </span>
                   {isHoveredMatch && hoveredWordInfo ? (
-                    <span className="font-mono text-[9.5px] font-black uppercase tracking-wider text-amber-400 mt-0.5">
+                    <span className="font-mono text-[9.5px] font-black uppercase tracking-wider text-white mt-0.5">
                       ✦ {hoveredWordInfo.word}
                     </span>
                   ) : null}
@@ -207,7 +207,7 @@ export const WordLengthTreemap: React.FC<WordLengthTreemapProps> = ({
                     {canFitFullLetters ? `${tile.length} ${letterLabel}` : `${tile.length}L`}
                   </span>
                   {isHoveredMatch && hoveredWordInfo ? (
-                    <span className="font-mono text-[9px] font-black uppercase tracking-wider text-amber-400 truncate max-w-full my-0.5">
+                    <span className="font-mono text-[9px] font-black uppercase tracking-wider text-white truncate max-w-full my-0.5">
                       ✦ {hoveredWordInfo.word}
                     </span>
                   ) : null}

@@ -1,6 +1,9 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { renderRearrangementCanvas } from '../render/stage';
+import { Share2 } from 'lucide-react';
+import { renderRearrangementCanvas, type ShuffleEffectState } from '../render/stage';
 import type { ProgressBus } from '../hooks/useProgressBus';
+import { ShareModal } from './ShareModal';
+import { triggerHaptic } from '../hooks/useHaptics';
 
 export interface NameAnagramStageProps {
   sourceName: string;
@@ -10,6 +13,9 @@ export interface NameAnagramStageProps {
   isPlaying?: boolean;
   onTogglePlay?: () => void;
   onReset?: () => void;
+  isExportModalOpen?: boolean;
+  onOpenExportModal?: () => void;
+  onCloseExportModal?: () => void;
 }
 
 export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
@@ -20,10 +26,37 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
   isPlaying: externalIsPlaying,
   onTogglePlay: externalOnTogglePlay,
   onReset: externalOnReset,
+  isExportModalOpen: externalIsExportModalOpen,
+  onOpenExportModal: externalOnOpenExportModal,
+  onCloseExportModal: externalOnCloseExportModal,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [progress, setProgress] = useState<number>(() => progressBus.get());
   const [internalIsPlaying, setInternalIsPlaying] = useState<boolean>(false);
+  const [internalIsExportModalOpen, setInternalIsExportModalOpen] = useState<boolean>(false);
+
+  const isExportModalOpen =
+    externalIsExportModalOpen !== undefined
+      ? externalIsExportModalOpen
+      : internalIsExportModalOpen;
+
+  const handleOpenExportModal = () => {
+    triggerHaptic('light');
+    if (externalOnOpenExportModal) {
+      externalOnOpenExportModal();
+    } else {
+      setInternalIsExportModalOpen(true);
+    }
+  };
+
+  const handleCloseExportModal = () => {
+    if (externalOnCloseExportModal) {
+      externalOnCloseExportModal();
+    } else {
+      setInternalIsExportModalOpen(false);
+    }
+  };
+
   const isPlaying = externalIsPlaying !== undefined ? externalIsPlaying : internalIsPlaying;
   const setIsPlaying = (val: boolean) => {
     if (externalOnTogglePlay && val !== isPlaying) {
@@ -34,6 +67,96 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
   };
   const animFrameRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number | null>(null);
+
+  // Flicker-shuffle kinetic transition state and refs
+  const prevTargetPhraseRef = useRef<string>(targetPhrase);
+  const shuffleStateRef = useRef<ShuffleEffectState | null>(null);
+  const shuffleAnimFrameRef = useRef<number | null>(null);
+
+  const draw = useCallback(
+    (p: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      renderRearrangementCanvas(
+        p,
+        canvas,
+        sourceName,
+        targetPhrase,
+        'arc',
+        shuffleStateRef.current || undefined
+      );
+    },
+    [sourceName, targetPhrase]
+  );
+
+  // Trigger snappy mechanical flicker-shuffle transition
+  const triggerShuffleTransition = useCallback(() => {
+    if (shuffleAnimFrameRef.current) {
+      cancelAnimationFrame(shuffleAnimFrameRef.current);
+    }
+
+    const startTime = performance.now();
+    const duration = 380; // ms: punchy, snappy flicker
+    let phaseTick = 0;
+    let lastPhaseTime = startTime;
+
+    const step = (now: number) => {
+      const elapsed = now - startTime;
+      if (elapsed >= duration) {
+        shuffleStateRef.current = null;
+        draw(progressBus.get());
+        return;
+      }
+
+      // Increment discrete flicker phase every 36ms for rapid glyph cycling
+      if (now - lastPhaseTime >= 36) {
+        phaseTick++;
+        lastPhaseTime = now;
+      }
+
+      const t = elapsed / duration;
+      // Smooth cubic decay curve for natural physical settling
+      const intensity = Math.pow(1 - t, 2.2);
+
+      shuffleStateRef.current = {
+        intensity,
+        phase: phaseTick,
+      };
+
+      draw(progressBus.get());
+      shuffleAnimFrameRef.current = requestAnimationFrame(step);
+    };
+
+    shuffleAnimFrameRef.current = requestAnimationFrame(step);
+  }, [draw, progressBus]);
+
+  // Listen for target phrase changes (words added or removed) to trigger flicker-shuffle
+  useEffect(() => {
+    const prevText = prevTargetPhraseRef.current;
+    const currText = targetPhrase;
+
+    if (prevText !== currText) {
+      prevTargetPhraseRef.current = currText;
+
+      const prevWords = prevText.trim().split(/\s+/).filter(Boolean);
+      const currWords = currText.trim().split(/\s+/).filter(Boolean);
+
+      // Trigger transition whenever word tokens or phrase content changes
+      if (prevWords.length !== currWords.length || prevText.trim() !== currText.trim()) {
+        triggerHaptic(currWords.length > prevWords.length ? 'add' : 'remove');
+        triggerShuffleTransition();
+      }
+    }
+  }, [targetPhrase, triggerShuffleTransition]);
+
+  // Clean up shuffle animation frame on unmount
+  useEffect(() => {
+    return () => {
+      if (shuffleAnimFrameRef.current) {
+        cancelAnimationFrame(shuffleAnimFrameRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     return progressBus.subscribe(p => {
@@ -128,11 +251,7 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
   useEffect(() => {
     resizeCanvasToDPR();
 
-    const draw = (p: number) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      renderRearrangementCanvas(p, canvas, sourceName, targetPhrase, 'arc');
-    };
+    draw(progressBus.get());
 
     const unsubscribe = progressBus.subscribe(draw);
 
@@ -157,7 +276,7 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
         ro.disconnect();
       }
     };
-  }, [sourceName, targetPhrase, progressBus, resizeCanvasToDPR]);
+  }, [progressBus, resizeCanvasToDPR, draw]);
 
   // Keyboard shortcut: KeyR = reset, Space = toggle play
   useEffect(() => {
@@ -191,9 +310,34 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
   return (
     <div
       id="anagram-stage"
-      className="relative w-full h-full flex items-center justify-center overflow-hidden bg-white select-none"
+      className="relative w-full h-full flex items-center justify-center overflow-hidden bg-white select-none group/stage"
     >
       <canvas ref={canvasRef} className="w-full h-full block bg-white" />
+
+      {/* Floating Top-Right Stage Share Button */}
+      {sourceName.trim() && (
+        <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5 pointer-events-auto">
+          <button
+            type="button"
+            onClick={handleOpenExportModal}
+            title="Share kinetic anagram animation or generate shareable link/card"
+            aria-label="Share anagram animation"
+            className="h-6.5 sm:h-7.5 px-2.5 sm:px-3 bg-white hover:bg-black text-black hover:text-white border-2 border-black rounded-md text-[9.5px] sm:text-[10.5px] font-mono font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_#000000] hover:shadow-[3px_3px_0px_#000000] hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none cursor-pointer group/btn touch-manipulation"
+          >
+            <Share2 className="w-3.5 h-3.5 text-black group-hover/btn:text-white transition-colors" />
+            <span>Share</span>
+          </button>
+        </div>
+      )}
+
+      {/* Share & Export Dialog Modal */}
+      <ShareModal
+        isOpen={isExportModalOpen}
+        onClose={handleCloseExportModal}
+        sourceName={sourceName}
+        targetPhrase={targetPhrase}
+        onShowToast={onShowToast}
+      />
     </div>
   );
 };

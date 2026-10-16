@@ -159,6 +159,17 @@ export function useSplitController({
     }
   }, [defaultDetent, currentDetent, setDetent]);
 
+  // Touch-drag context to prevent jumping, handle finger deadband, and eliminate mobile overscroll
+  const dragContextRef = useRef<{
+    startX: number;
+    startY: number;
+    startRatio: number;
+    dragType: 1 | 2;
+    pointerId: number;
+    isTouch: boolean;
+    hasExceededSlop: boolean;
+  } | null>(null);
+
   // Start dragging panel to reposition
   const startPanelDrag = useCallback((panelId: PanelId, e: React.PointerEvent) => {
     e.preventDefault();
@@ -169,23 +180,65 @@ export function useSplitController({
     triggerHaptic('light');
   }, [panelOrder]);
 
-  const startDrag1 = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setHasUserCustomized(true);
-    setIsCard1Minimized(false);
-    setSoloCard(null);
-    pointerHistoryRef.current = [{ y: e.clientY, time: performance.now() }];
-    setActiveDrag(1);
-  };
+  const startDrag1 = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+    const isTouch = e.pointerType === 'touch';
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore
+    }
 
-  const startDrag2 = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setHasUserCustomized(true);
-    setIsCard3Minimized(false);
-    setSoloCard(null);
+    dragContextRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startRatio: ratio1,
+      dragType: 1,
+      pointerId: e.pointerId,
+      isTouch,
+      hasExceededSlop: !isTouch, // mice have zero slop; touch devices get refined deadzone
+    };
     pointerHistoryRef.current = [{ y: e.clientY, time: performance.now() }];
-    setActiveDrag(2);
-  };
+
+    if (!isTouch) {
+      setHasUserCustomized(true);
+      setIsCard1Minimized(false);
+      setSoloCard(null);
+      setActiveDrag(1);
+    }
+  }, [ratio1]);
+
+  const startDrag2 = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+    const isTouch = e.pointerType === 'touch';
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore
+    }
+
+    dragContextRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startRatio: ratio1,
+      dragType: 2,
+      pointerId: e.pointerId,
+      isTouch,
+      hasExceededSlop: !isTouch,
+    };
+    pointerHistoryRef.current = [{ y: e.clientY, time: performance.now() }];
+
+    if (!isTouch) {
+      setHasUserCustomized(true);
+      setIsCard3Minimized(false);
+      setSoloCard(null);
+      setActiveDrag(2);
+    }
+  }, [ratio1]);
 
   const handlePointerMove = useCallback(
     (e: PointerEvent) => {
@@ -198,7 +251,54 @@ export function useSplitController({
         return;
       }
 
-      if (!activeDrag || !containerRef.current) return;
+      const ctx = dragContextRef.current;
+      if (!ctx || !containerRef.current) return;
+
+      const deltaX = e.clientX - ctx.startX;
+      const deltaY = e.clientY - ctx.startY;
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+
+      // On mobile touch devices, refine touch-drag sensitivity:
+      // Require clear intentional vertical motion (7px) and ensure vertical motion dominates
+      // to avoid unintentional horizontal swipes or micro-jitter triggering panel resize.
+      if (!ctx.hasExceededSlop) {
+        if (ctx.isTouch) {
+          // If gesture is predominantly horizontal (e.g. swiping word pills or scrubbing), abort split drag
+          if (absX > 12 && absX > absY * 1.4) {
+            dragContextRef.current = null;
+            return;
+          }
+          // Deadzone for touch: require 7px vertical motion with clear vertical dominance
+          if (absY >= 7 && absY > absX * 1.1) {
+            ctx.hasExceededSlop = true;
+            setHasUserCustomized(true);
+            if (ctx.dragType === 1) {
+              setIsCard1Minimized(false);
+            } else {
+              setIsCard3Minimized(false);
+            }
+            setSoloCard(null);
+            setActiveDrag(ctx.dragType);
+            triggerHaptic('notch');
+          } else {
+            return;
+          }
+        } else {
+          // Desktop pointer/mouse: immediate drag engagement
+          ctx.hasExceededSlop = true;
+          setHasUserCustomized(true);
+          if (ctx.dragType === 1) {
+            setIsCard1Minimized(false);
+          } else {
+            setIsCard3Minimized(false);
+          }
+          setSoloCard(null);
+          setActiveDrag(ctx.dragType);
+        }
+      }
+
+      // Record trajectory history for velocity detection
       const now = performance.now();
       pointerHistoryRef.current.push({ y: e.clientY, time: now });
       if (pointerHistoryRef.current.length > 6) {
@@ -206,20 +306,30 @@ export function useSplitController({
       }
 
       const rect = containerRef.current.getBoundingClientRect();
-      const relativeY = (e.clientY - rect.top) / rect.height;
+      // Deadband smoothing compensation to prevent sudden jumps upon crossing slop threshold
+      const effectiveDeltaY = ctx.isTouch
+        ? (deltaY > 0 ? deltaY - 7 : deltaY + 7)
+        : deltaY;
+      const deltaRatio = effectiveDeltaY / Math.max(1, rect.height);
 
-      if (activeDrag === 1 && hasStage) {
-        const clamped1 = Math.max(0.18, Math.min(0.78, relativeY));
-        setRatio1(clamped1);
-      } else if (activeDrag === 2 && hasCard3) {
-        const clamped2 = Math.max(0.18, Math.min(0.78, relativeY - 0.12));
-        setRatio1(clamped2);
-      }
+      // Delta-based relative tracking prevents abrupt jumps on touch
+      const nextRatio = ctx.startRatio + deltaRatio;
+      const clamped = Math.max(0.18, Math.min(0.78, nextRatio));
+      setRatio1(clamped);
     },
-    [draggedPanel, activeDrag, hasStage, hasCard3]
+    [draggedPanel]
   );
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e?: PointerEvent) => {
+    const ctx = dragContextRef.current;
+    if (ctx && e) {
+      try {
+        (e.target as HTMLElement | null)?.releasePointerCapture?.(ctx.pointerId);
+      } catch {
+        // Ignore
+      }
+    }
+
     if (draggedPanel && dropTargetIndex !== null) {
       setPanelOrderState(prev => {
         const fromIdx = prev.indexOf(draggedPanel);
@@ -239,10 +349,17 @@ export function useSplitController({
       });
       setDraggedPanel(null);
       setDropTargetIndex(null);
+      dragContextRef.current = null;
       return;
     }
 
-    if (!activeDrag) return;
+    const currentDrag = activeDrag || ctx?.dragType;
+
+    if (!currentDrag || !ctx?.hasExceededSlop) {
+      dragContextRef.current = null;
+      setActiveDrag(null);
+      return;
+    }
 
     const history = pointerHistoryRef.current;
     let velocityY = 0;
@@ -255,7 +372,7 @@ export function useSplitController({
       }
     }
 
-    if (activeDrag === 1) {
+    if (currentDrag === 1) {
       if (ratio1 > 0.68 || (velocityY > 0.5 && ratio1 > 0.58)) {
         triggerHaptic('heavy');
         setDetent(SplitDetents.focusTop);
@@ -266,7 +383,7 @@ export function useSplitController({
         triggerHaptic('notch');
         setDetent(SplitDetents.balanced);
       }
-    } else if (activeDrag === 2) {
+    } else if (currentDrag === 2) {
       if (ratio1 < 0.32 || (velocityY < -0.5 && ratio1 < 0.42)) {
         triggerHaptic('heavy');
         setDetent(SplitDetents.focusBottom);
@@ -279,15 +396,33 @@ export function useSplitController({
       }
     }
 
+    dragContextRef.current = null;
     setActiveDrag(null);
-  }, [draggedPanel, dropTargetIndex, activeDrag, ratio1, ratio2, setDetent]);
+  }, [draggedPanel, dropTargetIndex, activeDrag, ratio1, setDetent]);
 
   useEffect(() => {
-    if (!activeDrag && !draggedPanel) return;
-    window.addEventListener('pointermove', handlePointerMove);
+    // Lock viewport during active split dragging and intercept all mobile gestures
+    if (activeDrag || draggedPanel) {
+      document.body.classList.add('is-split-dragging');
+    } else {
+      document.body.classList.remove('is-split-dragging');
+    }
+
+    const preventTouchOverscroll = (e: TouchEvent) => {
+      // Prevent native pull-to-refresh and rubber-band bounce when interacting with split handles
+      if (e.cancelable && (activeDrag !== null || draggedPanel !== null || dragContextRef.current !== null)) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('touchmove', preventTouchOverscroll, { passive: false });
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerUp);
+
     return () => {
+      document.body.classList.remove('is-split-dragging');
+      window.removeEventListener('touchmove', preventTouchOverscroll);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);

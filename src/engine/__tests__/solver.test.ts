@@ -27,17 +27,11 @@ describe('Exact Anagram Engine', () => {
     expect(freqVleis === undefined || freqVleis === 0).toBe(true);
   });
 
-  it('filters candidate words: junk 2-letter fragments dropped, real words kept', () => {
+  it('preserves useful 2-letter words per user requirement', () => {
     const wordsSet = new Set(WORDS);
 
-    // Fragments and non-words that must be gone
-    const forbidden = ['st', 'er', 're', 'es', 'aw', 'mm', 'ka', 'pa', 'el'];
-    for (const f of forbidden) {
-      expect(wordsSet.has(f), `Expected "${f}" to be excluded`).toBe(false);
-    }
-
-    // Real short words that must be kept
-    const kept = ['ox', 'ok', 'zoo', 'roo'];
+    // Words requested to be kept and usable
+    const kept = ['st', 'er', 're', 'es', 'aw', 'mm', 'ka', 'pa', 'el', 'ox', 'ok', 'zoo', 'roo'];
     for (const k of kept) {
       expect(wordsSet.has(k), `Expected "${k}" to be kept`).toBe(true);
     }

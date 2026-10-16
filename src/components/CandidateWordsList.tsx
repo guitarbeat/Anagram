@@ -1,11 +1,11 @@
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
-import { Layers, Network, LayoutGrid, ChevronDown } from 'lucide-react';
+import { Layers, Network, LayoutGrid, ChevronDown, BarChart3 } from 'lucide-react';
 import { WordsGraphView } from './WordsGraphView';
 import { WordBlocksExplorer } from './WordBlocksExplorer';
-import { WordPebblesExplorer } from './WordPebblesExplorer';
+import { WordPebblesExplorer, type WordSortOption } from './WordPebblesExplorer';
 import { WordSolutionsExplorer } from './WordSolutionsExplorer';
 import { ContextualLens } from './ContextualLens';
-import type { CandidateWordItem, HistogramBin, POS, FinisherPair } from '../engine/types';
+import type { CandidateWordItem, HistogramBin, POS, FinisherPair, AnagramResult } from '../engine/types';
 import { pos, isMatchingPos, type FrequencyTier, getFrequencyTier } from '../engine/lexicon';
 import { PosTreemap } from './PosTreemap';
 import { WordLengthTreemap } from './WordLengthTreemap';
@@ -14,6 +14,7 @@ import { PosHistogram } from './PosHistogram';
 import { WordLengthLabels } from './WordLengthLabels';
 import { PosLabels } from './PosLabels';
 import type { WordFilterMode } from '../types/split';
+import { BottomExplorerToolbar } from './BottomExplorerToolbar';
 
 export type LexicalViewMode = 'treemap' | 'histogram' | 'labels';
 
@@ -37,6 +38,9 @@ export interface CandidateWordsListProps {
   onShowToast: (text: string, type?: 'success' | 'info' | 'error') => void;
   exactClosers?: string[];
   finisherPairs?: FinisherPair[];
+  completeSolutions?: AnagramResult[];
+  isSolvingSolutions?: boolean;
+  remainingLetters?: string[];
   solvableWordsCount?: number;
   deadEndWordsCount?: number;
 
@@ -64,6 +68,9 @@ export interface CandidateWordsListProps {
   wordFilterMode?: WordFilterMode;
   countsByMode?: Record<WordFilterMode, number>;
   onCycleWordFilter?: () => void;
+  onSelectWordFilterMode?: (mode: WordFilterMode) => void;
+  customWordsCount?: number;
+  onOpenCustomWordManager?: () => void;
 }
 
 export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
@@ -84,6 +91,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   onShowToast,
   exactClosers = [],
   finisherPairs = [],
+  completeSolutions = [],
+  isSolvingSolutions = false,
+  remainingLetters = [],
   solvableWordsCount = 0,
   deadEndWordsCount = 0,
   inspectorCategory: externalInspectorCategory,
@@ -102,11 +112,18 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   wordFilterMode,
   countsByMode,
   onCycleWordFilter,
+  onSelectWordFilterMode,
+  customWordsCount,
+  onOpenCustomWordManager,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortBy, setSortBy] = useState<WordSortOption>('length-desc');
   const [internalSplitLeft, setInternalSplitLeft] = useState<'graph' | 'pebbles' | 'blocks' | 'solutions'>('pebbles');
   const [internalSplitRight, setInternalSplitRight] = useState<'inspector' | 'blocks' | 'pebbles' | 'solutions'>('inspector');
   const [selectedWord, setSelectedWord] = useState<CandidateWordItem | null>(null);
+  const [mobileViewTab, setMobileViewTab] = useState<'words' | 'stats'>('words');
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState<boolean>(false);
 
   const currentLeftView = externalSplitLeftView || internalSplitLeft;
   const currentRightView = externalSplitRightView || internalSplitRight;
@@ -128,13 +145,21 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   );
   const rightColumnRef = useRef<HTMLDivElement>(null);
   const [internalPosFilter, setInternalPosFilter] = useState<POS | 'all' | null>(null);
+  const activePosFilter = selectedPosFilter !== undefined ? selectedPosFilter : internalPosFilter;
+  const handlePosFilterChange = (val: POS | 'all' | null) => {
+    if (onSelectPosFilter) {
+      onSelectPosFilter(val);
+    } else {
+      setInternalPosFilter(val);
+    }
+  };
 
   // Avoid Dead-Ends Mode (Internal state fallback if not hoisted)
   const [internalAvoidDeadEnds, setInternalAvoidDeadEnds] = useState<boolean>(true);
   const avoidDeadEnds = externalAvoidDeadEnds !== undefined ? externalAvoidDeadEnds : internalAvoidDeadEnds;
   const setAvoidDeadEnds = onAvoidDeadEndsChange || setInternalAvoidDeadEnds;
 
-  // Candidates filtered by solvability safety and optional frequency tier
+  // Candidates filtered by solvability safety, frequency tier, length filter, and POS filter
   const safeCandidateWords = useMemo(() => {
     let list = candidateWords;
     if (avoidDeadEnds) {
@@ -143,10 +168,27 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     }
     if (selectedFreqFilter && selectedFreqFilter !== 'all') {
       const freqFiltered = list.filter(c => getFrequencyTier(c.freq) === selectedFreqFilter);
-      return freqFiltered.length > 0 ? freqFiltered : list;
+      list = freqFiltered;
+    }
+    if (selectedLengthFilter !== null && selectedLengthFilter !== undefined) {
+      const targetLengths = Array.isArray(selectedLengthFilter)
+        ? new Set(selectedLengthFilter)
+        : new Set([selectedLengthFilter]);
+      if (targetLengths.size > 0) {
+        list = list.filter(c => targetLengths.has(c.length));
+      }
+    }
+    if (activePosFilter && activePosFilter !== 'all') {
+      list = list.filter(c => isMatchingPos(pos(c.word), activePosFilter));
     }
     return list;
-  }, [candidateWords, avoidDeadEnds, selectedFreqFilter]);
+  }, [candidateWords, avoidDeadEnds, selectedFreqFilter, selectedLengthFilter, activePosFilter]);
+
+  const searchFilteredWords = useMemo(() => {
+    if (!searchQuery.trim()) return safeCandidateWords;
+    const q = searchQuery.toLowerCase().trim();
+    return safeCandidateWords.filter((w) => w.word.toLowerCase().includes(q));
+  }, [safeCandidateWords, searchQuery]);
 
   // Keyboard navigation: Escape to dismiss lens, Arrow keys to scrub through candidate words
   useEffect(() => {
@@ -199,15 +241,6 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedWord, safeCandidateWords]);
-
-  const activePosFilter = selectedPosFilter !== undefined ? selectedPosFilter : internalPosFilter;
-  const handlePosFilterChange = (val: POS | 'all' | null) => {
-    if (onSelectPosFilter) {
-      onSelectPosFilter(val);
-    } else {
-      setInternalPosFilter(val);
-    }
-  };
 
   const posCounts = useMemo(() => {
     const counts: Record<string, number> = {
@@ -422,6 +455,12 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
           exactClosers={exactClosers}
           activeTargetPhrase={activeTargetPhrase}
           sourceText={sourceText}
+          selectedWord={selectedWord}
+          onSelectWord={setSelectedWord}
+          selectedLengthFilter={selectedLengthFilter}
+          onClearLengthFilter={onClearLengthFilter}
+          selectedPosFilter={activePosFilter}
+          onClearPosFilter={() => handlePosFilterChange(null)}
         />
       </div>
     );
@@ -436,6 +475,10 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
         <WordSolutionsExplorer
           exactClosers={exactClosers}
           finisherPairs={finisherPairs}
+          completeSolutions={completeSolutions}
+          isSolvingSolutions={isSolvingSolutions}
+          targetPhrase={activeTargetPhrase}
+          remainingLetters={remainingLetters}
           onAddWordToTarget={onAddWordToTarget}
           onSetWordAsTarget={onSetWordAsTarget}
           onShowToast={onShowToast}
@@ -461,113 +504,12 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     >
       {/* LEFT: Focused Word Field (Pebbles / Graph / Blocks) */}
       {showLeftGraph && (
-        <div className="flex-1 min-w-0 h-full relative bg-white border-2 border-black rounded-xl sm:rounded-2xl overflow-hidden shadow-xs flex flex-row">
-          {/* Integrated Clean Vertical Sidebar Rail */}
-          <div className="w-14 shrink-0 bg-zinc-50 border-r-2 border-black flex flex-col items-center justify-between py-2.5 px-1 select-none z-10">
-            {/* View Selector Tabs in Vertical Segmented Track */}
-            <div className="w-full flex flex-col items-center gap-1">
-              <span className="text-[7.5px] font-mono font-extrabold uppercase text-zinc-400 tracking-wider">
-                VIEW
-              </span>
-              <div className="w-full flex flex-col items-center p-0.5 bg-zinc-200/80 rounded-md border border-zinc-200 gap-1">
-                {(
-                  [
-                    { id: 'pebbles', label: 'PEBBLE', icon: Layers },
-                    { id: 'graph', label: 'GRAPH', icon: Network },
-                    { id: 'blocks', label: 'BLOCK', icon: LayoutGrid },
-                  ] as const
-                ).map(({ id, label, icon: Icon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => handleSplitLeftChange(id)}
-                    className={`w-full py-1.5 px-0.5 rounded-[4px] transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
-                      currentLeftView === id
-                        ? 'bg-black text-white shadow-2xs font-extrabold'
-                        : 'text-zinc-600 hover:text-black hover:bg-zinc-100/60 font-bold'
-                    }`}
-                    title={`${label} View`}
-                  >
-                    <Icon className="w-3.5 h-3.5 shrink-0" />
-                    <span className="text-[7.5px] font-mono uppercase tracking-tight leading-none">
-                      {label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Clean Integrated Vertical Word Filter Selector */}
-            <div className="w-full flex flex-col items-center gap-1">
-              <span className="text-[7.5px] font-mono font-extrabold uppercase text-zinc-400 tracking-wider">
-                FILTER
-              </span>
-              <button
-                type="button"
-                onClick={onCycleWordFilter}
-                className="w-full flex flex-col items-center justify-center gap-1 py-1.5 px-0.5 bg-white hover:bg-zinc-100 border border-zinc-300 hover:border-black rounded-md transition-all active:scale-90 shadow-2xs group cursor-pointer"
-                title={`Filter: ${
-                  wordFilterMode === 'safe'
-                    ? 'SOLVABLE'
-                    : wordFilterMode === 'closers'
-                    ? '1-WORD WINS'
-                    : wordFilterMode === 'pairs'
-                    ? '2-WORD PAIRS'
-                    : wordFilterMode === 'top'
-                    ? 'TOP EVERYDAY'
-                    : wordFilterMode === 'common'
-                    ? 'COMMON'
-                    : wordFilterMode === 'rare'
-                    ? 'RARE / SCRABBLE'
-                    : wordFilterMode === 'long'
-                    ? '5+ LETTERS'
-                    : 'ALL WORDS'
-                } (${safeCandidateWords.length} words)\nClick to cycle filters`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full transition-colors ${
-                    wordFilterMode === 'safe'
-                      ? 'bg-emerald-500'
-                      : wordFilterMode === 'closers'
-                      ? 'bg-amber-500'
-                      : wordFilterMode === 'pairs'
-                      ? 'bg-cyan-500'
-                      : wordFilterMode === 'top'
-                      ? 'bg-blue-500'
-                      : wordFilterMode === 'common'
-                      ? 'bg-yellow-500'
-                      : wordFilterMode === 'rare'
-                      ? 'bg-rose-500'
-                      : wordFilterMode === 'long'
-                      ? 'bg-purple-500'
-                      : 'bg-zinc-400'
-                  }`}
-                />
-                <span className="font-mono text-[9.5px] sm:text-[10px] font-black text-black tabular-nums leading-none">
-                  {safeCandidateWords.length}
-                </span>
-                <span className="text-[7.5px] font-mono font-bold uppercase text-zinc-400 group-hover:text-black tracking-tighter leading-none truncate max-w-full">
-                  {wordFilterMode === 'safe'
-                    ? 'SOLV'
-                    : wordFilterMode === 'closers'
-                    ? 'WINS'
-                    : wordFilterMode === 'pairs'
-                    ? 'PAIR'
-                    : wordFilterMode === 'top'
-                    ? 'TOP'
-                    : wordFilterMode === 'common'
-                    ? 'COMM'
-                    : wordFilterMode === 'rare'
-                    ? 'RARE'
-                    : wordFilterMode === 'long'
-                    ? '5+L'
-                    : 'ALL'}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Word Field Content */}
+        <div
+          className={`flex-1 min-w-0 h-full relative bg-white border-2 border-black rounded-xl sm:rounded-2xl overflow-hidden shadow-xs flex flex-col ${
+            showRightCards && mobileViewTab === 'stats' ? 'hidden md:flex' : 'flex'
+          }`}
+        >
+          {/* Main Word Field Content (Full width & flex-1 height) */}
           <div className="flex-1 h-full min-w-0 min-h-0 relative overflow-hidden">
             {currentLeftView === 'graph' ? (
               <WordsGraphView
@@ -611,8 +553,18 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
                 exactClosers={exactClosers}
                 activeTargetPhrase={activeTargetPhrase}
                 sourceText={sourceText}
+                selectedLengthFilter={selectedLengthFilter}
+                onClearLengthFilter={onClearLengthFilter}
+                selectedPosFilter={activePosFilter}
+                onClearPosFilter={() => handlePosFilterChange(null)}
+                sortBy={sortBy}
+                onSortByChange={setSortBy}
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
                 watermarkLabel={
-                  wordFilterMode === 'safe'
+                  wordFilterMode === 'domains'
+                    ? 'DOMAINS & TLDS'
+                    : wordFilterMode === 'safe'
                     ? 'SOLVABLE WORDS'
                     : wordFilterMode === 'closers'
                     ? '1-WORD WINS'
@@ -623,6 +575,51 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
               />
             )}
           </div>
+
+          {/* Expandable Bottom Drawer Toolbar (Full Width on All Devices) */}
+          <BottomExplorerToolbar
+            currentView={
+              mobileViewTab === 'stats'
+                ? 'stats'
+                : (currentLeftView as 'pebbles' | 'graph' | 'blocks')
+            }
+            onViewChange={(view) => {
+              if (view === 'stats') {
+                setMobileViewTab('stats');
+              } else {
+                setMobileViewTab('words');
+                handleSplitLeftChange(view);
+              }
+            }}
+            showStatsTab={showRightCards}
+            activeFilterMode={wordFilterMode || (avoidDeadEnds ? 'safe' : 'all')}
+            onSelectFilterMode={(mode) => {
+              if (onSelectWordFilterMode) {
+                onSelectWordFilterMode(mode);
+              }
+            }}
+            onCycleFilterMode={onCycleWordFilter}
+            countsByMode={countsByMode}
+            totalFilteredWords={searchFilteredWords.length}
+            totalDictionaryWords={candidateWords.length}
+            isDrawerOpen={isFilterDrawerOpen}
+            onToggleDrawer={() => setIsFilterDrawerOpen((prev) => !prev)}
+            onCloseDrawer={() => setIsFilterDrawerOpen(false)}
+            customWordsCount={customWordsCount}
+            onOpenCustomWordManager={onOpenCustomWordManager}
+            selectedLengthFilter={selectedLengthFilter}
+            onSelectLengthFilter={onSelectLengthFilter}
+            onClearLengthFilter={onClearLengthFilter}
+            selectedFreqFilter={selectedFreqFilter}
+            onSelectFreqFilter={onSelectFreqFilter}
+            onClearFreqFilter={onClearFreqFilter}
+            avoidDeadEnds={avoidDeadEnds}
+            onToggleAvoidDeadEnds={() => setAvoidDeadEnds(!avoidDeadEnds)}
+            sortBy={sortBy}
+            onSortByChange={setSortBy}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+          />
         </div>
       )}
 
@@ -630,35 +627,101 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
       {showRightCards && (
         <div
           ref={rightColumnRef}
-          className="flex-1 min-w-0 h-full relative flex flex-col bg-white border-2 border-black rounded-xl sm:rounded-2xl overflow-hidden shadow-xs"
+          className={`flex-1 min-w-0 h-full relative flex flex-col bg-white border-2 border-black rounded-xl sm:rounded-2xl overflow-hidden shadow-xs ${
+            showLeftGraph && mobileViewTab === 'words' ? 'hidden md:flex' : 'flex'
+          }`}
         >
-          <ContextualLens
-            selectedWord={selectedWord}
-            onClearSelectedWord={() => setSelectedWord(null)}
-            onSelectWord={setSelectedWord}
-            sourceText={sourceText}
-            candidateWords={safeCandidateWords}
-            exactClosers={exactClosers}
-            finisherPairs={finisherPairs}
-            onAddWordToTarget={onAddWordToTarget}
-            onSetWordAsTarget={onSetWordAsTarget}
-            onShowToast={onShowToast}
-            selectedLengthFilter={selectedLengthFilter}
-            onSelectLengthFilter={onSelectLengthFilter}
-            onClearLengthFilter={onClearLengthFilter}
-            selectedPosFilter={activePosFilter}
-            onSelectPosFilter={handlePosFilterChange}
-            selectedFreqFilter={selectedFreqFilter}
-            onSelectFreqFilter={onSelectFreqFilter}
-            onClearFreqFilter={onClearFreqFilter}
-            histogramData={effectiveHistogramData}
-            hoveredWordInfo={hoveredWordInfo}
-            compatibleData={compatibleData}
-            posCounts={posCounts}
-            otherSubtypeCounts={otherSubtypeCounts}
-            onHoverTreemapLength={setHoveredTreemapLength}
-            onHoverTreemapPos={setHoveredTreemapPos}
-          />
+          {/* Mobile Back to Words button */}
+          {showLeftGraph && (
+            <div className="md:hidden flex items-center justify-between px-2.5 py-1.5 bg-zinc-100 border-b-2 border-black shrink-0">
+              <button
+                type="button"
+                onClick={() => setMobileViewTab('words')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] text-[11px] font-mono font-bold bg-black text-white rounded cursor-pointer shadow-xs active:scale-95 transition-all touch-manipulation"
+              >
+                ← Back to Words
+              </button>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-black">
+                  Stats & Lens
+                </span>
+                <span className="text-[9px] font-mono text-zinc-500 tabular-nums">
+                  ({safeCandidateWords.length} words)
+                </span>
+              </div>
+            </div>
+          )}
+          <div className="flex-1 min-h-0 relative overflow-hidden">
+            <ContextualLens
+              selectedWord={selectedWord}
+              onClearSelectedWord={() => setSelectedWord(null)}
+              onSelectWord={setSelectedWord}
+              sourceText={sourceText}
+              candidateWords={safeCandidateWords}
+              exactClosers={exactClosers}
+              finisherPairs={finisherPairs}
+              completeSolutions={completeSolutions}
+              isSolvingSolutions={isSolvingSolutions}
+              targetPhrase={activeTargetPhrase}
+              remainingLetters={remainingLetters}
+              onAddWordToTarget={onAddWordToTarget}
+              onSetWordAsTarget={onSetWordAsTarget}
+              onShowToast={onShowToast}
+              selectedLengthFilter={selectedLengthFilter}
+              onSelectLengthFilter={onSelectLengthFilter}
+              onClearLengthFilter={onClearLengthFilter}
+              selectedPosFilter={activePosFilter}
+              onSelectPosFilter={handlePosFilterChange}
+              selectedFreqFilter={selectedFreqFilter}
+              onSelectFreqFilter={onSelectFreqFilter}
+              onClearFreqFilter={onClearFreqFilter}
+              histogramData={effectiveHistogramData}
+              hoveredWordInfo={hoveredWordInfo}
+              compatibleData={compatibleData}
+              posCounts={posCounts}
+              otherSubtypeCounts={otherSubtypeCounts}
+              onHoverTreemapLength={setHoveredTreemapLength}
+              onHoverTreemapPos={setHoveredTreemapPos}
+            />
+          </div>
+          {/* Mobile bottom dock when on Stats panel so user can tap PEBBLE / GRAPH / BLOCK to switch back immediately */}
+          {showLeftGraph && (
+            <div className="md:hidden">
+              <BottomExplorerToolbar
+                currentView="stats"
+                onViewChange={(view) => {
+                  if (view !== 'stats') {
+                    setMobileViewTab('words');
+                    handleSplitLeftChange(view);
+                  }
+                }}
+                showStatsTab={true}
+                activeFilterMode={wordFilterMode || (avoidDeadEnds ? 'safe' : 'all')}
+                onSelectFilterMode={(mode) => {
+                  if (onSelectWordFilterMode) {
+                    onSelectWordFilterMode(mode);
+                  }
+                }}
+                onCycleFilterMode={onCycleWordFilter}
+                countsByMode={countsByMode}
+                totalFilteredWords={safeCandidateWords.length}
+                totalDictionaryWords={candidateWords.length}
+                isDrawerOpen={isFilterDrawerOpen}
+                onToggleDrawer={() => setIsFilterDrawerOpen((prev) => !prev)}
+                onCloseDrawer={() => setIsFilterDrawerOpen(false)}
+                customWordsCount={customWordsCount}
+                onOpenCustomWordManager={onOpenCustomWordManager}
+                selectedLengthFilter={selectedLengthFilter}
+                onSelectLengthFilter={onSelectLengthFilter}
+                onClearLengthFilter={onClearLengthFilter}
+                selectedFreqFilter={selectedFreqFilter}
+                onSelectFreqFilter={onSelectFreqFilter}
+                onClearFreqFilter={onClearFreqFilter}
+                avoidDeadEnds={avoidDeadEnds}
+                onToggleAvoidDeadEnds={() => setAvoidDeadEnds(!avoidDeadEnds)}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

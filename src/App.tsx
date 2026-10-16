@@ -10,6 +10,7 @@ import {
   Play,
   Pause,
   RotateCcw,
+  Share2,
 } from 'lucide-react';
 import type { AnagramResult, SolveMetrics, POS } from './engine/types';
 import type { FrequencyTier } from './engine/lexicon';
@@ -20,6 +21,9 @@ import { NameAnagramStage } from './components/NameAnagramStage';
 import { TargetHistogramWindow } from './components/TargetHistogramWindow';
 import { CandidateWordsList, type LexicalViewMode } from './components/CandidateWordsList';
 import { ThreePaneSplit } from './components/ThreePaneSplit';
+import { ShareModal } from './components/ShareModal';
+import { CustomWordManagerModal } from './components/CustomWordManagerModal';
+import { getStoredCustomWords, saveStoredCustomWords, rebuildLexicon } from './engine/lexicon';
 import { useProgressBus } from './hooks/useProgressBus';
 import { useAnagramDelta } from './hooks/useAnagramDelta';
 import { useVisualViewport } from './hooks/useVisualViewport';
@@ -30,6 +34,7 @@ import { useHaptics } from './hooks/useHaptics';
 export function App() {
   const [sourceName, setSourceName] = useState<string>('AARON LOREZNO WOODS');
   const [allowSpicy] = useState<boolean>(true);
+  const [isExportVideoModalOpen, setIsExportVideoModalOpen] = useState<boolean>(false);
 
   // Toast notifier (disabled per clean UI guidelines)
   const showToast = useCallback((_text: string, _type: 'success' | 'info' | 'error' = 'info') => {
@@ -66,6 +71,22 @@ export function App() {
     onError: (err) => showToast(err, 'error'),
   });
 
+  // Parse Deep Link URL parameters on initial mount (e.g. ?src=AARON&tgt=ROAD)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const srcParam = params.get('src') || params.get('s') || params.get('source');
+      const tgtParam = params.get('tgt') || params.get('t') || params.get('target');
+
+      if (srcParam && srcParam.trim()) {
+        setSourceName(srcParam.trim().toUpperCase());
+      }
+      if (tgtParam && tgtParam.trim()) {
+        setTargetPhrase(tgtParam.trim().toUpperCase());
+      }
+    }
+  }, [setTargetPhrase]);
+
   const handleSourceNameChange = useCallback((name: string) => {
     setSourceName(name);
     setSelectedLengthFilter(null);
@@ -101,6 +122,48 @@ export function App() {
   const [selectedPosFilter, setSelectedPosFilter] = useState<POS | 'all' | null>(null);
   const [selectedFreqFilter, setSelectedFreqFilter] = useState<FrequencyTier | 'all' | null>(null);
 
+  // In-App Custom Word & TLD Dictionary state
+  const [customWords, setCustomWords] = useState<string[]>(() => getStoredCustomWords());
+  const [isCustomWordModalOpen, setIsCustomWordModalOpen] = useState<boolean>(false);
+  const [lexiconVersion, setLexiconVersion] = useState<number>(0);
+
+  const handleAddCustomWord = useCallback((word: string) => {
+    setCustomWords((prev) => {
+      const next = Array.from(new Set([...prev, word.toLowerCase().trim()]));
+      saveStoredCustomWords(next);
+      rebuildLexicon(next);
+      setLexiconVersion((v) => v + 1);
+      return next;
+    });
+  }, []);
+
+  const handleAddBulkCustomWords = useCallback((words: string[]) => {
+    setCustomWords((prev) => {
+      const next = Array.from(new Set([...prev, ...words.map((w) => w.toLowerCase().trim())]));
+      saveStoredCustomWords(next);
+      rebuildLexicon(next);
+      setLexiconVersion((v) => v + 1);
+      return next;
+    });
+  }, []);
+
+  const handleRemoveCustomWord = useCallback((word: string) => {
+    setCustomWords((prev) => {
+      const next = prev.filter((w) => w !== word.toLowerCase().trim());
+      saveStoredCustomWords(next);
+      rebuildLexicon(next);
+      setLexiconVersion((v) => v + 1);
+      return next;
+    });
+  }, []);
+
+  const handleClearAllCustomWords = useCallback(() => {
+    setCustomWords([]);
+    saveStoredCustomWords([]);
+    rebuildLexicon([]);
+    setLexiconVersion((v) => v + 1);
+  }, []);
+
   // Reactive multiset delta & construction state (Source \ Target)
   const {
     remainingLetters,
@@ -114,7 +177,7 @@ export function App() {
     deadEndWordsCount,
     budget,
     getAppendedPhrase,
-  } = useAnagramDelta(sourceName, targetPhrase);
+  } = useAnagramDelta(sourceName, targetPhrase, lexiconVersion);
 
   // Track dynamic visual viewport height to prevent keyboard from pushing UI out of view
   const { viewportHeight, isKeyboardOpen } = useVisualViewport();
@@ -247,7 +310,7 @@ export function App() {
   const [wordFilterMode, setWordFilterMode] = useState<WordFilterMode>('safe');
 
   const availableModes = useMemo((): WordFilterMode[] => {
-    const list: WordFilterMode[] = ['safe', 'all', 'top', 'common', 'rare'];
+    const list: WordFilterMode[] = ['safe', 'domains', 'all', 'top', 'common', 'rare'];
     if (exactClosers && exactClosers.length > 0) {
       list.push('closers');
     }
@@ -339,6 +402,10 @@ export function App() {
       const filtered = candidateWords.filter(w => getFrequencyTier(w.freq) === selectedFreqFilter);
       return filtered.length > 0 ? filtered : candidateWords;
     }
+    if (wordFilterMode === 'domains') {
+      const filtered = candidateWords.filter(w => w.isTLD);
+      return filtered.length > 0 ? filtered : candidateWords;
+    }
     if (wordFilterMode === 'closers' && exactClosers && exactClosers.length > 0) {
       const closerSet = new Set(exactClosers.map(c => c.toLowerCase()));
       const filtered = candidateWords.filter(w => closerSet.has(w.word.toLowerCase()));
@@ -373,6 +440,7 @@ export function App() {
   }, [wordFilterMode, selectedFreqFilter, exactClosers, finisherPairs, candidateWords]);
 
   const countsByMode = useMemo(() => {
+    const domainsCount = candidateWords.filter(w => w.isTLD && (avoidDeadEnds ? w.isSolvable !== false : true)).length;
     const topCount = candidateWords.filter(w => (w.freq || 0) >= 1000 && (avoidDeadEnds ? w.isSolvable !== false : true)).length;
     const commonCount = candidateWords.filter(w => (w.freq || 0) >= 100 && (avoidDeadEnds ? w.isSolvable !== false : true)).length;
     const rareCount = candidateWords.filter(w => (w.freq || 0) < 10 && (avoidDeadEnds ? w.isSolvable !== false : true)).length;
@@ -386,6 +454,7 @@ export function App() {
     }
     return {
       safe: solvableWordsCount || candidateWords.length,
+      domains: domainsCount,
       all: candidateWords.length,
       top: topCount,
       common: commonCount,
@@ -485,6 +554,9 @@ export function App() {
               isPlaying={isStagePlaying}
               onTogglePlay={handleToggleStagePlay}
               onReset={handleResetStage}
+              isExportModalOpen={isExportVideoModalOpen}
+              onOpenExportModal={() => setIsExportVideoModalOpen(true)}
+              onCloseExportModal={() => setIsExportVideoModalOpen(false)}
             />
           ) : null
         }
@@ -500,9 +572,22 @@ export function App() {
               {placedLetterCount}/{sourceLetterCount} placed
             </span>
             {isExactMatch ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 shrink-0">
-                <Sparkles className="w-3 h-3 text-emerald-400" /> Solved
-              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-white text-black border border-white">
+                  <Sparkles className="w-3 h-3 text-black" /> Solved
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsExportVideoModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold bg-black hover:bg-zinc-800 text-white border border-zinc-600 cursor-pointer transition-all shadow-[1px_1px_0px_#fff]"
+                  title="Share kinetic anagram animation, social card, or MP4 video"
+                >
+                  <Share2 className="w-3 h-3 text-white" /> Share
+                </button>
+              </div>
             ) : (
               <>
                 <span className="text-zinc-600 hidden sm:inline">·</span>
@@ -561,6 +646,9 @@ export function App() {
               onShowToast={showToast}
               exactClosers={exactClosers}
               finisherPairs={finisherPairs}
+              completeSolutions={results}
+              isSolvingSolutions={isSolving}
+              remainingLetters={remainingLetters}
               solvableWordsCount={solvableWordsCount}
               deadEndWordsCount={deadEndWordsCount}
               inspectorCategory={inspectorCategory}
@@ -575,6 +663,9 @@ export function App() {
               wordFilterMode={wordFilterMode}
               countsByMode={countsByMode}
               onCycleWordFilter={handleCycleWordFilter}
+              onSelectWordFilterMode={handleSelectWordFilterMode}
+              customWordsCount={customWords.length}
+              onOpenCustomWordManager={() => setIsCustomWordModalOpen(true)}
             />
           ) : null
         }
@@ -583,8 +674,8 @@ export function App() {
           <div className="flex items-center justify-center w-full h-full min-w-0 px-3 gap-2.5 select-none text-zinc-300">
             {nextRecommendedCloser ? (
               <div className="flex items-center gap-1.5 min-w-0 truncate">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-600/60 shrink-0">
-                  <Zap className="w-3 h-3 text-amber-400 fill-amber-400" />
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-900 text-zinc-100 border border-zinc-700 shrink-0">
+                  <Zap className="w-3 h-3 text-white fill-white" />
                   Exact Closer:
                 </span>
                 <button
@@ -594,14 +685,14 @@ export function App() {
                     handleAddWordToTarget(nextRecommendedCloser);
                   }}
                   title={`Click to add finishing closer "${nextRecommendedCloser}"`}
-                  className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/50 hover:border-amber-400 transition-colors cursor-pointer truncate shadow-xs"
+                  className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-600 hover:border-zinc-400 transition-colors cursor-pointer truncate shadow-xs"
                 >
                   +{nextRecommendedCloser}
                 </button>
               </div>
             ) : nextRecommendedPair ? (
               <div className="flex items-center gap-1.5 min-w-0 truncate">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-950/80 text-indigo-300 border border-indigo-700/60 shrink-0">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-900 text-zinc-200 border border-zinc-700 shrink-0">
                   Pair:
                 </span>
                 <button
@@ -644,6 +735,27 @@ export function App() {
             )}
           </div>
         }
+      />
+
+      {/* Global Share & Export Dialog */}
+      <ShareModal
+        isOpen={isExportVideoModalOpen}
+        onClose={() => setIsExportVideoModalOpen(false)}
+        sourceName={sourceName}
+        targetPhrase={targetPhrase}
+        onShowToast={showToast}
+      />
+
+      {/* In-App Custom Word & TLD Dictionary Manager Dialog */}
+      <CustomWordManagerModal
+        isOpen={isCustomWordModalOpen}
+        onClose={() => setIsCustomWordModalOpen(false)}
+        customWords={customWords}
+        onAddWord={handleAddCustomWord}
+        onAddBulkWords={handleAddBulkCustomWords}
+        onRemoveWord={handleRemoveCustomWord}
+        onClearAll={handleClearAllCustomWords}
+        onShowToast={showToast}
       />
     </div>
   );

@@ -201,7 +201,7 @@ export type PresetType = 'balanced' | 'focusStage' | 'focusExplorer';
 
 export type PanelId = 'stage' | 'composer' | 'explorer';
 
-export type WordFilterMode = 'safe' | 'all' | 'closers' | 'pairs' | 'common' | 'long' | 'top' | 'rare';
+export type WordFilterMode = 'safe' | 'all' | 'closers' | 'pairs' | 'common' | 'long' | 'top' | 'rare' | 'domains';
 
 export interface PanelConfig {
   id: PanelId;

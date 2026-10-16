@@ -13,10 +13,14 @@ export interface UseAnagramDeltaResult extends ConstructionState {
  * Reactive custom hook managing the multiset delta between source and target phrases.
  * Powers the construction telemetry, closer suggestions, letter budgets, and word graphs.
  */
-export function useAnagramDelta(sourceText: string, targetText: string): UseAnagramDeltaResult {
+export function useAnagramDelta(
+  sourceText: string,
+  targetText: string,
+  lexiconVersion = 0
+): UseAnagramDeltaResult {
   const constructionState = useMemo(() => {
     return getConstructionState(sourceText, targetText);
-  }, [sourceText, targetText]);
+  }, [sourceText, targetText, lexiconVersion]);
 
   const getAppendedPhrase = (currentPhrase: string, wordToAppend: string): string => {
     const trimmed = currentPhrase.trim();

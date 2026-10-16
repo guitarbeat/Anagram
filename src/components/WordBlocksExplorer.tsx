@@ -98,7 +98,13 @@ export const WordBlocksExplorer: React.FC<WordBlocksExplorerProps> = ({
     return computeSquarifiedTreemapGeneric(items, availW, availH);
   }, [displayedWords, availW, availH, closersSet]);
 
+  const [poppingWord, setPoppingWord] = useState<string | null>(null);
+
   const handleWordClick = (word: string) => {
+    setPoppingWord(word.toUpperCase());
+    setTimeout(() => {
+      setPoppingWord((prev) => (prev === word.toUpperCase() ? null : prev));
+    }, 350);
     onAddWordToTarget(word);
     if (onSelectWord) {
       const item = candidateWords.find((c) => c.word.toLowerCase() === word.toLowerCase()) || {
@@ -108,14 +114,16 @@ export const WordBlocksExplorer: React.FC<WordBlocksExplorerProps> = ({
       };
       onSelectWord(item);
     }
-    onShowToast(`Added "${word}" to sentence`, 'success');
   };
 
   const handleWordDoubleClick = (e: React.MouseEvent, word: string) => {
     e.preventDefault();
     e.stopPropagation();
+    setPoppingWord(word.toUpperCase());
+    setTimeout(() => {
+      setPoppingWord((prev) => (prev === word.toUpperCase() ? null : prev));
+    }, 350);
     onAddWordToTarget(word);
-    onShowToast(`Added "${word}" to sentence`, 'success');
   };
 
   return (
@@ -142,16 +150,19 @@ export const WordBlocksExplorer: React.FC<WordBlocksExplorerProps> = ({
             const isMedium = tileW >= 44 && tileH >= 30;
 
             const isSelected = selectedWord?.word.toLowerCase() === tile.id.toLowerCase();
+            const isPopping = poppingWord === tile.id.toUpperCase();
 
             let tileColor = 'bg-white hover:bg-zinc-50 text-black border-black shadow-[1.5px_1.5px_0px_#000000]';
             if (isCloser) {
-              tileColor = 'bg-amber-300 hover:bg-amber-400 text-black border-black font-black shadow-[2px_2px_0px_#000000] ring-1 ring-amber-600';
+              tileColor = 'bg-black text-white hover:bg-zinc-800 border-2 border-black font-black shadow-[2px_2px_0px_#000000]';
             }
-            if (isSelected) {
+            if (isPopping) {
+              tileColor = 'bg-black text-white border-2 border-black ring-4 ring-black z-40 scale-[1.12] shadow-xl font-black';
+            } else if (isSelected) {
               tileColor = 'bg-black text-white border-black ring-2 ring-black z-30 scale-[1.02] shadow-[3px_3px_0px_#000000] font-black';
             } else if (isHovered) {
               tileColor = isCloser
-                ? 'bg-amber-400 text-black border-black ring-2 ring-amber-600 z-20 shadow-[2.5px_2.5px_0px_#000000]'
+                ? 'bg-zinc-900 text-white border-2 border-black ring-2 ring-black z-20 shadow-[2.5px_2.5px_0px_#000000]'
                 : 'bg-zinc-950 text-white border-black ring-2 ring-zinc-800 z-20 shadow-[2.5px_2.5px_0px_#000000]';
             }
 
@@ -178,8 +189,9 @@ export const WordBlocksExplorer: React.FC<WordBlocksExplorerProps> = ({
                     tile.id,
                     tileW < 50 || tileH < 35 ? 'compact' : 'tile'
                   ),
+                  transition: 'left 220ms cubic-bezier(0.2, 0.8, 0.2, 1), top 220ms cubic-bezier(0.2, 0.8, 0.2, 1), width 220ms cubic-bezier(0.2, 0.8, 0.2, 1), height 220ms cubic-bezier(0.2, 0.8, 0.2, 1), transform 100ms ease, box-shadow 100ms ease',
                 }}
-                className={`absolute border-2 border-black flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none transition-all duration-75 overflow-hidden p-1 ${tileColor}`}
+                className={`absolute border-2 border-black flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none transition-all duration-75 overflow-hidden p-1 touch-manipulation active:scale-[0.96] ${tileColor}`}
                 title={`Word: ${tile.id.toUpperCase()} (${tile.id.length} letters)${
                   isCloser ? ' · Exact Closer!' : ''
                 }\nClick to add to sentence · Drag & drop into target input`}

@@ -200,7 +200,7 @@ export const PosTreemap: React.FC<PosTreemapProps> = ({
                     {displayLabel}
                   </span>
                   {isHoveredMatch && hoveredWordInfo ? (
-                    <span className="font-mono text-[9.5px] font-black uppercase tracking-wider text-amber-400 my-0.5">
+                    <span className="font-mono text-[9.5px] font-black uppercase tracking-wider text-white my-0.5">
                       ✦ {hoveredWordInfo.word}
                     </span>
                   ) : null}
