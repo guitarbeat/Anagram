@@ -303,8 +303,18 @@ export function App() {
     progressBus.set(0);
   }, [progressBus]);
 
-  // Split-pane layout detent state
-  const [splitDetent, setSplitDetent] = useState<SplitDetent>(SplitDetents.balanced);
+  // Split-pane layout detent state (defaults to topMini so stage opens minimized)
+  const [splitDetent, setSplitDetent] = useState<SplitDetent>(SplitDetents.topMini);
+
+  // When a target phrase is entered, expand directly into the minimized version (topMini)
+  const prevTargetTextRef = useRef<boolean>(Boolean(targetPhrase.trim()));
+  useEffect(() => {
+    const hasTarget = Boolean(targetPhrase.trim());
+    if (hasTarget && !prevTargetTextRef.current) {
+      setSplitDetent(SplitDetents.topMini);
+    }
+    prevTargetTextRef.current = hasTarget;
+  }, [targetPhrase]);
 
   // Word Explorer Multi-Mode Filter (Safe, All, Closers, Pairs, Common, Long)
   const [wordFilterMode, setWordFilterMode] = useState<WordFilterMode>('safe');
@@ -507,7 +517,7 @@ export function App() {
         className="flex-1 w-full h-full min-h-0"
         detent={splitDetent}
         onDetentChange={setSplitDetent}
-        isStageActive={Boolean(sourceName.trim())}
+        isStageActive={Boolean(sourceName.trim() && targetPhrase.trim())}
         isKeyboardOpen={isKeyboardOpen}
         progressBus={progressBus}
         // Real-time Solver Indicator State on Main Divider
@@ -545,10 +555,11 @@ export function App() {
         onToggleInspectorPanel={handleToggleInspectorPanel}
         /* WINDOW 1: TOP KINETIC ANAGRAM STAGE */
         card1={
-          sourceName.trim() ? (
+          sourceName.trim() && targetPhrase.trim() ? (
             <NameAnagramStage
               sourceName={sourceName}
               targetPhrase={targetPhrase}
+              onTargetPhraseChange={setTargetPhrase}
               progressBus={progressBus}
               onShowToast={showToast}
               isPlaying={isStagePlaying}

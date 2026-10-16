@@ -30,10 +30,26 @@ export const IdlePeekDock: React.FC<IdlePeekDockProps> = ({
   return (
     <div
       onClick={onRestore}
-      className={`IdlePeekDock w-full h-full flex items-center justify-center px-3 cursor-pointer select-none text-white group ${className}`}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onRestore?.();
+        }
+      }}
+      aria-label={`${title}: ${actionLabel}`}
+      className={`IdlePeekDock w-full h-full flex items-center justify-between px-3 cursor-pointer select-none text-white group bg-transparent hover:bg-white/[0.03] active:scale-[0.99] transition-all ${className}`}
     >
-      <div className="flex items-center justify-center gap-2.5 min-w-0">
-        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-200 group-hover:text-white transition-colors truncate">
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="p-0.5 rounded bg-white/5 border border-white/10 text-zinc-400 group-hover:text-white group-hover:bg-white/10 transition-colors shrink-0">
+          {isUp ? (
+            <ChevronUp className="w-3 h-3 transition-transform group-hover:-translate-y-0.5" />
+          ) : (
+            <ChevronDown className="w-3 h-3 transition-transform group-hover:translate-y-0.5" />
+          )}
+        </div>
+        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-300 group-hover:text-white transition-colors truncate">
           {title}
         </span>
         {badge && badge !== 'PEEK IDLE' && (
@@ -41,7 +57,13 @@ export const IdlePeekDock: React.FC<IdlePeekDockProps> = ({
             {badge}
           </span>
         )}
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
         {children}
+        <span className="text-[10px] font-medium text-zinc-500 group-hover:text-zinc-300 transition-colors hidden sm:inline">
+          {actionLabel}
+        </span>
       </div>
     </div>
   );

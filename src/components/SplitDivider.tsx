@@ -216,7 +216,7 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
 
       {/* Expanded invisible touch hit-target on mobile to prevent missing the divider */}
       <div
-        className="absolute -top-3 -bottom-3 inset-x-0 z-10 pointer-events-auto touch-none"
+        className="absolute -top-3.5 -bottom-3.5 inset-x-0 z-10 pointer-events-auto touch-none cursor-row-resize"
         onPointerDown={onPointerDown}
         onDoubleClick={onDoubleClick}
         aria-label="Drag edge to resize panels"
@@ -251,39 +251,30 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
                 : 'Minimize panel')
             }
             data-drag-handle="split-divider-notch"
-            className="flex items-center justify-center py-0.5 px-2 bg-transparent border-0 ring-0 shadow-none outline-none cursor-row-resize select-none group/notch active:scale-95 transition-all duration-150"
+            className="flex items-center justify-center py-1 px-3 bg-transparent border-0 ring-0 shadow-none outline-none cursor-row-resize select-none group/notch active:scale-95 transition-all duration-150"
           >
             <div
-              className={`rounded-full transition-all duration-200 flex items-center justify-center gap-1 border ${
+              className={`rounded-full transition-all duration-200 flex items-center justify-center border ${
                 isDragging
-                  ? 'w-16 sm:w-20 h-2 bg-white border-white shadow-[0_0_12px_rgba(255,255,255,0.9)] scale-105'
-                  : 'w-10 sm:w-12 h-1.5 bg-zinc-800 hover:bg-zinc-700 border-zinc-700 hover:border-zinc-500 group-hover/notch:w-16'
+                  ? 'w-16 sm:w-22 h-1.5 bg-white border-white shadow-[0_0_14px_rgba(255,255,255,0.95)] scale-105'
+                  : 'w-12 sm:w-14 h-1 sm:h-1.5 bg-zinc-700 hover:bg-zinc-600 border-zinc-600/80 hover:border-zinc-400 group-hover/notch:w-18'
               }`}
-            >
-              {/* Tactile micro grip dots */}
-              <span className={`w-1 h-1 rounded-full transition-colors ${isDragging ? 'bg-black' : 'bg-zinc-400 group-hover/notch:bg-white'}`} />
-              <span className={`w-1 h-1 rounded-full transition-colors ${isDragging ? 'bg-black' : 'bg-zinc-400 group-hover/notch:bg-white'}`} />
-              <span className={`w-1 h-1 rounded-full transition-colors ${isDragging ? 'bg-black' : 'bg-zinc-400 group-hover/notch:bg-white'}`} />
-            </div>
+            />
           </button>
         ) : (
           <div
             aria-label="Drag to resize split"
             data-drag-handle="split-divider-notch"
-            className={`rounded-full transition-all duration-200 pointer-events-none flex items-center justify-center gap-1 border ${
+            className={`rounded-full transition-all duration-200 pointer-events-none flex items-center justify-center border ${
               isHorizontal
                 ? isDragging
-                  ? 'w-16 sm:w-20 h-2 bg-white border-white shadow-[0_0_12px_rgba(255,255,255,0.9)]'
-                  : 'w-10 sm:w-12 h-1.5 bg-zinc-800 border-zinc-700 group-hover:bg-zinc-700 group-hover:w-16'
+                  ? 'w-16 sm:w-22 h-1.5 bg-white border-white shadow-[0_0_14px_rgba(255,255,255,0.95)] scale-105'
+                  : 'w-12 sm:w-14 h-1 sm:h-1.5 bg-zinc-700 border-zinc-600/80 group-hover:bg-zinc-600 group-hover:w-18'
                 : isDragging
-                  ? 'w-2 h-16 sm:h-20 bg-white border-white shadow-[0_0_12px_rgba(255,255,255,0.9)]'
-                  : 'w-1.5 h-10 sm:h-12 bg-zinc-800 border-zinc-700 group-hover:bg-zinc-700 group-hover:h-16'
+                  ? 'w-1.5 h-16 sm:h-22 bg-white border-white shadow-[0_0_14px_rgba(255,255,255,0.95)] scale-105'
+                  : 'w-1 sm:w-1.5 h-12 sm:h-14 bg-zinc-700 border-zinc-600/80 group-hover:bg-zinc-600 group-hover:h-18'
             }`}
-          >
-            <span className={`w-1 h-1 rounded-full ${isDragging ? 'bg-black' : 'bg-zinc-400'}`} />
-            <span className={`w-1 h-1 rounded-full ${isDragging ? 'bg-black' : 'bg-zinc-400'}`} />
-            <span className={`w-1 h-1 rounded-full ${isDragging ? 'bg-black' : 'bg-zinc-400'}`} />
-          </div>
+          />
         )}
       </div>
 

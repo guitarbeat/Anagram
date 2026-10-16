@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { X, ArrowLeftRight, Pencil, Check } from 'lucide-react';
+import { X, ArrowLeftRight, Pencil, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProgressBus } from '../hooks/useProgressBus';
 import type { FinisherPair } from '../engine/types';
@@ -10,7 +10,7 @@ export interface TargetHistogramWindowProps {
   onSourceNameChange: (name: string) => void;
   targetPhrase: string;
   onTargetPhraseChange: (phrase: string) => void;
-  progressBus: ProgressBus;
+  progressBus?: ProgressBus;
   remainingLetters?: string[];
   isExactMatch?: boolean;
   onShowToast: (text: string, type?: 'success' | 'info' | 'error') => void;
@@ -20,6 +20,8 @@ export interface TargetHistogramWindowProps {
   deadEndWordsCount?: number;
   onAddWordToTarget?: (word: string) => void;
   onRemoveLastWord?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 interface EditableBoxProps {
@@ -415,6 +417,8 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
   targetPhrase,
   onTargetPhraseChange,
   onShowToast,
+  isCollapsed = false,
+  onToggleCollapse,
 }) => {
   const hasSource = Boolean(sourceText.trim());
 
@@ -453,6 +457,44 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
     prevTargetPhraseRef.current = targetPhrase;
   }, [targetPhrase]);
 
+  // Collapsed Minimal Dock View
+  if (isCollapsed) {
+    return (
+      <div className="w-full h-full flex items-center justify-between px-3 bg-white border-2 border-black rounded-xl sm:rounded-2xl shadow-xs select-none">
+        <div
+          onClick={onToggleCollapse}
+          className="flex items-center gap-2 min-w-0 cursor-pointer overflow-hidden py-1 flex-1"
+        >
+          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 shrink-0">
+            Composer:
+          </span>
+          <span className="text-xs font-mono font-bold text-zinc-900 truncate">
+            {sourceText || 'No source name'}
+          </span>
+          {targetPhrase.trim() && (
+            <>
+              <span className="text-zinc-400 shrink-0">→</span>
+              <span className="text-xs font-mono font-bold text-zinc-700 truncate">
+                {targetPhrase}
+              </span>
+            </>
+          )}
+        </div>
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            title="Expand Composer"
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-zinc-100 hover:bg-zinc-200 text-zinc-900 border border-zinc-300 transition-colors cursor-pointer shrink-0 ml-2"
+          >
+            <ChevronDown className="w-3 h-3" />
+            <span className="hidden sm:inline">Expand</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="w-full h-full flex flex-col items-stretch p-0 text-zinc-900 select-none">
       {/* Unified Input Pair: Side-by-side white cards */}
@@ -460,6 +502,16 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
         {/* Source Input Card */}
         <div className="group flex-1 flex flex-col min-w-0 bg-white border-2 border-black rounded-xl sm:rounded-2xl overflow-hidden shadow-xs relative">
           <div className="flex-1 relative min-h-0 flex items-center justify-center">
+            {onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                title="Collapse dock to save space"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-900 p-1 rounded-full cursor-pointer transition-all duration-150 z-10 hover:bg-zinc-100 opacity-60 group-hover:opacity-100 focus:opacity-100 active:scale-[0.88]"
+              >
+                <ChevronUp className="w-3.5 h-3.5" />
+              </button>
+            )}
             <EditableBox
               id="source-input"
               value={sourceText}
@@ -507,7 +559,9 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
                 handleInsertWord(word.trim());
               }
             }}
-            className={`group flex-1 flex flex-col min-w-0 bg-white border-2 rounded-xl sm:rounded-2xl overflow-hidden shadow-xs relative transition-all duration-300 ${
+            className={`group flex flex-col min-w-0 bg-white border-2 rounded-xl sm:rounded-2xl overflow-hidden shadow-xs relative transition-all duration-300 ${
+              targetPhrase.trim() ? 'flex-1' : 'flex-[0_0_auto] w-[140px] sm:w-[200px] md:w-[240px]'
+            } ${
               isCardDragOver
                 ? 'border-black ring-2 ring-black bg-zinc-50 border-dashed scale-[1.01]'
                 : cardPulse

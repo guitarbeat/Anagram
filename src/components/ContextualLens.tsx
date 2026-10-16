@@ -250,166 +250,96 @@ export const ContextualLens: React.FC<ContextualLensProps> = ({
         )}
       </div>
 
-      {/* Clean Integrated Vertical Sidebar Rail (Right Side) */}
-      <div className="w-14 shrink-0 bg-zinc-50 border-l-2 border-black flex flex-col items-center justify-between py-2.5 px-1 select-none z-10">
-        {/* Mode Tabs in Vertical Segmented Track */}
-        <div className="w-full flex flex-col items-center gap-1">
-          <span className="text-[7.5px] font-mono font-extrabold uppercase text-zinc-400 tracking-wider">
+      {/* Clean Integrated Sidebar Rail (Right Side) */}
+      <div className="w-16 shrink-0 bg-zinc-50 border-l-2 border-black flex flex-col items-center justify-between py-2 px-1 select-none z-10">
+        {/* Mode Tabs */}
+        <div className="w-full flex flex-col items-center gap-1.5">
+          <span className="text-[8px] font-mono font-black uppercase text-zinc-400 tracking-wider">
             LENS
           </span>
-          <div className="w-full flex flex-col items-center p-0.5 bg-zinc-200/80 rounded-md border border-zinc-200 gap-1">
-            <button
-              type="button"
-              onClick={() => setLensTab('stats')}
-              className={`w-full py-1.5 px-0.5 rounded-[4px] transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 touch-manipulation active:scale-95 ${
-                lensTab === 'stats'
-                  ? 'bg-black text-white shadow-2xs font-extrabold ring-1 ring-black'
-                  : 'bg-white hover:bg-zinc-100 text-zinc-700 hover:text-black border border-zinc-200 font-bold shadow-2xs'
-              }`}
-              title="Histogram Statistics (Letter length & Part of speech distributions)"
-            >
-              <BarChart3 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${lensTab === 'stats' ? 'text-white' : 'text-zinc-600'}`} />
-              <span className="text-[7.5px] sm:text-[8px] font-mono uppercase tracking-tight leading-none font-bold">
-                STATS
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setLensTab('split')}
-              className={`w-full py-1.5 px-0.5 rounded-[4px] transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 touch-manipulation active:scale-95 ${
-                lensTab === 'split'
-                  ? 'bg-black text-white shadow-2xs font-extrabold ring-1 ring-black'
-                  : 'bg-white hover:bg-zinc-100 text-black border border-zinc-300 font-bold shadow-2xs'
-              }`}
-              title="Split View: View Histogram Stats and Auto-Solver Solutions simultaneously"
-            >
-              <LayoutGrid className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${lensTab === 'split' ? 'text-white' : 'text-zinc-800'}`} />
-              <span className="text-[7.5px] sm:text-[8px] font-mono uppercase tracking-tight leading-none font-bold">
-                SPLIT
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setLensTab('solutions')}
-              className={`w-full py-1.5 px-0.5 rounded-[4px] transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 relative touch-manipulation active:scale-95 ${
-                lensTab === 'solutions'
-                  ? 'bg-black text-white shadow-2xs font-extrabold ring-1 ring-black'
-                  : totalWins > 0
-                  ? 'bg-white hover:bg-zinc-100 text-black border border-black font-bold shadow-2xs'
-                  : 'bg-white hover:bg-zinc-100 text-zinc-600 hover:text-black border border-zinc-200 font-bold shadow-2xs'
-              }`}
-              title={`Winning Anagram Solutions (${totalWins} available)\nClick to view complete solutions, 1-word wins and 2-word pairs`}
-            >
-              <div className="relative flex items-center justify-center">
-                <Sparkles
-                  className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-transform ${
-                    lensTab === 'solutions'
-                      ? 'text-white fill-white'
-                      : totalWins > 0
-                      ? 'text-black fill-black'
-                      : 'text-zinc-400'
+          <nav className="w-full flex flex-col gap-1.5 text-center" aria-label="Lens sub views">
+            {[
+              { id: 'stats', label: 'STATS' },
+              { id: 'split', label: 'SPLIT' },
+              { id: 'solutions', label: 'SOLVE' },
+            ].map(({ id, label }) => {
+              const isActive = lensTab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setLensTab(id as any)}
+                  className={`w-full py-1 text-[8.5px] font-mono uppercase transition-all cursor-pointer text-center ${
+                    isActive
+                      ? 'font-black text-black border-l-2 border-black bg-white shadow-2xs'
+                      : 'font-bold text-zinc-500 hover:text-black border-l-2 border-transparent'
                   }`}
-                />
-                {totalWins > 0 && lensTab !== 'solutions' && (
-                  <span className="absolute -top-0.5 -right-1 w-1.5 h-1.5 rounded-full bg-black" />
-                )}
-              </div>
-              <span className="text-[7.5px] sm:text-[8px] font-mono uppercase tracking-tight leading-none font-bold">
-                SOLVE
-              </span>
-              {totalWins > 0 && (
-                <span
-                  className={`text-[7.5px] sm:text-[8px] font-mono font-black px-1 rounded-[2px] leading-none ${
-                    lensTab === 'solutions'
-                      ? 'bg-white/20 text-white'
-                      : 'bg-black text-white'
-                  }`}
+                  title={`${label} View`}
                 >
-                  {totalWins}
-                </span>
-              )}
-            </button>
-          </div>
+                  {label}
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
-        {/* Sub-filter indicators or toggles in Bottom of Right Rail */}
-        <div className="w-full flex flex-col items-center gap-1.5">
+        {/* Sub-filter indicators or toggles */}
+        <div className="w-full flex flex-col items-center gap-2">
           {lensTab === 'stats' && (
-            <div className="w-full flex flex-col items-center gap-1">
-              <span className="text-[7.5px] font-mono font-extrabold uppercase text-zinc-400 tracking-wider">
+            <div className="w-full flex flex-col items-center gap-1.5">
+              <span className="text-[7.5px] font-mono font-black uppercase text-zinc-400 tracking-wider">
                 VIEW
               </span>
-              <div className="w-full flex flex-col items-center p-0.5 bg-zinc-200/80 rounded-md border border-zinc-200 gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setStatsCategory('length')}
-                  className={`w-full py-1 px-0.5 text-[8.5px] font-mono uppercase rounded-[3px] transition-all cursor-pointer text-center leading-none ${
-                    statsCategory === 'length'
-                      ? 'bg-black text-white shadow-2xs font-black'
-                      : 'text-zinc-600 hover:text-black font-bold'
-                  }`}
-                  title="Group words by letter length (e.g. 3-letter, 4-letter words)"
-                >
-                  LENGTH
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStatsCategory('pos')}
-                  className={`w-full py-1 px-0.5 text-[8.5px] font-mono uppercase rounded-[3px] transition-all cursor-pointer text-center leading-none ${
-                    statsCategory === 'pos'
-                      ? 'bg-black text-white shadow-2xs font-black'
-                      : 'text-zinc-600 hover:text-black font-bold'
-                  }`}
-                  title="Group words by Part of Speech (Noun, Verb, Adjective, etc.)"
-                >
-                  SPEECH
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStatsCategory('freq')}
-                  className={`w-full py-1 px-0.5 text-[8.5px] font-mono uppercase rounded-[3px] transition-all cursor-pointer text-center leading-none ${
-                    statsCategory === 'freq'
-                      ? 'bg-black text-white shadow-2xs font-black'
-                      : 'text-zinc-600 hover:text-black font-bold'
-                  }`}
-                  title="Group words by Frequency (Top, Common, Rare, Obscure)"
-                >
-                  FREQ
-                </button>
-              </div>
+              <nav className="w-full flex flex-col gap-1 text-center">
+                {[
+                  { id: 'length', label: 'LENGTH' },
+                  { id: 'pos', label: 'SPEECH' },
+                  { id: 'freq', label: 'FREQ' },
+                ].map(({ id, label }) => {
+                  const isActive = statsCategory === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setStatsCategory(id as any)}
+                      className={`w-full py-0.5 text-[8px] font-mono uppercase transition-all cursor-pointer text-center ${
+                        isActive
+                          ? 'font-black text-black border-l-2 border-black'
+                          : 'font-bold text-zinc-400 hover:text-black border-l-2 border-transparent'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </nav>
 
-              {/* Chart Format Switcher: HISTO vs TREEMAP */}
-              <span className="text-[7.5px] font-mono font-extrabold uppercase text-zinc-400 tracking-wider mt-1">
+              {/* Chart Format Switcher */}
+              <span className="text-[7.5px] font-mono font-black uppercase text-zinc-400 tracking-wider mt-1">
                 STYLE
               </span>
-              <div className="w-full flex flex-col items-center p-0.5 bg-zinc-200/80 rounded-md border border-zinc-200 gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setStatsChartType('histogram')}
-                  className={`w-full py-1 px-0.5 text-[8px] font-mono uppercase rounded-[3px] transition-all cursor-pointer text-center leading-none ${
-                    statsChartType === 'histogram'
-                      ? 'bg-black text-white shadow-2xs font-black'
-                      : 'text-zinc-600 hover:text-black font-bold'
-                  }`}
-                  title="Bar chart histogram layout"
-                >
-                  HISTO
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStatsChartType('treemap')}
-                  className={`w-full py-1 px-0.5 text-[8px] font-mono uppercase rounded-[3px] transition-all cursor-pointer text-center leading-none ${
-                    statsChartType === 'treemap'
-                      ? 'bg-black text-white shadow-2xs font-black'
-                      : 'text-zinc-600 hover:text-black font-bold'
-                  }`}
-                  title="Squarified treemap block layout"
-                >
-                  TREEMAP
-                </button>
-              </div>
+              <nav className="w-full flex flex-col gap-1 text-center">
+                {[
+                  { id: 'histogram', label: 'HISTO' },
+                  { id: 'treemap', label: 'TREEMAP' },
+                ].map(({ id, label }) => {
+                  const isActive = statsChartType === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setStatsChartType(id as any)}
+                      className={`w-full py-0.5 text-[7.5px] font-mono uppercase transition-all cursor-pointer text-center ${
+                        isActive
+                          ? 'font-black text-black border-l-2 border-black'
+                          : 'font-bold text-zinc-400 hover:text-black border-l-2 border-transparent'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </nav>
             </div>
           )}
 

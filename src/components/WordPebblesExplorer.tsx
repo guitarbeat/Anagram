@@ -241,7 +241,7 @@ export const WordPebblesExplorer: React.FC<WordPebblesExplorerProps> = ({
               )}
             </motion.div>
           ) : (
-            displayedWords.map((item) => {
+            displayedWords.map((item, index) => {
               const isCloser = closersSet.has(item.word.toUpperCase());
               const isSelected = selectedWord?.word.toUpperCase() === item.word.toUpperCase();
               const isPopping = poppingWord === item.word.toUpperCase();
@@ -251,14 +251,15 @@ export const WordPebblesExplorer: React.FC<WordPebblesExplorerProps> = ({
                 <motion.button
                   key={item.word}
                   layout="position"
-                  initial={{ opacity: 0, scale: 0.75 }}
-                  animate={{ opacity: 1, scale: isPopping ? 1.25 : isSelected ? 1.05 : 1 }}
-                  exit={{ opacity: 0, scale: 0.75 }}
+                  initial={{ opacity: 0, scale: 0.7, y: 12 }}
+                  animate={{ opacity: 1, scale: isPopping ? 1.25 : isSelected ? 1.05 : 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.7, y: -12 }}
                   whileTap={{ scale: 1.18 }}
                   transition={{
-                    layout: { type: 'spring', damping: 25, stiffness: 350 },
-                    opacity: { duration: 0.16 },
-                    scale: { type: 'spring', damping: 14, stiffness: 450 },
+                    layout: { type: 'spring', damping: 22, stiffness: 380, mass: 0.8 },
+                    opacity: { duration: 0.2, delay: Math.min(index * 0.012, 0.25) },
+                    y: { type: 'spring', damping: 24, stiffness: 400, delay: Math.min(index * 0.012, 0.25) },
+                    scale: { type: 'spring', damping: 14, stiffness: 480 },
                   }}
                   type="button"
                   draggable

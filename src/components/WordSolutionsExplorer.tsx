@@ -153,23 +153,23 @@ export const WordSolutionsExplorer: React.FC<WordSolutionsExplorerProps> = ({
             />
           </div>
 
-          {/* Word Count Filter Pills */}
-          <div className="flex items-center gap-0.5 p-0.5 bg-zinc-100 rounded-md border border-zinc-200">
+          {/* Word Count Text Tabs */}
+          <nav className="flex items-center gap-1.5" aria-label="Word count filters">
             {(['all', '2', '3', '4+'] as const).map((count) => (
               <button
                 key={count}
                 type="button"
                 onClick={() => setWordCountFilter(count)}
-                className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded transition-all cursor-pointer ${
+                className={`py-0.5 px-1 text-[10px] font-mono transition-all cursor-pointer ${
                   wordCountFilter === count
-                    ? 'bg-black text-white shadow-2xs'
-                    : 'text-zinc-600 hover:text-black hover:bg-white'
+                    ? 'font-black text-black border-b-2 border-black'
+                    : 'font-bold text-zinc-400 hover:text-black border-b-2 border-transparent'
                 }`}
               >
-                {count === 'all' ? 'All' : `${count}w`}
+                {count === 'all' ? 'ALL' : `${count} W`}
               </button>
             ))}
-          </div>
+          </nav>
 
           {/* Sort Selector */}
           <select

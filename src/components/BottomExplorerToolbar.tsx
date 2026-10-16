@@ -25,8 +25,8 @@ import type { POS } from '../engine/types';
 import type { WordSortOption } from './WordPebblesExplorer';
 
 export interface BottomExplorerToolbarProps {
-  currentView: 'pebbles' | 'graph' | 'blocks' | 'stats';
-  onViewChange: (view: 'pebbles' | 'graph' | 'blocks' | 'stats') => void;
+  currentView: 'pebbles' | 'graph' | 'blocks' | 'stats' | 'solutions';
+  onViewChange: (view: 'pebbles' | 'graph' | 'blocks' | 'stats' | 'solutions') => void;
   showStatsTab?: boolean;
   activeFilterMode?: WordFilterMode;
   onSelectFilterMode?: (mode: WordFilterMode) => void;
@@ -212,20 +212,7 @@ export const BottomExplorerToolbar: React.FC<BottomExplorerToolbarProps> = ({
                       : 'bg-white text-zinc-900 border-zinc-300 hover:border-black hover:bg-zinc-100 font-bold'
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {isDomain ? (
-                      <Globe className={`w-3 h-3 shrink-0 ${isSelected ? 'text-white' : 'text-black'}`} />
-                    ) : (
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                          isSelected
-                            ? 'bg-white'
-                            : isZero
-                            ? 'bg-zinc-300'
-                            : 'bg-black'
-                        }`}
-                      />
-                    )}
+                  <div className="flex items-center min-w-0">
                     <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-tight truncate">
                       {preset.shortLabel}
                     </span>
@@ -250,81 +237,49 @@ export const BottomExplorerToolbar: React.FC<BottomExplorerToolbarProps> = ({
         </div>
       )}
 
-      {/* COMPACT BOTTOM DOCK (Always visible at the bottom of the card, h-10 sm:h-11 for touch ergonomics) */}
-      {/* MAIN BOTTOM DOCK ROW (Always fits 100% viewport, no sideways scroll) */}
-      <div className="h-10 sm:h-11 bg-white border-t-2 border-black flex items-center justify-between px-1 sm:px-2.5 gap-1 overflow-hidden select-none">
-        {/* Left: View Tabs in Compact Segmented Track */}
-        <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-          <div className="flex items-center p-0.5 bg-zinc-100 rounded-md border border-zinc-300 gap-0.5">
-            {(
-              [
-                { id: 'pebbles', label: 'PEBBLE', icon: Layers },
-                { id: 'graph', label: 'GRAPH', icon: Network },
-                { id: 'blocks', label: 'BLOCK', icon: LayoutGrid },
-              ] as const
-            ).map(({ id, label, icon: Icon }) => {
-              const isActive = currentView === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => handleViewClick(id)}
-                  className={`min-h-[28px] sm:min-h-[32px] px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-[4px] transition-all cursor-pointer flex items-center gap-1 touch-manipulation active:scale-95 ${
-                    isActive
-                      ? 'bg-black text-white shadow-2xs font-extrabold'
-                      : 'text-zinc-600 hover:text-black hover:bg-zinc-200/60 font-semibold'
-                  }`}
-                  title={`${label} View`}
-                >
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
-                  <span className="text-[8.5px] sm:text-[9px] font-mono uppercase tracking-tight leading-none hidden sm:inline">
-                    {label}
-                  </span>
-                </button>
-              );
-            })}
-
-            {/* Mobile / Lens STATS Tab */}
-            {showStatsTab && (
+      {/* COMPACT BOTTOM DOCK CONTROL RAIL */}
+      <div className="h-10 sm:h-11 bg-white border-t-2 border-black flex items-center justify-between px-2 sm:px-3 gap-2 overflow-hidden select-none">
+        {/* Left: Primary View Text Navigation */}
+        <nav className="flex items-center gap-1 sm:gap-2 shrink-0" aria-label="Workspace views">
+          {[
+            { id: 'pebbles', label: 'WORDS' },
+            { id: 'graph', label: 'GRAPH' },
+            { id: 'blocks', label: 'BLOCKS' },
+            { id: 'stats', label: 'STATS' },
+            { id: 'solutions', label: 'SOLVE' },
+          ].map(({ id, label }) => {
+            const isActive = currentView === id;
+            return (
               <button
+                key={id}
                 type="button"
-                onClick={() => handleViewClick('stats')}
-                className={`min-h-[28px] sm:min-h-[32px] px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-[4px] transition-all cursor-pointer flex items-center gap-1 touch-manipulation active:scale-95 ${
-                  currentView === 'stats'
-                    ? 'bg-black text-white shadow-2xs font-extrabold'
-                    : 'text-zinc-600 hover:text-black hover:bg-zinc-200/60 font-semibold'
+                onClick={() => handleViewClick(id as any)}
+                className={`py-1 px-1.5 sm:px-2 text-[10px] sm:text-[11px] font-mono uppercase tracking-wider transition-all cursor-pointer relative touch-manipulation active:scale-95 ${
+                  isActive
+                    ? 'font-black text-black border-b-2 border-black'
+                    : 'font-bold text-zinc-500 hover:text-black border-b-2 border-transparent'
                 }`}
-                title="Word Statistics & Lexical Lens"
+                title={`${label} View`}
               >
-                <BarChart3 className="w-3.5 h-3.5 shrink-0" />
-                <span className="text-[8.5px] sm:text-[9px] font-mono uppercase tracking-tight leading-none hidden sm:inline">
-                  STATS
-                </span>
+                {label}
               </button>
-            )}
-          </div>
-        </div>
+            );
+          })}
+        </nav>
 
-        {/* Center: Total Options Badge */}
-        <div className="hidden md:flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-100 border border-zinc-200 shrink-0">
-          <span className="text-[9px] font-mono font-black text-black tracking-tight uppercase">
-            {totalFilteredWords.toLocaleString()} <span className="text-zinc-500 font-bold">OPTIONS</span>
-          </span>
-        </div>
-
-        {/* Center/Right Section: FILTER Button + Dedicated SORT Button */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
-          {/* Streamlined Filter Button Toggle */}
+        {/* Right: Secondary Actions (FILTERS Drawer & SORT Dropdown) */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Streamlined Filter Toggle */}
           <button
             type="button"
             onClick={() => {
               triggerHaptic();
               onToggleDrawer();
             }}
-            className={`h-7.5 sm:h-8.5 px-2 sm:px-3 flex items-center gap-1 sm:gap-1.5 rounded border-2 transition-all cursor-pointer group active:scale-95 shrink-0 touch-manipulation shadow-2xs ${
+            className={`h-7.5 sm:h-8 px-2.5 sm:px-3 flex items-center gap-1 rounded-full border transition-all cursor-pointer group active:scale-95 shrink-0 touch-manipulation ${
               isDrawerOpen
-                ? 'bg-black text-white border-black font-extrabold'
-                : 'bg-zinc-100 hover:bg-zinc-200 text-black border-zinc-300 hover:border-black font-bold'
+                ? 'bg-black text-white border-black font-black'
+                : 'bg-zinc-50 hover:bg-zinc-100 text-black border-zinc-300 hover:border-black font-bold'
             }`}
             title={isDrawerOpen ? 'Close filter drawer' : `Filter Preset: ${activePreset.label}. Click to open filters drawer`}
             aria-expanded={isDrawerOpen}
@@ -334,50 +289,37 @@ export const BottomExplorerToolbar: React.FC<BottomExplorerToolbarProps> = ({
             ) : (
               <ChevronUp className="w-3.5 h-3.5 text-zinc-600 group-hover:text-black transition-colors shrink-0" />
             )}
-            <span className="text-[8.5px] sm:text-[9.5px] font-mono font-black uppercase tracking-wider leading-none">
+            <span className="text-[9px] sm:text-[10px] font-mono font-black uppercase tracking-wider leading-none">
               FILTERS
             </span>
           </button>
 
-          {/* Dedicated Sort Order Selector */}
+          {/* Dedicated Sort Dropdown */}
           {sortBy && onSortByChange && (
             <div
-              className="h-7.5 sm:h-8.5 flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2.5 rounded border-2 border-black bg-white hover:bg-zinc-100 transition-all cursor-pointer shadow-2xs shrink-0 touch-manipulation group/sort active:scale-95"
-              title="Click to toggle or select sorting order"
+              className="h-7.5 sm:h-8 flex items-center gap-1.5 px-2 rounded border border-zinc-300 bg-white hover:border-black transition-all cursor-pointer shrink-0 touch-manipulation group/sort active:scale-95"
+              title="Select sorting order"
             >
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic();
-                  if (sortBy === 'freq') onSortByChange('length-desc');
-                  else if (sortBy === 'length-desc') onSortByChange('length-asc');
-                  else if (sortBy === 'length-asc') onSortByChange('alpha');
-                  else onSortByChange('freq');
-                }}
-                className="flex items-center gap-0.5 sm:gap-1 font-mono text-[8.5px] sm:text-[9.5px] font-black uppercase text-black cursor-pointer shrink-0"
-              >
-                {sortBy === 'freq' ? (
-                  <TrendingUp className="w-3.5 h-3.5 text-black shrink-0 group-hover/sort:scale-110 transition-transform" />
-                ) : sortBy === 'length-desc' ? (
-                  <ArrowDownWideNarrow className="w-3.5 h-3.5 text-black shrink-0 group-hover/sort:scale-110 transition-transform" />
-                ) : sortBy === 'length-asc' ? (
-                  <ArrowUpNarrowWide className="w-3.5 h-3.5 text-black shrink-0 group-hover/sort:scale-110 transition-transform" />
-                ) : sortBy === 'alpha' ? (
-                  <ArrowDownAZ className="w-3.5 h-3.5 text-black shrink-0 group-hover/sort:scale-110 transition-transform" />
-                ) : sortBy === 'closers' ? (
-                  <Sparkles className="w-3.5 h-3.5 text-black shrink-0 group-hover/sort:scale-110 transition-transform" />
-                ) : (
-                  <ArrowDownUp className="w-3.5 h-3.5 text-black shrink-0 group-hover/sort:scale-110 transition-transform" />
-                )}
-                <span className="text-zinc-500 font-bold hidden md:inline">SORT:</span>
-              </button>
+              {sortBy === 'freq' ? (
+                <TrendingUp className="w-3.5 h-3.5 text-black shrink-0" />
+              ) : sortBy === 'length-desc' ? (
+                <ArrowDownWideNarrow className="w-3.5 h-3.5 text-black shrink-0" />
+              ) : sortBy === 'length-asc' ? (
+                <ArrowUpNarrowWide className="w-3.5 h-3.5 text-black shrink-0" />
+              ) : sortBy === 'alpha' ? (
+                <ArrowDownAZ className="w-3.5 h-3.5 text-black shrink-0" />
+              ) : sortBy === 'closers' ? (
+                <Sparkles className="w-3.5 h-3.5 text-black shrink-0" />
+              ) : (
+                <ArrowDownUp className="w-3.5 h-3.5 text-black shrink-0" />
+              )}
               <select
                 value={sortBy}
                 onChange={(e) => {
                   triggerHaptic();
                   onSortByChange(e.target.value as WordSortOption);
                 }}
-                className="text-[8.5px] sm:text-[9.5px] font-mono font-black bg-transparent text-black focus:outline-none cursor-pointer uppercase pr-0.5"
+                className="text-[9px] sm:text-[10px] font-mono font-black bg-transparent text-black focus:outline-none cursor-pointer uppercase pr-0.5"
               >
                 <option value="freq">Freq</option>
                 <option value="length-desc">Length ↓</option>

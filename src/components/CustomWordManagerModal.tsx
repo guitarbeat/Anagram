@@ -120,39 +120,31 @@ export const CustomWordManagerModal: React.FC<CustomWordManagerModalProps> = ({
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-zinc-300 bg-zinc-100 p-1 gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('custom');
-              setSearchQuery('');
-            }}
-            className={`flex-1 py-1.5 px-2 rounded-md font-mono text-[10px] sm:text-[11px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'custom'
-                ? 'bg-black text-white shadow-xs'
-                : 'text-zinc-600 hover:text-black hover:bg-zinc-200/70'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Custom Words ({customWords.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('tlds');
-              setSearchQuery('');
-            }}
-            className={`flex-1 py-1.5 px-2 rounded-md font-mono text-[10px] sm:text-[11px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'tlds'
-                ? 'bg-black text-white shadow-xs'
-                : 'text-zinc-600 hover:text-black hover:bg-zinc-200/70'
-            }`}
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>Global TLDs ({GLOBAL_TLDS.length})</span>
-          </button>
-        </div>
+        <nav className="flex border-b border-zinc-200 bg-white px-3 gap-4" aria-label="Custom word tabs">
+          {[
+            { id: 'custom', label: `Custom Words (${customWords.length})` },
+            { id: 'tlds', label: `Global TLDs (${GLOBAL_TLDS.length})` },
+          ].map(({ id, label }) => {
+            const isActive = activeTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setActiveTab(id as any);
+                  setSearchQuery('');
+                }}
+                className={`py-2 text-[11px] font-mono uppercase tracking-wider transition-all cursor-pointer ${
+                  isActive
+                    ? 'font-black text-black border-b-2 border-black'
+                    : 'font-bold text-zinc-400 hover:text-black border-b-2 border-transparent'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </nav>
 
         {/* TAB 1: CUSTOM WORDS */}
         {activeTab === 'custom' && (

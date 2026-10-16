@@ -327,55 +327,32 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         </div>
 
         {/* Tab Switcher: Link / Social Card / MP4 Video */}
-        <div className="flex border-b border-zinc-300 bg-zinc-100 p-1 gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic('light');
-              setActiveTab('link');
-            }}
-            className={`flex-1 py-1.5 px-2 rounded-md font-mono text-[10px] sm:text-[11px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'link'
-                ? 'bg-black text-white shadow-xs'
-                : 'text-zinc-600 hover:text-black hover:bg-zinc-200/70'
-            }`}
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>Deep Link</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic('light');
-              setActiveTab('card');
-            }}
-            className={`flex-1 py-1.5 px-2 rounded-md font-mono text-[10px] sm:text-[11px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'card'
-                ? 'bg-black text-white shadow-xs'
-                : 'text-zinc-600 hover:text-black hover:bg-zinc-200/70'
-            }`}
-          >
-            <ImageIcon className="w-3.5 h-3.5" />
-            <span>Social Card</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic('light');
-              setActiveTab('video');
-            }}
-            className={`flex-1 py-1.5 px-2 rounded-md font-mono text-[10px] sm:text-[11px] font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'video'
-                ? 'bg-black text-white shadow-xs'
-                : 'text-zinc-600 hover:text-black hover:bg-zinc-200/70'
-            }`}
-          >
-            <Film className="w-3.5 h-3.5" />
-            <span>MP4 Video</span>
-          </button>
-        </div>
+        <nav className="flex border-b border-zinc-200 bg-white px-3 gap-4" aria-label="Share options">
+          {[
+            { id: 'link', label: 'Deep Link' },
+            { id: 'card', label: 'Social Card' },
+            { id: 'video', label: 'MP4 Video' },
+          ].map(({ id, label }) => {
+            const isActive = activeTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setActiveTab(id as any);
+                }}
+                className={`py-2 text-[11px] font-mono uppercase tracking-wider transition-all cursor-pointer ${
+                  isActive
+                    ? 'font-black text-black border-b-2 border-black'
+                    : 'font-bold text-zinc-400 hover:text-black border-b-2 border-transparent'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </nav>
 
         {/* TAB 1: DEEP LINK SHARE */}
         {activeTab === 'link' && (

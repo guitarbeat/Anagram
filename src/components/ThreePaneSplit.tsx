@@ -23,6 +23,8 @@ import {
   Check,
   Layers,
   Globe,
+  SlidersHorizontal,
+  Theater,
 } from 'lucide-react';
 import { triggerHaptic } from '../hooks/useHaptics';
 import { SplitDivider } from './SplitDivider';
@@ -180,6 +182,10 @@ export interface ThreePaneSplitProps {
   // Real-time Solver Indicator State
   isSolving?: boolean;
   justFoundResults?: boolean;
+
+  // Collapsible Composer Dock State
+  isComposerCollapsed?: boolean;
+  onToggleComposerCollapse?: () => void;
 }
 
 export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
@@ -227,9 +233,18 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   onToggleInspectorPanel,
   isSolving = false,
   justFoundResults = false,
+  isComposerCollapsed: externalComposerCollapsed,
+  onToggleComposerCollapse,
 }) => {
   const hasStage = Boolean(isStageActive && card1);
   const hasCard3 = Boolean(card3);
+
+  // Internal collapsible composer state if not managed externally
+  const [internalComposerCollapsed, setInternalComposerCollapsed] = useState<boolean>(false);
+  const isComposerCollapsed =
+    externalComposerCollapsed !== undefined ? externalComposerCollapsed : internalComposerCollapsed;
+  const handleToggleComposerCollapse =
+    onToggleComposerCollapse || (() => setInternalComposerCollapsed((prev) => !prev));
 
   // Real-time animation progress subscription from progressBus
   const [stageProgress, setStageProgress] = useState<number>(() =>
@@ -282,122 +297,93 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     onDetentChange,
   });
 
-  // DIVIDER 1 MERGED CENTER WIDGET: Unified Bar-Integrated Scrubber & Tactile Drag Handle
-  const divider1CenterContent =
-    hasStage && progressBus ? (
-      <div
-        className="flex items-center justify-center gap-1 sm:gap-2.5 h-full select-none max-w-full px-0.5"
-        onPointerDown={(e) => {
-          // Allow interactive elements to stopPropagation, while non-interactive parts permit divider dragging
-        }}
-      >
-        {/* Transport controls */}
-        <div className="flex items-center gap-0.5 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
-          {onToggleStagePlay && (
-            <button
-              type="button"
-              onClick={onToggleStagePlay}
-              aria-label={isStagePlaying ? 'Pause animation' : 'Play animation'}
-              className="h-4.5 w-4.5 sm:h-5 sm:w-5 flex items-center justify-center rounded text-zinc-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer active:scale-90"
-            >
-              {isStagePlaying ? (
-                <Pause className="w-3 h-3 fill-current text-white" />
-              ) : (
-                <Play className="w-3 h-3 fill-current text-white ml-0.5" />
-              )}
-            </button>
-          )}
+  // Divider 1 Split Presets Popover Menu state
+  const [showDivider1Menu, setShowDivider1Menu] = useState(false);
+  const divider1MenuRef = useRef<HTMLDivElement>(null);
 
-          {onResetStage && (
-            <button
-              type="button"
-              onClick={onResetStage}
-              aria-label="Rewind letter tiles"
-              className="h-4.5 w-4.5 sm:h-5 sm:w-5 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer active:scale-90"
-            >
-              <RotateCcw className="w-3 h-3" />
-            </button>
-          )}
-        </div>
+  useEffect(() => {
+    if (!showDivider1Menu) return;
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (divider1MenuRef.current && !divider1MenuRef.current.contains(e.target as Node)) {
+        setShowDivider1Menu(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => document.removeEventListener('pointerdown', handleClickOutside);
+  }, [showDivider1Menu]);
 
-        {/* Center: Integrated Bar Scrubber with Visible Track and Glowing Thumb */}
-        <div
-          className="flex items-center gap-1 w-20 sm:w-44 md:w-60 lg:w-72 shrink max-w-[280px] group/slider"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <div className="relative w-full h-1 sm:h-1.5 bg-zinc-800/90 hover:bg-zinc-700/80 rounded-full flex items-center cursor-ew-resize">
-            {/* Filled track portion */}
-            <div
-              className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-zinc-300 via-white to-zinc-200 rounded-full pointer-events-none transition-all duration-75"
-              style={{ width: `${Math.max(0, Math.min(1, stageProgress)) * 100}%` }}
-            />
-            {/* Hidden native input capturing dragging & scrubbing */}
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.001}
-              value={stageProgress}
-              onChange={(e) => {
-                const val = parseFloat(e.target.value);
-                progressBus.set(val);
-              }}
-              aria-label="Kinetic rearrangement animation progress"
-              className="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize z-10"
-            />
-            {/* Smooth glowing thumb */}
-            <div
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-white rounded-full shadow-[0_0_6px_rgba(255,255,255,0.9)] pointer-events-none group-hover/slider:scale-125 transition-transform"
-              style={{ left: `${Math.max(0, Math.min(1, stageProgress)) * 100}%` }}
-            />
-          </div>
-        </div>
+  // DIVIDER 1 LEADING ACCESSORIES: Stage Transport & Progress Scrubber
+  const resolvedDivider1Leading: SplitAccessory[] = [
+    ...(onToggleStagePlay
+      ? [
+          {
+            id: 'stagePlayToggle',
+            title: isStagePlaying ? 'Pause Animation' : 'Play Kinetic Animation',
+            icon: isStagePlaying ? (
+              <Pause className="w-3 h-3 fill-current text-white" />
+            ) : (
+              <Play className="w-3 h-3 fill-current text-white ml-0.5" />
+            ),
+            action: onToggleStagePlay,
+            active: isStagePlaying,
+          },
+        ]
+      : []),
+    ...(onResetStage
+      ? [
+          {
+            id: 'stageReset',
+            title: 'Rewind Animation',
+            icon: <RotateCcw className="w-3 h-3" />,
+            action: onResetStage,
+          },
+        ]
+      : []),
+    ...(hasStage && progressBus
+      ? [
+          {
+            id: 'stageScrubberPill',
+            title: `Progress: ${Math.round(stageProgress * 100)}%`,
+            customContent: (
+              <div
+                className="flex items-center gap-1 sm:gap-1.5 px-2 py-0.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 transition-colors"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <div className="relative w-14 sm:w-20 md:w-28 h-1 bg-zinc-800 hover:bg-zinc-700 rounded-full flex items-center cursor-ew-resize group/slider">
+                  <div
+                    className="absolute left-0 top-0 bottom-0 bg-white rounded-full transition-all duration-75"
+                    style={{ width: `${Math.max(0, Math.min(1, stageProgress)) * 100}%` }}
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.001}
+                    value={stageProgress}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      progressBus.set(val);
+                    }}
+                    aria-label="Animation progress slider"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize z-10"
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full shadow-[0_0_4px_rgba(255,255,255,0.9)] pointer-events-none group-hover/slider:scale-125 transition-transform"
+                    style={{ left: `${Math.max(0, Math.min(1, stageProgress)) * 100}%` }}
+                  />
+                </div>
+                <span className="text-[9.5px] font-mono tabular-nums text-zinc-300">
+                  {Math.round(stageProgress * 100)}%
+                </span>
+              </div>
+            ),
+            action: () => {},
+          },
+        ]
+      : []),
+  ];
 
-        {/* Merged Percentage & Minimize Button */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleMinimizeCard1();
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-          aria-label={isCard1Minimized ? 'Expand stage' : 'Minimize stage'}
-          className="flex items-center justify-center py-0.5 px-1 sm:px-1.5 h-4 sm:h-4.5 rounded-full text-zinc-400 hover:text-white bg-zinc-800/60 hover:bg-zinc-700/80 border border-zinc-700/40 hover:border-zinc-500/60 cursor-pointer select-none group/notch active:scale-95 transition-all shadow-xs shrink-0"
-        >
-          <span
-            className={`text-[9px] sm:text-[9.5px] font-mono font-medium tabular-nums transition-colors ${
-              activeDrag === 1 ? 'text-white font-bold' : ''
-            }`}
-          >
-            {Math.round(stageProgress * 100)}%
-          </span>
-        </button>
-
-        {/* Tactile drag-handle indicator notch on Divider 1 */}
-        <div
-          aria-label="Drag edge to resize panels"
-          data-drag-handle="split-divider-notch"
-          style={{ touchAction: 'none' }}
-          className="flex items-center justify-center py-0.5 px-0.5 cursor-row-resize touch-none select-none group/divider-handle shrink-0"
-        >
-          <div
-            className={`rounded-full transition-all duration-200 flex items-center justify-center gap-0.5 sm:gap-1 border ${
-              activeDrag === 1
-                ? 'w-10 sm:w-14 h-2 bg-white border-white shadow-[0_0_12px_rgba(255,255,255,0.9)] scale-105'
-                : 'w-6 sm:w-8 h-1.5 bg-zinc-800 hover:bg-zinc-700 border-zinc-700 hover:border-zinc-500 group-hover/divider-handle:w-10 group-hover/divider-handle:bg-zinc-600'
-            }`}
-          >
-            <span className={`w-0.5 sm:w-1 h-0.5 sm:h-1 rounded-full transition-colors ${activeDrag === 1 ? 'bg-black' : 'bg-zinc-400 group-hover/divider-handle:bg-white'}`} />
-            <span className={`w-0.5 sm:w-1 h-0.5 sm:h-1 rounded-full transition-colors ${activeDrag === 1 ? 'bg-black' : 'bg-zinc-400 group-hover/divider-handle:bg-white'}`} />
-            <span className={`w-0.5 sm:w-1 h-0.5 sm:h-1 rounded-full transition-colors ${activeDrag === 1 ? 'bg-black' : 'bg-zinc-400 group-hover/divider-handle:bg-white'}`} />
-          </div>
-        </div>
-      </div>
-    ) : null;
-
-  const resolvedDivider1Leading: SplitAccessory[] = [];
-
-  // DIVIDER 1 TRAILING: Clean status (Solved badge when exact match)
+  // DIVIDER 1 TRAILING: Solved Banner & Pop-Out Presets Menu Trigger (menuAccessories)
   const resolvedDivider1Trailing: SplitAccessory[] = [
     ...(solveProgressPercent === 100
       ? [
@@ -411,7 +397,110 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           },
         ]
       : []),
+    {
+      id: 'presetsMenuTrigger',
+      title: 'Split Presets (VerticalSplit)',
+      icon: <SlidersHorizontal className="w-3.5 h-3.5" />,
+      action: () => {
+        triggerHaptic('snap');
+        setShowDivider1Menu((prev) => !prev);
+      },
+      active: showDivider1Menu,
+    },
   ];
+
+  // DIVIDER 1 TRAILING MENU: Floating VerticalSplit Popover Menu
+  const divider1TrailingMenu = showDivider1Menu ? (
+    <div
+      ref={divider1MenuRef}
+      className="absolute top-full right-0 mt-2 w-52 bg-[#18181b]/98 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-1 z-50 select-none animate-in fade-in zoom-in-95 duration-100"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between px-2 py-1 mb-0.5 border-b border-white/5">
+        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+          Split Presets
+        </span>
+        <span className="text-[9px] font-mono text-zinc-400 bg-white/5 border border-white/10 px-1 py-0.2 rounded">
+          VerticalSplit
+        </span>
+      </div>
+      <div className="flex flex-col gap-0.5">
+        {[
+          {
+            id: 'balanced',
+            label: '50/50 Balanced',
+            icon: <Rows2 className="w-3.5 h-3.5 text-zinc-200" />,
+            action: () => setDetent(SplitDetents.balanced),
+            isActive: currentDetent.type === 'fraction' && Math.abs(currentDetent.value - 0.48) < 0.05,
+          },
+          {
+            id: 'stage75',
+            label: 'Stage Focus (75%)',
+            icon: <ChevronsUp className="w-3.5 h-3.5 text-white" />,
+            action: () => setDetent(SplitDetents.focusTop),
+            isActive: currentDetent.type === 'fraction' && currentDetent.value >= 0.65,
+          },
+          {
+            id: 'words75',
+            label: 'Words Focus (75%)',
+            icon: <BookOpen className="w-3.5 h-3.5 text-zinc-300" />,
+            action: () => setDetent(SplitDetents.focusBottom),
+            isActive: currentDetent.type === 'fraction' && currentDetent.value <= 0.35,
+          },
+          {
+            id: 'topMini',
+            label: 'Mini Stage (34px)',
+            icon: <ChevronUp className="w-3.5 h-3.5 text-zinc-300" />,
+            action: () => setDetent(SplitDetents.topMini),
+            isActive: currentDetent.type === 'topMini',
+          },
+          {
+            id: 'bottomMini',
+            label: 'Mini Words (34px)',
+            icon: <ChevronDown className="w-3.5 h-3.5 text-zinc-300" />,
+            action: () => setDetent(SplitDetents.bottomMini),
+            isActive: currentDetent.type === 'bottomMini',
+          },
+          {
+            id: 'soloStage',
+            label: soloCard === 1 ? 'Exit Solo Stage' : 'Solo Stage',
+            icon: <Theater className="w-3.5 h-3.5 text-zinc-200" />,
+            action: () => setDetent(soloCard === 1 ? SplitDetents.balanced : SplitDetents.topFull),
+            isActive: soloCard === 1,
+          },
+          {
+            id: 'reset',
+            label: 'Reset Split Ratios',
+            icon: <RotateCcw className="w-3.5 h-3.5 text-zinc-300" />,
+            action: resetRatios,
+            isActive: false,
+          },
+        ].map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => {
+              triggerHaptic('snap');
+              setShowDivider1Menu(false);
+              item.action();
+            }}
+            className={`flex items-center justify-between w-full h-7.5 px-2 rounded-lg text-left transition-colors cursor-pointer group ${
+              item.isActive
+                ? 'bg-white/10 text-white font-medium'
+                : 'text-zinc-300 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="shrink-0">{item.icon}</span>
+              <span className="text-[12px] truncate">{item.label}</span>
+            </div>
+            {item.isActive && <Check className="w-3.5 h-3.5 text-white shrink-0 ml-1.5" />}
+          </button>
+        ))}
+      </div>
+    </div>
+  ) : null;
 
   // DIVIDER 2 LEADING: Mode Filter (Cycles between Safe, All, Closers, Pairs, Common, Long)
   const currentMode = wordFilterMode || (avoidDeadEnds ? 'safe' : 'all');
@@ -841,6 +930,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             onRestore={() => {
               setIsCard1Minimized(false);
               setSoloCard(null);
+              setDetent(SplitDetents.balanced);
             }}
             style={
               isStageMinimized
@@ -869,7 +959,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
         return (
           <div
             key="composer"
-            className={`w-full relative overflow-hidden flex flex-col min-h-0 flex-none shrink-0 bg-transparent px-1 sm:px-1.5 ${
+            className={`w-full relative overflow-hidden flex flex-col min-h-0 flex-none shrink-0 bg-transparent px-1 sm:px-1.5 transition-all ${
               activeDrag ? 'duration-0' : 'duration-350 ease-[cubic-bezier(0.16,1,0.3,1)]'
             } ${
               isBeingDragged
@@ -877,12 +967,17 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                 : ''
             }`}
             style={{
-              height: isKeyboardOpen ? '58px' : '72px',
-              minHeight: '56px',
+              height: isComposerCollapsed ? '34px' : isKeyboardOpen ? '58px' : '72px',
+              minHeight: isComposerCollapsed ? '32px' : '56px',
             }}
           >
             <div className="w-full h-full flex flex-col justify-center min-h-0">
-              {card2}
+              {React.isValidElement(card2)
+                ? React.cloneElement(card2 as React.ReactElement<any>, {
+                    isCollapsed: isComposerCollapsed,
+                    onToggleCollapse: handleToggleComposerCollapse,
+                  })
+                : card2}
             </div>
           </div>
         );
@@ -906,6 +1001,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             onRestore={() => {
               setIsCard3Minimized(false);
               setSoloCard(null);
+              setDetent(SplitDetents.balanced);
             }}
             style={
               isExplorerMinimized
@@ -987,11 +1083,11 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                       : 'Drag to resize'
                     : 'Drag to resize'
                 }
-                centerContent={isDivider1 ? divider1CenterContent : undefined}
-                leadingAccessories={undefined}
-                leadingMenu={undefined}
-                trailingAccessories={undefined}
-                trailingMenu={undefined}
+                centerContent={undefined}
+                leadingAccessories={isDivider1 ? resolvedDivider1Leading : resolvedDivider2Leading}
+                leadingMenu={isDivider1 ? undefined : divider2LeadingMenu}
+                trailingAccessories={isDivider1 ? resolvedDivider1Trailing : resolvedDivider2Trailing}
+                trailingMenu={isDivider1 ? divider1TrailingMenu : divider2TrailingMenu}
               />
             );
           })()}
@@ -1004,6 +1100,52 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           )}
         </React.Fragment>
       ))}
+
+      {/* VerticalSplit Floating Edge Restore Pill for topFull (Solo Stage) */}
+      {soloCard === 1 && (
+        <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#18181b]/95 border border-white/15 backdrop-blur-md shadow-2xl text-white select-none animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <BookOpen className="w-3.5 h-3.5 text-zinc-300" />
+          <span className="text-xs font-semibold">Word Explorer</span>
+          {candidateWordsCount !== undefined && candidateWordsCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-mono text-zinc-300">
+              {candidateWordsCount} words
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic('snap');
+              setDetent(SplitDetents.balanced);
+            }}
+            className="ml-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+          >
+            Restore Split
+          </button>
+        </div>
+      )}
+
+      {/* VerticalSplit Floating Edge Restore Pill for bottomFull (Solo Words) */}
+      {soloCard === 3 && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#18181b]/95 border border-white/15 backdrop-blur-md shadow-2xl text-white select-none animate-in fade-in slide-in-from-top-2 duration-200">
+          <Theater className="w-3.5 h-3.5 text-zinc-200" />
+          <span className="text-xs font-semibold">Kinetic Stage</span>
+          {solveProgressPercent !== undefined && (
+            <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-mono text-zinc-300">
+              {solveProgressPercent}% solved
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic('snap');
+              setDetent(SplitDetents.balanced);
+            }}
+            className="ml-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+          >
+            Restore Split
+          </button>
+        </div>
+      )}
     </div>
   );
 };

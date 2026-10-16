@@ -119,7 +119,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<WordSortOption>('length-desc');
-  const [internalSplitLeft, setInternalSplitLeft] = useState<'graph' | 'pebbles' | 'blocks' | 'solutions'>('pebbles');
+  const [internalSplitLeft, setInternalSplitLeft] = useState<'graph' | 'pebbles' | 'blocks' | 'solutions' | 'stats'>('pebbles');
   const [internalSplitRight, setInternalSplitRight] = useState<'inspector' | 'blocks' | 'pebbles' | 'solutions'>('inspector');
   const [selectedWord, setSelectedWord] = useState<CandidateWordItem | null>(null);
   const [mobileViewTab, setMobileViewTab] = useState<'words' | 'stats'>('words');
@@ -129,8 +129,8 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   const currentRightView = externalSplitRightView || internalSplitRight;
 
   const handleSplitLeftChange = useCallback(
-    (view: 'graph' | 'pebbles' | 'blocks' | 'solutions') => {
-      if (onSplitLeftViewChange) onSplitLeftViewChange(view);
+    (view: 'graph' | 'pebbles' | 'blocks' | 'solutions' | 'stats') => {
+      if (onSplitLeftViewChange) onSplitLeftViewChange(view as any);
       else setInternalSplitLeft(view);
     },
     [onSplitLeftViewChange]
@@ -500,230 +500,170 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full relative flex flex-row items-stretch min-h-0 text-zinc-900 select-none overflow-hidden bg-transparent gap-1.5 sm:gap-2"
+      className="w-full h-full relative flex flex-col min-h-0 text-zinc-900 select-none overflow-hidden bg-white border-2 border-black rounded-xl sm:rounded-2xl shadow-xs"
     >
-      {/* LEFT: Focused Word Field (Pebbles / Graph / Blocks) */}
-      {showLeftGraph && (
-        <div
-          className={`flex-1 min-w-0 h-full relative bg-white border-2 border-black rounded-xl sm:rounded-2xl overflow-hidden shadow-xs flex flex-col ${
-            showRightCards && mobileViewTab === 'stats' ? 'hidden md:flex' : 'flex'
-          }`}
-        >
-          {/* Main Word Field Content (Full width & flex-1 height) */}
-          <div className="flex-1 h-full min-w-0 min-h-0 relative overflow-hidden">
-            {currentLeftView === 'graph' ? (
-              <WordsGraphView
-                sourceText={sourceText}
-                candidateWords={safeCandidateWords}
-                selectedLengthFilter={selectedLengthFilter}
-                selectedPosFilter={activePosFilter}
-                onAddWordToTarget={onAddWordToTarget}
-                onSetWordAsTarget={onSetWordAsTarget}
-                activeTargetPhrase={activeTargetPhrase}
-                onShowToast={onShowToast}
-                onHoverWordChange={setHoveredGraphWord}
-                hoveredPosFilter={hoveredTreemapPos}
-                hoveredLengthFilter={hoveredTreemapLength}
-                wordFilterMode={wordFilterMode}
-                wordFilterCount={countsByMode ? countsByMode[wordFilterMode || 'safe'] : safeCandidateWords.length}
-                onCycleWordFilter={onCycleWordFilter}
-                selectedWord={selectedWord}
-                onSelectWord={setSelectedWord}
-              />
-            ) : currentLeftView === 'blocks' ? (
-              <WordBlocksExplorer
-                candidateWords={safeCandidateWords}
-                onAddWordToTarget={onAddWordToTarget}
-                onSetWordAsTarget={onSetWordAsTarget}
-                onShowToast={onShowToast}
-                exactClosers={exactClosers}
-                activeTargetPhrase={activeTargetPhrase}
-                sourceText={sourceText}
-                selectedWord={selectedWord}
-                onSelectWord={setSelectedWord}
-              />
-            ) : (
-              <WordPebblesExplorer
-                candidateWords={safeCandidateWords}
-                selectedWord={selectedWord}
-                onSelectWord={setSelectedWord}
-                onAddWordToTarget={onAddWordToTarget}
-                onSetWordAsTarget={onSetWordAsTarget}
-                onShowToast={onShowToast}
-                exactClosers={exactClosers}
-                activeTargetPhrase={activeTargetPhrase}
-                sourceText={sourceText}
-                selectedLengthFilter={selectedLengthFilter}
-                onClearLengthFilter={onClearLengthFilter}
-                selectedPosFilter={activePosFilter}
-                onClearPosFilter={() => handlePosFilterChange(null)}
-                sortBy={sortBy}
-                onSortByChange={setSortBy}
-                searchQuery={searchQuery}
-                onSearchQueryChange={setSearchQuery}
-                watermarkLabel={
-                  wordFilterMode === 'domains'
-                    ? 'DOMAINS & TLDS'
-                    : wordFilterMode === 'safe'
-                    ? 'SOLVABLE WORDS'
-                    : wordFilterMode === 'closers'
-                    ? '1-WORD WINS'
-                    : wordFilterMode === 'pairs'
-                    ? '2-WORD PAIRS'
-                    : 'ALL WORDS'
-                }
-              />
-            )}
-          </div>
-
-          {/* Expandable Bottom Drawer Toolbar (Full Width on All Devices) */}
-          <BottomExplorerToolbar
-            currentView={
-              mobileViewTab === 'stats'
-                ? 'stats'
-                : (currentLeftView as 'pebbles' | 'graph' | 'blocks')
-            }
-            onViewChange={(view) => {
-              if (view === 'stats') {
-                setMobileViewTab('stats');
-              } else {
-                setMobileViewTab('words');
-                handleSplitLeftChange(view);
-              }
-            }}
-            showStatsTab={showRightCards}
-            activeFilterMode={wordFilterMode || (avoidDeadEnds ? 'safe' : 'all')}
-            onSelectFilterMode={(mode) => {
-              if (onSelectWordFilterMode) {
-                onSelectWordFilterMode(mode);
-              }
-            }}
-            onCycleFilterMode={onCycleWordFilter}
-            countsByMode={countsByMode}
-            totalFilteredWords={searchFilteredWords.length}
-            totalDictionaryWords={candidateWords.length}
-            isDrawerOpen={isFilterDrawerOpen}
-            onToggleDrawer={() => setIsFilterDrawerOpen((prev) => !prev)}
-            onCloseDrawer={() => setIsFilterDrawerOpen(false)}
-            customWordsCount={customWordsCount}
-            onOpenCustomWordManager={onOpenCustomWordManager}
+      {/* Workspace View Surface */}
+      <div className="flex-1 w-full min-h-0 relative overflow-hidden">
+        {currentLeftView === 'graph' && mobileViewTab !== 'stats' ? (
+          <WordsGraphView
+            sourceText={sourceText}
+            candidateWords={safeCandidateWords}
+            selectedLengthFilter={selectedLengthFilter}
+            selectedPosFilter={activePosFilter}
+            onAddWordToTarget={onAddWordToTarget}
+            onSetWordAsTarget={onSetWordAsTarget}
+            activeTargetPhrase={activeTargetPhrase}
+            onShowToast={onShowToast}
+            onHoverWordChange={setHoveredGraphWord}
+            hoveredPosFilter={hoveredTreemapPos}
+            hoveredLengthFilter={hoveredTreemapLength}
+            wordFilterMode={wordFilterMode}
+            wordFilterCount={countsByMode ? countsByMode[wordFilterMode || 'safe'] : safeCandidateWords.length}
+            onCycleWordFilter={onCycleWordFilter}
+            selectedWord={selectedWord}
+            onSelectWord={setSelectedWord}
+          />
+        ) : currentLeftView === 'blocks' && mobileViewTab !== 'stats' ? (
+          <WordBlocksExplorer
+            candidateWords={safeCandidateWords}
+            onAddWordToTarget={onAddWordToTarget}
+            onSetWordAsTarget={onSetWordAsTarget}
+            onShowToast={onShowToast}
+            exactClosers={exactClosers}
+            activeTargetPhrase={activeTargetPhrase}
+            sourceText={sourceText}
+            selectedWord={selectedWord}
+            onSelectWord={setSelectedWord}
+          />
+        ) : currentLeftView === 'solutions' && mobileViewTab !== 'stats' ? (
+          <WordSolutionsExplorer
+            exactClosers={exactClosers}
+            finisherPairs={finisherPairs}
+            completeSolutions={completeSolutions}
+            isSolvingSolutions={isSolvingSolutions}
+            targetPhrase={activeTargetPhrase}
+            remainingLetters={remainingLetters}
+            onAddWordToTarget={onAddWordToTarget}
+            onSetWordAsTarget={onSetWordAsTarget}
+            onShowToast={onShowToast}
+            sourceText={sourceText}
+          />
+        ) : mobileViewTab === 'stats' || currentLeftView === 'stats' ? (
+          <ContextualLens
+            selectedWord={selectedWord}
+            onClearSelectedWord={() => setSelectedWord(null)}
+            onSelectWord={setSelectedWord}
+            sourceText={sourceText}
+            candidateWords={safeCandidateWords}
+            exactClosers={exactClosers}
+            finisherPairs={finisherPairs}
+            completeSolutions={completeSolutions}
+            isSolvingSolutions={isSolvingSolutions}
+            targetPhrase={activeTargetPhrase}
+            remainingLetters={remainingLetters}
+            onAddWordToTarget={onAddWordToTarget}
+            onSetWordAsTarget={onSetWordAsTarget}
+            onShowToast={onShowToast}
             selectedLengthFilter={selectedLengthFilter}
             onSelectLengthFilter={onSelectLengthFilter}
             onClearLengthFilter={onClearLengthFilter}
+            selectedPosFilter={activePosFilter}
+            onSelectPosFilter={handlePosFilterChange}
             selectedFreqFilter={selectedFreqFilter}
             onSelectFreqFilter={onSelectFreqFilter}
             onClearFreqFilter={onClearFreqFilter}
-            avoidDeadEnds={avoidDeadEnds}
-            onToggleAvoidDeadEnds={() => setAvoidDeadEnds(!avoidDeadEnds)}
+            histogramData={histogramData}
+            hoveredWordInfo={null}
+            compatibleData={compatibleData}
+            posCounts={posCounts}
+            otherSubtypeCounts={otherSubtypeCounts}
+            onHoverTreemapLength={setHoveredTreemapLength}
+            onHoverTreemapPos={setHoveredTreemapPos}
+          />
+        ) : (
+          <WordPebblesExplorer
+            candidateWords={safeCandidateWords}
+            selectedWord={selectedWord}
+            onSelectWord={setSelectedWord}
+            onAddWordToTarget={onAddWordToTarget}
+            onSetWordAsTarget={onSetWordAsTarget}
+            onShowToast={onShowToast}
+            exactClosers={exactClosers}
+            activeTargetPhrase={activeTargetPhrase}
+            sourceText={sourceText}
+            selectedLengthFilter={selectedLengthFilter}
+            onClearLengthFilter={onClearLengthFilter}
+            selectedPosFilter={activePosFilter}
+            onClearPosFilter={() => handlePosFilterChange(null)}
             sortBy={sortBy}
             onSortByChange={setSortBy}
             searchQuery={searchQuery}
             onSearchQueryChange={setSearchQuery}
+            watermarkLabel={
+              wordFilterMode === 'domains'
+                ? 'DOMAINS & TLDS'
+                : wordFilterMode === 'safe'
+                ? 'SOLVABLE WORDS'
+                : wordFilterMode === 'closers'
+                ? '1-WORD WINS'
+                : wordFilterMode === 'pairs'
+                ? '2-WORD PAIRS'
+                : 'ALL WORDS'
+            }
           />
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* RIGHT: Dynamic Contextual Lens Workspace */}
-      {showRightCards && (
-        <div
-          ref={rightColumnRef}
-          className={`flex-1 min-w-0 h-full relative flex flex-col bg-white border-2 border-black rounded-xl sm:rounded-2xl overflow-hidden shadow-xs ${
-            showLeftGraph && mobileViewTab === 'words' ? 'hidden md:flex' : 'flex'
-          }`}
-        >
-          {/* Mobile Back to Words button */}
-          {showLeftGraph && (
-            <div className="md:hidden flex items-center justify-between px-2.5 py-1.5 bg-zinc-100 border-b-2 border-black shrink-0">
-              <button
-                type="button"
-                onClick={() => setMobileViewTab('words')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] text-[11px] font-mono font-bold bg-black text-white rounded cursor-pointer shadow-xs active:scale-95 transition-all touch-manipulation"
-              >
-                ← Back to Words
-              </button>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-black">
-                  Stats & Lens
-                </span>
-                <span className="text-[9px] font-mono text-zinc-500 tabular-nums">
-                  ({safeCandidateWords.length} words)
-                </span>
-              </div>
-            </div>
-          )}
-          <div className="flex-1 min-h-0 relative overflow-hidden">
-            <ContextualLens
-              selectedWord={selectedWord}
-              onClearSelectedWord={() => setSelectedWord(null)}
-              onSelectWord={setSelectedWord}
-              sourceText={sourceText}
-              candidateWords={safeCandidateWords}
-              exactClosers={exactClosers}
-              finisherPairs={finisherPairs}
-              completeSolutions={completeSolutions}
-              isSolvingSolutions={isSolvingSolutions}
-              targetPhrase={activeTargetPhrase}
-              remainingLetters={remainingLetters}
-              onAddWordToTarget={onAddWordToTarget}
-              onSetWordAsTarget={onSetWordAsTarget}
-              onShowToast={onShowToast}
-              selectedLengthFilter={selectedLengthFilter}
-              onSelectLengthFilter={onSelectLengthFilter}
-              onClearLengthFilter={onClearLengthFilter}
-              selectedPosFilter={activePosFilter}
-              onSelectPosFilter={handlePosFilterChange}
-              selectedFreqFilter={selectedFreqFilter}
-              onSelectFreqFilter={onSelectFreqFilter}
-              onClearFreqFilter={onClearFreqFilter}
-              histogramData={effectiveHistogramData}
-              hoveredWordInfo={hoveredWordInfo}
-              compatibleData={compatibleData}
-              posCounts={posCounts}
-              otherSubtypeCounts={otherSubtypeCounts}
-              onHoverTreemapLength={setHoveredTreemapLength}
-              onHoverTreemapPos={setHoveredTreemapPos}
-            />
-          </div>
-          {/* Mobile bottom dock when on Stats panel so user can tap PEBBLE / GRAPH / BLOCK to switch back immediately */}
-          {showLeftGraph && (
-            <div className="md:hidden">
-              <BottomExplorerToolbar
-                currentView="stats"
-                onViewChange={(view) => {
-                  if (view !== 'stats') {
-                    setMobileViewTab('words');
-                    handleSplitLeftChange(view);
-                  }
-                }}
-                showStatsTab={true}
-                activeFilterMode={wordFilterMode || (avoidDeadEnds ? 'safe' : 'all')}
-                onSelectFilterMode={(mode) => {
-                  if (onSelectWordFilterMode) {
-                    onSelectWordFilterMode(mode);
-                  }
-                }}
-                onCycleFilterMode={onCycleWordFilter}
-                countsByMode={countsByMode}
-                totalFilteredWords={safeCandidateWords.length}
-                totalDictionaryWords={candidateWords.length}
-                isDrawerOpen={isFilterDrawerOpen}
-                onToggleDrawer={() => setIsFilterDrawerOpen((prev) => !prev)}
-                onCloseDrawer={() => setIsFilterDrawerOpen(false)}
-                customWordsCount={customWordsCount}
-                onOpenCustomWordManager={onOpenCustomWordManager}
-                selectedLengthFilter={selectedLengthFilter}
-                onSelectLengthFilter={onSelectLengthFilter}
-                onClearLengthFilter={onClearLengthFilter}
-                selectedFreqFilter={selectedFreqFilter}
-                onSelectFreqFilter={onSelectFreqFilter}
-                onClearFreqFilter={onClearFreqFilter}
-                avoidDeadEnds={avoidDeadEnds}
-                onToggleAvoidDeadEnds={() => setAvoidDeadEnds(!avoidDeadEnds)}
-              />
-            </div>
-          )}
-        </div>
-      )}
+      {/* Single Integrated Bottom Control Rail */}
+      <BottomExplorerToolbar
+        currentView={
+          mobileViewTab === 'stats' || currentLeftView === 'stats'
+            ? 'stats'
+            : currentLeftView === 'solutions'
+            ? 'solutions'
+            : (currentLeftView as 'pebbles' | 'graph' | 'blocks' | 'stats' | 'solutions')
+        }
+        onViewChange={(view) => {
+          if (view === 'stats') {
+            setMobileViewTab('stats');
+            handleSplitLeftChange('stats' as any);
+          } else if (view === 'solutions') {
+            setMobileViewTab('words');
+            handleSplitLeftChange('solutions');
+          } else {
+            setMobileViewTab('words');
+            handleSplitLeftChange(view);
+          }
+        }}
+        showStatsTab={showRightCards}
+        activeFilterMode={wordFilterMode || (avoidDeadEnds ? 'safe' : 'all')}
+        onSelectFilterMode={(mode) => {
+          if (onSelectWordFilterMode) {
+            onSelectWordFilterMode(mode);
+          }
+        }}
+        onCycleFilterMode={onCycleWordFilter}
+        countsByMode={countsByMode}
+        totalFilteredWords={searchFilteredWords.length}
+        totalDictionaryWords={candidateWords.length}
+        isDrawerOpen={isFilterDrawerOpen}
+        onToggleDrawer={() => setIsFilterDrawerOpen((prev) => !prev)}
+        onCloseDrawer={() => setIsFilterDrawerOpen(false)}
+        customWordsCount={customWordsCount}
+        onOpenCustomWordManager={onOpenCustomWordManager}
+        selectedLengthFilter={selectedLengthFilter}
+        onSelectLengthFilter={onSelectLengthFilter}
+        onClearLengthFilter={onClearLengthFilter}
+        selectedFreqFilter={selectedFreqFilter}
+        onSelectFreqFilter={onSelectFreqFilter}
+        onClearFreqFilter={onClearFreqFilter}
+        avoidDeadEnds={avoidDeadEnds}
+        onToggleAvoidDeadEnds={() => setAvoidDeadEnds(!avoidDeadEnds)}
+        sortBy={sortBy}
+        onSortByChange={setSortBy}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+      />
     </div>
   );
 };

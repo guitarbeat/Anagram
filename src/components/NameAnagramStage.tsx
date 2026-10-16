@@ -1,13 +1,117 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { Share2 } from 'lucide-react';
+import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
+import { Share2, X, ArrowLeftRight, GripVertical } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { renderRearrangementCanvas, type ShuffleEffectState } from '../render/stage';
 import type { ProgressBus } from '../hooks/useProgressBus';
 import { ShareModal } from './ShareModal';
 import { triggerHaptic } from '../hooks/useHaptics';
 
+interface SortableWordChipProps {
+  id: string;
+  word: string;
+  index: number;
+  total: number;
+  disabled?: boolean;
+  onRemove?: () => void;
+  onSwapWithNext?: () => void;
+}
+
+const SortableWordChip: React.FC<SortableWordChipProps> = ({
+  id,
+  word,
+  index,
+  total,
+  disabled = false,
+  onRemove,
+  onSwapWithNext,
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.35 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-zinc-900 font-mono font-bold text-[11px] sm:text-xs shadow-2xs group/chip transition-all shrink-0 select-none ${
+        disabled
+          ? 'cursor-default'
+          : isDragging
+          ? 'ring-2 ring-black shadow-lg scale-105 bg-white cursor-grabbing touch-none border-dashed border-zinc-400'
+          : 'cursor-grab active:cursor-grabbing hover:border-zinc-400 touch-none'
+      }`}
+      title={disabled ? undefined : 'Drag to reorder words, or click arrow to swap'}
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical className="w-2.5 h-2.5 text-zinc-400 group-hover/chip:text-zinc-700 pointer-events-none shrink-0" />
+      <span>{word}</span>
+      {index < total - 1 && onSwapWithNext && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSwapWithNext();
+          }}
+          title={`Swap with next`}
+          className="p-0.5 text-zinc-400 hover:text-black opacity-0 group-hover/chip:opacity-100 transition-opacity cursor-pointer"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <ArrowLeftRight className="w-2.5 h-2.5" />
+        </button>
+      )}
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          title={`Remove "${word}"`}
+          className="p-0.5 -mr-0.5 rounded-full text-zinc-400 hover:text-red-600 hover:bg-black/5 transition-colors cursor-pointer"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  );
+};
+
 export interface NameAnagramStageProps {
   sourceName: string;
   targetPhrase: string;
+  onTargetPhraseChange?: (phrase: string) => void;
   progressBus: ProgressBus;
   onShowToast: (text: string) => void;
   isPlaying?: boolean;
@@ -21,6 +125,7 @@ export interface NameAnagramStageProps {
 export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
   sourceName,
   targetPhrase,
+  onTargetPhraseChange,
   progressBus,
   onShowToast,
   isPlaying: externalIsPlaying,
@@ -34,6 +139,18 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
   const [progress, setProgress] = useState<number>(() => progressBus.get());
   const [internalIsPlaying, setInternalIsPlaying] = useState<boolean>(false);
   const [internalIsExportModalOpen, setInternalIsExportModalOpen] = useState<boolean>(false);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 4,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const isExportModalOpen =
     externalIsExportModalOpen !== undefined
@@ -307,28 +424,158 @@ export const NameAnagramStage: React.FC<NameAnagramStageProps> = ({
     };
   }, [progressBus, onShowToast, isPlaying]);
 
+  const targetWords = useMemo(
+    () => targetPhrase.trim().split(/\s+/).filter(Boolean),
+    [targetPhrase]
+  );
+
+  const tokenItems = useMemo(
+    () =>
+      targetWords.map((word, index) => ({
+        id: `token-${index}-${word}`,
+        word,
+        index,
+      })),
+    [targetWords]
+  );
+
+  const activeToken = useMemo(
+    () => (activeDragId ? tokenItems.find((t) => t.id === activeDragId) : null),
+    [activeDragId, tokenItems]
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(event.active.id as string);
+    triggerHaptic('light');
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = tokenItems.findIndex((item) => item.id === active.id);
+    const newIndex = tokenItems.findIndex((item) => item.id === over.id);
+
+    if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+      triggerHaptic('snap');
+      const updated = arrayMove(targetWords, oldIndex, newIndex);
+      if (onTargetPhraseChange) {
+        onTargetPhraseChange(updated.join(' '));
+      }
+      progressBus.set(0);
+      onShowToast(`Reordered: ${updated.join(' ')}`);
+    }
+  };
+
+  const handleDragCancel = () => {
+    setActiveDragId(null);
+  };
+
+  const handleRemoveWord = (index: number) => {
+    if (!onTargetPhraseChange) return;
+    triggerHaptic('remove');
+    const updated = [...targetWords];
+    const removedWord = updated.splice(index, 1)[0];
+    onTargetPhraseChange(updated.join(' '));
+    progressBus.set(0);
+    onShowToast(`Removed "${removedWord}"`);
+  };
+
+  const handleSwapWords = (idxA: number, idxB: number) => {
+    if (!onTargetPhraseChange) return;
+    triggerHaptic('snap');
+    const updated = [...targetWords];
+    const temp = updated[idxA];
+    updated[idxA] = updated[idxB];
+    updated[idxB] = temp;
+    onTargetPhraseChange(updated.join(' '));
+    progressBus.set(0);
+  };
+
   return (
     <div
       id="anagram-stage"
-      className="relative w-full h-full flex items-center justify-center overflow-hidden bg-white select-none group/stage"
+      className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden bg-white select-none group/stage"
     >
-      <canvas ref={canvasRef} className="w-full h-full block bg-white" />
-
-      {/* Floating Top-Right Stage Share Button */}
-      {sourceName.trim() && (
-        <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5 pointer-events-auto">
-          <button
-            type="button"
-            onClick={handleOpenExportModal}
-            title="Share kinetic anagram animation or generate shareable link/card"
-            aria-label="Share anagram animation"
-            className="h-6.5 sm:h-7.5 px-2.5 sm:px-3 bg-white hover:bg-black text-black hover:text-white border-2 border-black rounded-md text-[9.5px] sm:text-[10.5px] font-mono font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_#000000] hover:shadow-[3px_3px_0px_#000000] hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none cursor-pointer group/btn touch-manipulation"
-          >
-            <Share2 className="w-3.5 h-3.5 text-black group-hover/btn:text-white transition-colors" />
-            <span>Share</span>
-          </button>
+      {/* Integrated Stage Header Composer Bar with Interactive Word Chips */}
+      <div className="absolute top-0 inset-x-0 h-8 sm:h-9 z-20 flex items-center justify-between px-2.5 sm:px-3 bg-white/95 backdrop-blur-md border-b border-black/10 select-none pointer-events-auto">
+        <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto no-scrollbar py-0.5 pr-2">
+          <span className="text-[10px] font-mono uppercase font-bold text-zinc-400 shrink-0">
+            Target:
+          </span>
+          {tokenItems.length > 0 ? (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
+              <SortableContext
+                items={tokenItems.map((item) => item.id)}
+                strategy={horizontalListSortingStrategy}
+              >
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {tokenItems.map((item) => (
+                    <SortableWordChip
+                      key={item.id}
+                      id={item.id}
+                      word={item.word}
+                      index={item.index}
+                      total={tokenItems.length}
+                      disabled={!onTargetPhraseChange}
+                      onRemove={
+                        onTargetPhraseChange
+                          ? () => handleRemoveWord(item.index)
+                          : undefined
+                      }
+                      onSwapWithNext={
+                        onTargetPhraseChange && item.index < tokenItems.length - 1
+                          ? () => handleSwapWords(item.index, item.index + 1)
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+              <DragOverlay dropAnimation={{ duration: 160, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
+                {activeToken ? (
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-white border-2 border-black text-black font-mono font-bold text-[11px] sm:text-xs shadow-xl ring-2 ring-black/10 scale-105 cursor-grabbing select-none pointer-events-none">
+                    <GripVertical className="w-2.5 h-2.5 text-zinc-800 shrink-0" />
+                    <span>{activeToken.word}</span>
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+          ) : (
+            <span className="text-[11px] sm:text-xs text-zinc-400 font-mono italic truncate">
+              Tap words in explorer below to compose target
+            </span>
+          )}
         </div>
-      )}
+
+        {/* Floating Top-Right Stage Share Button */}
+        {sourceName.trim() && (
+          <div className="flex items-center gap-1.5 shrink-0 ml-1.5">
+            <button
+              type="button"
+              onClick={handleOpenExportModal}
+              title="Share kinetic anagram animation or generate shareable link/card"
+              aria-label="Share anagram animation"
+              className="h-6 sm:h-6.5 px-2.5 bg-black hover:bg-zinc-800 text-white rounded text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer active:scale-95 shadow-xs"
+            >
+              <Share2 className="w-3 h-3 text-white" />
+              <span className="hidden sm:inline">Share</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Main Canvas Viewport */}
+      <div className="w-full h-full pt-8 sm:pt-9 flex items-center justify-center">
+        <canvas ref={canvasRef} className="w-full h-full block bg-white" />
+      </div>
 
       {/* Share & Export Dialog Modal */}
       <ShareModal

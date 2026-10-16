@@ -159,10 +159,25 @@ export function useSplitController({
     }
   }, [defaultDetent, currentDetent, setDetent]);
 
+  // Keyboard auto-adaptation: when virtual keyboard opens, smoothly adapt detent to protect active input
+  const prevDetentBeforeKeyboardRef = useRef<SplitDetent | null>(null);
+  useEffect(() => {
+    if (isKeyboardOpen) {
+      if (currentDetent.type !== 'topMini') {
+        prevDetentBeforeKeyboardRef.current = currentDetent;
+        setDetent(SplitDetents.topMini);
+      }
+    } else if (prevDetentBeforeKeyboardRef.current) {
+      setDetent(prevDetentBeforeKeyboardRef.current);
+      prevDetentBeforeKeyboardRef.current = null;
+    }
+  }, [isKeyboardOpen, currentDetent, setDetent]);
+
   // Touch-drag context to prevent jumping, handle finger deadband, and eliminate mobile overscroll
   const dragContextRef = useRef<{
     startX: number;
     startY: number;
+    startTime: number;
     startRatio: number;
     dragType: 1 | 2;
     pointerId: number;
@@ -191,16 +206,18 @@ export function useSplitController({
       // Ignore
     }
 
+    const now = performance.now();
     dragContextRef.current = {
       startX: e.clientX,
       startY: e.clientY,
+      startTime: now,
       startRatio: ratio1,
       dragType: 1,
       pointerId: e.pointerId,
       isTouch,
       hasExceededSlop: !isTouch, // mice have zero slop; touch devices get refined deadzone
     };
-    pointerHistoryRef.current = [{ y: e.clientY, time: performance.now() }];
+    pointerHistoryRef.current = [{ y: e.clientY, time: now }];
 
     if (!isTouch) {
       setHasUserCustomized(true);
@@ -221,16 +238,18 @@ export function useSplitController({
       // Ignore
     }
 
+    const now = performance.now();
     dragContextRef.current = {
       startX: e.clientX,
       startY: e.clientY,
+      startTime: now,
       startRatio: ratio1,
       dragType: 2,
       pointerId: e.pointerId,
       isTouch,
       hasExceededSlop: !isTouch,
     };
-    pointerHistoryRef.current = [{ y: e.clientY, time: performance.now() }];
+    pointerHistoryRef.current = [{ y: e.clientY, time: now }];
 
     if (!isTouch) {
       setHasUserCustomized(true);
@@ -298,10 +317,13 @@ export function useSplitController({
         }
       }
 
-      // Record trajectory history for velocity detection
+      // Record trajectory history for velocity detection within last 120ms
       const now = performance.now();
       pointerHistoryRef.current.push({ y: e.clientY, time: now });
-      if (pointerHistoryRef.current.length > 6) {
+      while (
+        pointerHistoryRef.current.length > 2 &&
+        now - pointerHistoryRef.current[0].time > 120
+      ) {
         pointerHistoryRef.current.shift();
       }
 
@@ -314,8 +336,18 @@ export function useSplitController({
 
       // Delta-based relative tracking prevents abrupt jumps on touch
       const nextRatio = ctx.startRatio + deltaRatio;
-      const clamped = Math.max(0.18, Math.min(0.78, nextRatio));
-      setRatio1(clamped);
+      const clamped = Math.max(0.14, Math.min(0.86, nextRatio));
+
+      // Magnetic attractor fields around harmonic detents (0.28, 0.48, 0.72)
+      let magneticRatio = clamped;
+      const detents = [0.28, 0.48, 0.72];
+      for (const d of detents) {
+        if (Math.abs(clamped - d) < 0.025) {
+          magneticRatio = d + (clamped - d) * 0.4;
+          break;
+        }
+      }
+      setRatio1(magneticRatio);
     },
     [draggedPanel]
   );
@@ -353,46 +385,120 @@ export function useSplitController({
       return;
     }
 
-    const currentDrag = activeDrag || ctx?.dragType;
+    if (!ctx) {
+      setActiveDrag(null);
+      return;
+    }
 
-    if (!currentDrag || !ctx?.hasExceededSlop) {
+    const now = performance.now();
+    const releaseY = e ? e.clientY : (pointerHistoryRef.current[pointerHistoryRef.current.length - 1]?.y ?? ctx.startY);
+    const totalDeltaY = releaseY - ctx.startY;
+    const totalDuration = Math.max(1, now - ctx.startTime);
+    const overallVelocity = totalDeltaY / totalDuration;
+
+    // Calculate instantaneous release velocity from recent trajectory samples
+    const history = pointerHistoryRef.current;
+    let instantaneousVelocity = 0;
+    if (history.length >= 2) {
+      const first = history[0];
+      const last = history[history.length - 1];
+      const dt = last.time - first.time;
+      if (dt > 10) {
+        instantaneousVelocity = (last.y - first.y) / dt;
+      }
+    }
+
+    // Blend instantaneous and overall velocity for high-fidelity swipe physics
+    const velocityY =
+      Math.abs(instantaneousVelocity) > 0.16
+        ? instantaneousVelocity
+        : overallVelocity;
+
+    const isSwipeFlick =
+      Math.abs(velocityY) > 0.20 ||
+      (Math.abs(totalDeltaY) >= 10 && totalDuration < 300);
+
+    const isEngaged = activeDrag || ctx.hasExceededSlop || isSwipeFlick;
+
+    if (!isEngaged) {
       dragContextRef.current = null;
       setActiveDrag(null);
       return;
     }
 
-    const history = pointerHistoryRef.current;
-    let velocityY = 0;
-    if (history.length >= 2) {
-      const first = history[0];
-      const last = history[history.length - 1];
-      const dt = last.time - first.time;
-      if (dt > 12) {
-        velocityY = (last.y - first.y) / dt;
-      }
-    }
+    const currentDrag = activeDrag || ctx.dragType;
 
     if (currentDrag === 1) {
-      if (ratio1 > 0.68 || (velocityY > 0.5 && ratio1 > 0.58)) {
+      // Overscroll to topFull if dragged far down
+      if (ratio1 >= 0.82) {
         triggerHaptic('heavy');
-        setDetent(SplitDetents.focusTop);
-      } else if (ratio1 < 0.26 || (velocityY < -0.38 && ratio1 < 0.34)) {
-        triggerHaptic('heavy');
-        setDetent(SplitDetents.topMini);
-      } else {
-        triggerHaptic('notch');
-        setDetent(SplitDetents.balanced);
+        setDetent(SplitDetents.topFull);
+      }
+      // Swipe Up (negative velocity, flicking divider towards top of screen) -> snap to topMini or balanced
+      else if (velocityY < -0.22) {
+        if (ratio1 > 0.58) {
+          if (velocityY < -0.6) {
+            triggerHaptic('heavy');
+            setDetent(SplitDetents.topMini);
+          } else {
+            triggerHaptic('notch');
+            setDetent(SplitDetents.balanced);
+          }
+        } else {
+          triggerHaptic('heavy');
+          setDetent(SplitDetents.topMini);
+        }
+      }
+      // Swipe Down (positive velocity, flicking divider towards bottom of screen) -> snap to focusTop or balanced
+      else if (velocityY > 0.22) {
+        if (ratio1 < 0.35) {
+          if (velocityY > 0.6) {
+            triggerHaptic('heavy');
+            setDetent(SplitDetents.focusTop);
+          } else {
+            triggerHaptic('notch');
+            setDetent(SplitDetents.balanced);
+          }
+        } else {
+          triggerHaptic('heavy');
+          setDetent(SplitDetents.focusTop);
+        }
+      }
+      // Positional snap (drag released with low momentum)
+      else {
+        if (ratio1 < 0.28) {
+          triggerHaptic('heavy');
+          setDetent(SplitDetents.topMini);
+        } else if (ratio1 > 0.64) {
+          triggerHaptic('heavy');
+          setDetent(SplitDetents.focusTop);
+        } else {
+          triggerHaptic('notch');
+          setDetent(SplitDetents.balanced);
+        }
       }
     } else if (currentDrag === 2) {
-      if (ratio1 < 0.32 || (velocityY < -0.5 && ratio1 < 0.42)) {
+      // Overscroll to bottomFull if dragged far up
+      if (ratio1 <= 0.16) {
+        triggerHaptic('heavy');
+        setDetent(SplitDetents.bottomFull);
+      } else if (velocityY < -0.22) {
         triggerHaptic('heavy');
         setDetent(SplitDetents.focusBottom);
-      } else if (ratio1 > 0.68 || (velocityY > 0.38 && ratio1 > 0.58)) {
+      } else if (velocityY > 0.22) {
         triggerHaptic('heavy');
         setDetent(SplitDetents.bottomMini);
       } else {
-        triggerHaptic('notch');
-        setDetent(SplitDetents.balanced);
+        if (ratio1 < 0.35) {
+          triggerHaptic('heavy');
+          setDetent(SplitDetents.focusBottom);
+        } else if (ratio1 > 0.64) {
+          triggerHaptic('heavy');
+          setDetent(SplitDetents.bottomMini);
+        } else {
+          triggerHaptic('notch');
+          setDetent(SplitDetents.balanced);
+        }
       }
     }
 
