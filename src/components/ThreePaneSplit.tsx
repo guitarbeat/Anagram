@@ -28,6 +28,12 @@ import {
   TrendingUp,
   Search,
   X,
+  ArrowLeftRight,
+  Eye,
+  EyeOff,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
 } from 'lucide-react';
 import { triggerHaptic } from '../hooks/useHaptics';
 import { SplitDivider } from './SplitDivider';
@@ -109,7 +115,7 @@ const MODE_CONFIGS: Record<WordFilterMode, ModeConfig> = {
   },
   long: {
     label: '5+ Letters',
-    shortLabel: '5+ LET',
+    shortLabel: '5+ LTRS',
     sublabel: 'Longer anagrams',
     icon: <Zap className="w-3 h-3" />,
     color: 'text-zinc-200',
@@ -233,6 +239,7 @@ export interface ThreePaneSplitProps {
   onSplitLeftViewChange?: (view: 'graph' | 'pebbles' | 'blocks' | 'solutions' | 'inspector') => void;
   splitRightView?: 'inspector' | 'blocks' | 'pebbles' | 'solutions' | 'graph';
   onSplitRightViewChange?: (view: 'inspector' | 'blocks' | 'pebbles' | 'solutions' | 'graph') => void;
+  splitRatio?: number;
   showGraphPanel?: boolean;
   onToggleGraphPanel?: () => void;
   showInspectorPanel?: boolean;
@@ -262,6 +269,16 @@ export interface ThreePaneSplitProps {
   // Collapsible Composer Dock State
   isComposerCollapsed?: boolean;
   onToggleComposerCollapse?: () => void;
+
+  // Auto-Hide Disappearing Names State
+  autoHideDimmedNames?: boolean;
+  onAutoHideDimmedNamesChange?: (val: boolean) => void;
+
+  // Zoom & Fit Controls State
+  zoomScale?: number;
+  onZoomOut?: () => void;
+  onZoomIn?: () => void;
+  onResetZoomFit?: () => void;
 }
 
 export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
@@ -295,10 +312,11 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   onSelectModeFilter,
   explorerViewMode,
   onSelectExplorerView,
-  splitLeftView = 'pebbles',
+  splitLeftView = 'graph',
   onSplitLeftViewChange,
-  splitRightView = 'solutions',
+  splitRightView = 'inspector',
   onSplitRightViewChange,
+  splitRatio = 0.5,
   showGraphPanel = true,
   onToggleGraphPanel,
   showInspectorPanel = true,
@@ -321,6 +339,12 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   justFoundResults = false,
   isComposerCollapsed: externalComposerCollapsed,
   onToggleComposerCollapse,
+  autoHideDimmedNames = true,
+  onAutoHideDimmedNamesChange,
+  zoomScale = 1.0,
+  onZoomOut,
+  onZoomIn,
+  onResetZoomFit,
 }) => {
   const hasStage = Boolean(isStageActive && card1);
   const hasCard3 = Boolean(card3);
@@ -630,12 +654,24 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showViewMenu, setShowViewMenu] = useState(false);
+  const [showLeftSplitMenu, setShowLeftSplitMenu] = useState(false);
+  const [showRightSplitMenu, setShowRightSplitMenu] = useState(false);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
   const viewMenuRef = useRef<HTMLDivElement>(null);
+  const leftSplitMenuRef = useRef<HTMLDivElement>(null);
+  const rightSplitMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!showFilterMenu && !showSortMenu && !showViewMenu) return;
+    if (
+      !showFilterMenu &&
+      !showSortMenu &&
+      !showViewMenu &&
+      !showLeftSplitMenu &&
+      !showRightSplitMenu
+    ) {
+      return;
+    }
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
       if (showFilterMenu && filterMenuRef.current && !filterMenuRef.current.contains(target)) {
@@ -647,10 +683,24 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
       if (showViewMenu && viewMenuRef.current && !viewMenuRef.current.contains(target)) {
         setShowViewMenu(false);
       }
+      if (
+        showLeftSplitMenu &&
+        leftSplitMenuRef.current &&
+        !leftSplitMenuRef.current.contains(target)
+      ) {
+        setShowLeftSplitMenu(false);
+      }
+      if (
+        showRightSplitMenu &&
+        rightSplitMenuRef.current &&
+        !rightSplitMenuRef.current.contains(target)
+      ) {
+        setShowRightSplitMenu(false);
+      }
     };
     document.addEventListener('pointerdown', handleClickOutside);
     return () => document.removeEventListener('pointerdown', handleClickOutside);
-  }, [showFilterMenu, showSortMenu, showViewMenu]);
+  }, [showFilterMenu, showSortMenu, showViewMenu, showLeftSplitMenu, showRightSplitMenu]);
 
   const handleSelectFilterMode = (mode: WordFilterMode) => {
     triggerHaptic('snap');
@@ -661,10 +711,10 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     }
   };
 
-  // Current Explorer View Mode
+  // Current Explorer View Mode (Graph is the primary default view)
   const rawExplorerView =
     explorerViewMode ||
-    (showGraphPanel && showInspectorPanel ? 'pebbles' : showGraphPanel ? 'graph' : 'inspector');
+    (showGraphPanel && showInspectorPanel ? 'graph' : showGraphPanel ? 'graph' : 'inspector');
   const currentExplorerView: 'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions' =
     rawExplorerView === 'cards' ? 'blocks' : rawExplorerView;
 
@@ -710,113 +760,118 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   // DIVIDER 2 LEADING TABS & CHROME SPLIT SCREEN BUTTON
   const isSplitActive = currentExplorerView === 'both';
 
+  // Primary Single-View Tabs: GRAPH (Main)
+  const PRIMARY_TABS: {
+    id: 'graph';
+    label: string;
+    title: string;
+    icon: React.ReactNode;
+  }[] = [
+    {
+      id: 'graph',
+      label: 'GRAPH',
+      title: 'Graph View: Interactive physics word clusters',
+      icon: <Network className="w-3.5 h-3.5" />,
+    },
+  ];
+
+  // Full Split-Pane View Options (for Left / Right Split Pane Switchers)
   const VIEW_COMPLICATIONS: {
-    id: 'pebbles' | 'graph' | 'blocks' | 'inspector' | 'solutions';
+    id: 'graph' | 'inspector' | 'solutions' | 'blocks';
     label: string;
     title: string;
     icon: React.ReactNode;
     badge?: number;
   }[] = [
     {
-      id: 'pebbles',
-      label: 'WORDS',
-      title: 'Words Tab: Organic tactile word pebbles',
-      icon: <Layers className="w-3.5 h-3.5" />,
-    },
-    {
       id: 'graph',
       label: 'GRAPH',
-      title: 'Graph Tab: Interactive physics word network',
+      title: 'Graph View: Interactive physics word network',
       icon: <Network className="w-3.5 h-3.5" />,
     },
     {
-      id: 'blocks',
-      label: 'BLOCKS',
-      title: 'Blocks Tab: Squarified word treemap',
-      icon: <LayoutGrid className="w-3.5 h-3.5" />,
-    },
-    {
       id: 'inspector',
-      label: 'STATS',
-      title: 'Stats Tab: Word length & speech distributions',
+      label: 'INSPECT',
+      title: 'Live Word Lens, Finishes & Distributions (Updates on hover or click)',
       icon: <BarChart3 className="w-3.5 h-3.5" />,
     },
     {
       id: 'solutions',
       label: 'SOLVE',
-      title: `Solve Tab: Exact 1-word wins, 2-word pairs & full anagram solutions (${totalSolveCount})`,
+      title: `All Anagram Completions & Pairs (${totalSolveCount})`,
       icon: <Sparkles className="w-3.5 h-3.5" />,
       badge: totalSolveCount > 0 ? totalSolveCount : undefined,
+    },
+    {
+      id: 'blocks',
+      label: 'BLOCKS',
+      title: 'Blocks View: Squarified word treemap',
+      icon: <LayoutGrid className="w-3.5 h-3.5" />,
     },
   ];
 
   const leftConfig =
     VIEW_COMPLICATIONS.find((v) => v.id === splitLeftView) || VIEW_COMPLICATIONS[0];
   const rightConfig =
-    VIEW_COMPLICATIONS.find((v) => v.id === splitRightView) || VIEW_COMPLICATIONS[4];
+    VIEW_COMPLICATIONS.find((v) => v.id === splitRightView) || VIEW_COMPLICATIONS[2];
 
   const resolvedDivider2Leading: SplitAccessory[] = isSplitActive
     ? [
-        // Merged Chrome Split Tab (Active tab flowing directly from the page)
-        {
-          id: 'chrome-split-tab',
-          title: `Chrome Split Screen: ${leftConfig.label} + ${rightConfig.label}`,
+        // Left Split Pane Direct View Tabs: GRAPH | INSPECT | SOLVE | BLOCKS
+        ...VIEW_COMPLICATIONS.map((v) => ({
+          id: `left-split-tab-${v.id}`,
+          title: `Left Pane: ${v.label}`,
           variant: 'tab' as const,
-          active: !isCard3Minimized,
-          action: () => triggerHaptic('light'),
-          label: `${leftConfig.label} ⫽ ${rightConfig.label}`,
-          icon: <Columns2 className="w-3.5 h-3.5" />,
-          badge: rightConfig.badge,
-        },
-        // Inactive tabs to switch to single tab mode
-        ...VIEW_COMPLICATIONS.filter(
-          (view) => view.id !== splitLeftView && view.id !== splitRightView
-        ).map((view) => ({
-          id: `view-tab-${view.id}`,
-          title: `Switch to ${view.label} (Single Tab)`,
-          icon: view.icon,
-          label: view.label,
-          badge: view.badge,
-          variant: 'tab' as const,
-          active: false,
-          action: () => handleSelectViewMode(view.id),
+          active: splitLeftView === v.id && !isCard3Minimized,
+          icon: v.icon,
+          label: v.label,
+          badge: v.badge,
+          action: () => {
+            triggerHaptic('snap');
+            if (isCard3Minimized || soloCard === 1) {
+              setIsCard3Minimized(false);
+              setSoloCard(null);
+            }
+            if (onSplitLeftViewChange) {
+              onSplitLeftViewChange(v.id);
+            }
+          },
         })),
-        // Close split button in tab strip
+        // Swap Left ⇄ Right Button
         {
-          id: 'exit-split-btn',
-          title: 'Exit Split Screen (Return to Single Tab)',
-          icon: <X className="w-3.5 h-3.5 text-zinc-400 hover:text-white" />,
-          label: 'EXIT',
-          action: () => handleSelectViewMode(splitLeftView || 'pebbles'),
+          id: 'swap-split-panes-btn',
+          title: 'Swap left and right views',
+          icon: <ArrowLeftRight className="w-3 h-3" />,
+          label: 'SWAP',
+          action: () => {
+            triggerHaptic('snap');
+            if (onSplitLeftViewChange && onSplitRightViewChange) {
+              const temp = splitLeftView;
+              onSplitLeftViewChange(splitRightView);
+              onSplitRightViewChange(temp);
+            }
+          },
         },
       ]
     : [
-        // Standard Chrome Single Tabs
-        ...VIEW_COMPLICATIONS.map((view) => ({
-          id: `view-tab-${view.id}`,
-          title: view.title,
-          icon: view.icon,
-          label: view.label,
-          badge: view.badge,
+        // Direct View Tabs: GRAPH | INSPECT | SOLVE | BLOCKS
+        ...VIEW_COMPLICATIONS.map((v) => ({
+          id: `view-tab-${v.id}`,
+          title: v.title,
+          icon: v.icon,
+          label: v.label,
+          badge: v.badge,
           variant: 'tab' as const,
-          active:
-            !isCard3Minimized &&
-            !isSplitActive &&
-            currentExplorerView === view.id,
-          action: () => handleSelectViewMode(view.id),
-          onContextMenu: (e: React.MouseEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            triggerHaptic('medium');
-            setShowFilterMenu(false);
-            setShowSortMenu(false);
-            setShowViewMenu((prev) => !prev);
+          active: currentExplorerView === v.id && !isCard3Minimized && !isSplitActive,
+          action: () => {
+            triggerHaptic('snap');
+            handleSelectViewMode(v.id);
           },
         })),
-        // Dedicated Split Screen Toggle Complication Button
+        // Split View Toggle
         {
           id: 'split-screen-toggle',
-          title: 'Chrome Split Screen: View two tabs side-by-side',
+          title: 'Open Split View: Side-by-side dual pane view',
           icon: <Columns2 className="w-3.5 h-3.5" />,
           label: 'SPLIT',
           active: false,
@@ -827,7 +882,45 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
         },
       ];
 
-  // DIVIDER 2 LEADING MENU: Layout & Split View Context Menu (on right-click of view complications)
+  const resolvedDivider2RightLeading: SplitAccessory[] | undefined = isSplitActive
+    ? [
+        // Right Split Pane Direct View Tabs: GRAPH | INSPECT | SOLVE | BLOCKS
+        ...VIEW_COMPLICATIONS.map((v) => ({
+          id: `right-split-tab-${v.id}`,
+          title: `Right Pane: ${v.label}`,
+          variant: 'tab' as const,
+          active: splitRightView === v.id && !isCard3Minimized,
+          icon: v.icon,
+          label: v.label,
+          badge: v.badge,
+          action: () => {
+            triggerHaptic('snap');
+            if (isCard3Minimized || soloCard === 1) {
+              setIsCard3Minimized(false);
+              setSoloCard(null);
+            }
+            if (onSplitRightViewChange) {
+              onSplitRightViewChange(v.id);
+            }
+          },
+        })),
+        // Close Split Screen Button
+        {
+          id: 'exit-split-btn',
+          title: 'Close split screen (Return to single view)',
+          icon: <X className="w-3.5 h-3.5 text-zinc-400 hover:text-white" />,
+          label: 'CLOSE',
+          action: () =>
+            handleSelectViewMode(
+              splitLeftView === 'pebbles' ? 'pebbles' : splitLeftView
+            ),
+        },
+      ]
+    : undefined;
+
+  const divider2RightLeadingMenu = null;
+
+  // DIVIDER 2 LEADING MENU: Workspace & Split Context Menu
   const divider2LeadingMenu = showViewMenu ? (
     <div
       ref={viewMenuRef}
@@ -937,38 +1030,224 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   const activeSortConfig =
     SORT_OPTIONS.find((s) => s.id === sortBy) || SORT_OPTIONS[0];
 
-  // DIVIDER 2 TRAILING COMPLICATIONS: FILTER + SORT (Sort shown only in WORDS pebble explorer)
+  const availableLengths = histogramData.filter((bin) => bin.count > 0);
+
+  // DIVIDER 2 TRAILING COMPLICATIONS:
+  // Always-visible inline quick filter pills (so filters are never forgotten) + Search/More Filter menu
   const resolvedDivider2Trailing: SplitAccessory[] = [
+    // Inline Quick Filter Pills (Visible directly on the divider bar)
     {
-      id: 'filterComplication',
-      title: MODE_CONFIGS[currentMode].getDescription(safeCounts[currentMode]),
-      icon: <SlidersHorizontal className="w-3 h-3" />,
-      label: 'FILTER',
-      badge: hasActiveFilterModifiers ? '●' : undefined,
-      shortcut: 'S',
-      active: showFilterMenu,
-      action: (e?: React.MouseEvent) => {
-        if (e?.shiftKey) {
-          // Shift-click: cycle filter preset directly
-          if (onCycleWordFilter) {
-            onCycleWordFilter();
-          } else {
-            const idx = ALL_MODES.indexOf(currentMode);
-            const nextIdx = (idx + 1) % ALL_MODES.length;
-            handleSelectFilterMode(ALL_MODES[nextIdx]);
-          }
-          return;
-        }
-        triggerHaptic('snap');
-        setShowSortMenu(false);
-        setShowViewMenu(false);
-        setShowFilterMenu((prev) => !prev);
-      },
-      onContextMenu: (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (onCycleWordFilter) onCycleWordFilter();
-      },
+      id: 'inlineQuickFilters',
+      title: 'Quick Filters: Click to filter Graph or Words immediately',
+      customContent: (
+        <div
+          className="hidden sm:flex items-center gap-1"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {/* Solvable vs All Toggle */}
+          <button
+            type="button"
+            onClick={() =>
+              handleSelectFilterMode(currentMode === 'safe' ? 'all' : 'safe')
+            }
+            title={
+              currentMode === 'safe'
+                ? `Showing ${safeCounts.safe} Solvable Words (no dead ends). Click to show All (${safeCounts.all}).`
+                : `Showing All ${safeCounts.all} Words. Click to filter to Solvable (${safeCounts.safe}).`
+            }
+            className={`h-5.5 px-2 rounded-md text-[9.5px] font-mono font-bold uppercase tracking-tight transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0 border ${
+              currentMode === 'safe' || currentMode === 'all'
+                ? 'bg-white text-black border-white font-black shadow-2xs'
+                : 'bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 border-white/10'
+            }`}
+          >
+            <span>{currentMode === 'all' ? 'ALL' : 'SOLVABLE'}</span>
+            <span
+              className={`text-[8.5px] tabular-nums font-black px-1 py-0.1 rounded ${
+                currentMode === 'safe' || currentMode === 'all'
+                  ? 'bg-black/15 text-black'
+                  : 'bg-white/10 text-zinc-300'
+              }`}
+            >
+              {currentMode === 'all' ? safeCounts.all : safeCounts.safe}
+            </span>
+          </button>
+
+          {/* 1-Word Wins Quick Filter (when available) */}
+          {safeCounts.closers > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                handleSelectFilterMode(
+                  currentMode === 'closers' ? 'safe' : 'closers'
+                )
+              }
+              title={`Filter to ${safeCounts.closers} 1-word exact solutions`}
+              className={`h-5.5 px-2 rounded-md text-[9.5px] font-mono font-bold uppercase tracking-tight transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0 border ${
+                currentMode === 'closers'
+                  ? 'bg-white text-black border-white font-black shadow-2xs'
+                  : 'bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 border-white/10'
+              }`}
+            >
+              <span>1-WORD</span>
+              <span
+                className={`text-[8.5px] tabular-nums font-black px-1 py-0.1 rounded ${
+                  currentMode === 'closers'
+                    ? 'bg-black/15 text-black'
+                    : 'bg-white/10 text-zinc-300'
+                }`}
+              >
+                {safeCounts.closers}
+              </span>
+            </button>
+          )}
+
+          {/* 2-Word Pairs Quick Filter (when available) */}
+          {safeCounts.pairs > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                handleSelectFilterMode(currentMode === 'pairs' ? 'safe' : 'pairs')
+              }
+              title={`Filter to ${safeCounts.pairs} words that form 2-word exact finishes`}
+              className={`h-5.5 px-2 rounded-md text-[9.5px] font-mono font-bold uppercase tracking-tight transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0 border ${
+                currentMode === 'pairs'
+                  ? 'bg-white text-black border-white font-black shadow-2xs'
+                  : 'bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 border-white/10'
+              }`}
+            >
+              <span>PAIRS</span>
+              <span
+                className={`text-[8.5px] tabular-nums font-black px-1 py-0.1 rounded ${
+                  currentMode === 'pairs'
+                    ? 'bg-black/15 text-black'
+                    : 'bg-white/10 text-zinc-300'
+                }`}
+              >
+                {safeCounts.pairs}
+              </span>
+            </button>
+          )}
+
+          {/* 5+ Letters Quick Filter */}
+          {safeCounts.long > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                handleSelectFilterMode(currentMode === 'long' ? 'safe' : 'long')
+              }
+              title={`Filter to ${safeCounts.long} words with 5 or more letters`}
+              className={`h-5.5 px-2 rounded-md text-[9.5px] font-mono font-bold uppercase tracking-tight transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0 border ${
+                currentMode === 'long'
+                  ? 'bg-white text-black border-white font-black shadow-2xs'
+                  : 'bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 border-white/10'
+              }`}
+            >
+              <span>5+ LTRS</span>
+              <span
+                className={`text-[8.5px] tabular-nums font-black px-1 py-0.1 rounded ${
+                  currentMode === 'long'
+                    ? 'bg-black/15 text-black'
+                    : 'bg-white/10 text-zinc-300'
+                }`}
+              >
+                {safeCounts.long}
+              </span>
+            </button>
+          )}
+
+          {/* Merged View Controls Capsule (Auto-Hide + Zoom) */}
+          <div className="flex items-center gap-0.5 p-0.5 rounded-md bg-white/5 border border-white/10 shrink-0">
+            <button
+              type="button"
+              onClick={() => onAutoHideDimmedNamesChange?.(!autoHideDimmedNames)}
+              title={
+                autoHideDimmedNames
+                  ? 'Auto-hide names for dimmed/disappearing words (Click to show all names always)'
+                  : 'Show all word names always (Click to auto-hide names for dimmed/disappearing words)'
+              }
+              className={`h-4.5 px-1.5 rounded text-[9px] font-mono font-bold uppercase tracking-tight transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0 ${
+                autoHideDimmedNames
+                  ? 'bg-white text-black font-black shadow-2xs'
+                  : 'text-zinc-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              {autoHideDimmedNames ? (
+                <EyeOff className="w-3 h-3 shrink-0" />
+              ) : (
+                <Eye className="w-3 h-3 text-zinc-400 shrink-0" />
+              )}
+              <span>AUTO-HIDE</span>
+            </button>
+
+            <div className="w-px h-3 bg-white/15 my-auto mx-0.5 shrink-0" />
+
+            <button
+              type="button"
+              onClick={onZoomOut}
+              title="Zoom Out"
+              className="h-4.5 w-4.5 rounded text-[9px] font-mono font-bold transition-all cursor-pointer text-zinc-400 hover:text-white hover:bg-white/10 flex items-center justify-center shrink-0"
+            >
+              <ZoomOut className="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              onClick={onResetZoomFit}
+              title="Fit all words to screen"
+              className="h-4.5 px-1.5 rounded text-[9px] font-mono font-bold tabular-nums transition-all cursor-pointer text-zinc-300 hover:text-white hover:bg-white/10 flex items-center gap-0.5 shrink-0"
+            >
+              <Maximize2 className="w-2.5 h-2.5 text-zinc-400" />
+              <span>{Math.round((zoomScale || 1.0) * 100)}%</span>
+            </button>
+            <button
+              type="button"
+              onClick={onZoomIn}
+              title="Zoom In"
+              className="h-4.5 w-4.5 rounded text-[9px] font-mono font-bold transition-all cursor-pointer text-zinc-400 hover:text-white hover:bg-white/10 flex items-center justify-center shrink-0"
+            >
+              <ZoomIn className="w-3 h-3" />
+            </button>
+          </div>
+
+          {/* Compact Inline Length Segmented Chips */}
+          {availableLengths.length > 0 && onSelectLengthFilter && (
+            <div className="hidden md:flex items-center gap-0.5 p-0.5 rounded-md bg-white/5 border border-white/10 ml-0.5">
+              {availableLengths.slice(0, 6).map((bin) => {
+                const isLenActive = activeLengthArray.includes(bin.length);
+                return (
+                  <button
+                    key={bin.length}
+                    type="button"
+                    onClick={() => handleToggleLengthChip(bin.length)}
+                    title={`Filter ${bin.length}-letter words (${bin.count})`}
+                    className={`h-4.5 px-1.5 rounded text-[9px] font-mono font-bold tabular-nums transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-center ${
+                      isLenActive
+                        ? 'bg-white text-black font-black'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    {bin.length}L
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Quick Reset when any filter is active */}
+          {hasActiveFilterModifiers && (
+            <button
+              type="button"
+              onClick={handleResetAllFilters}
+              title="Reset active filters"
+              className="h-5.5 px-1.5 rounded-md bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white text-[9px] font-mono font-bold transition-colors cursor-pointer flex items-center gap-1 border border-white/15"
+            >
+              <RotateCcw className="w-2.5 h-2.5" />
+              <span className="hidden lg:inline text-[8.5px] font-bold">RESET</span>
+            </button>
+          )}
+        </div>
+      ),
+      action: () => {},
     },
     ...(onSortByChange && currentExplorerView === 'pebbles'
       ? [
@@ -994,29 +1273,59 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           },
         ]
       : []),
+    {
+      id: 'filterComplication',
+      title: MODE_CONFIGS[currentMode].getDescription(safeCounts[currentMode]),
+      icon: searchQuery.trim() ? (
+        <Search className="w-3 h-3" />
+      ) : (
+        <SlidersHorizontal className="w-3 h-3" />
+      ),
+      label: searchQuery.trim() ? `"${searchQuery.trim()}"` : 'MORE',
+      badge: hasActiveFilterModifiers ? '●' : undefined,
+      active: showFilterMenu,
+      action: (e?: React.MouseEvent) => {
+        if (e?.shiftKey) {
+          if (onCycleWordFilter) {
+            onCycleWordFilter();
+          } else {
+            const idx = ALL_MODES.indexOf(currentMode);
+            const nextIdx = (idx + 1) % ALL_MODES.length;
+            handleSelectFilterMode(ALL_MODES[nextIdx]);
+          }
+          return;
+        }
+        triggerHaptic('snap');
+        setShowSortMenu(false);
+        setShowViewMenu(false);
+        setShowFilterMenu((prev) => !prev);
+      },
+      onContextMenu: (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (onCycleWordFilter) onCycleWordFilter();
+      },
+    },
   ];
-
-  // DIVIDER 2 TRAILING MENU: Pop-Out Filter & Lexicon Complication Capsule OR Sort Menu Capsule
-  const availableLengths = histogramData.filter((bin) => bin.count > 0);
 
   const divider2TrailingMenu = showFilterMenu ? (
     <div
       ref={filterMenuRef}
       role="menu"
-      className={`absolute ${menuVerticalPosClass} right-0 w-[290px] sm:w-[340px] bg-[#121215]/98 backdrop-blur-xl border border-white/15 rounded-2xl shadow-2xl p-2.5 z-50 select-none animate-in fade-in zoom-in-95 duration-100`}
+      className={`absolute ${menuVerticalPosClass} right-0 w-[220px] sm:w-[240px] bg-[#121215]/98 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl p-1.5 z-50 select-none animate-in fade-in zoom-in-95 duration-100`}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
       {/* Header Row: Title + Custom Words + Reset */}
-      <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-white/10">
-        <div className="flex items-center gap-1.5">
-          <SlidersHorizontal className="w-3.5 h-3.5 text-white" />
-          <span className="text-[10.5px] font-mono font-black uppercase tracking-wider text-white">
+      <div className="flex items-center justify-between gap-1 pb-1 mb-1 border-b border-white/10">
+        <div className="flex items-center gap-1">
+          <SlidersHorizontal className="w-3 h-3 text-white" />
+          <span className="text-[9px] font-mono font-black uppercase tracking-wider text-white">
             Filter & Lexicon
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           {onOpenCustomWordManager && (
             <button
               type="button"
@@ -1025,13 +1334,13 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                 setShowFilterMenu(false);
                 onOpenCustomWordManager();
               }}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-mono font-bold bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-mono font-bold bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-colors cursor-pointer"
               title="Manage custom dictionary words and 1,200+ global TLDs"
             >
               <Globe className="w-2.5 h-2.5" />
-              <span>Custom Words</span>
+              <span>Custom</span>
               {customWordsCount > 0 && (
-                <span className="px-1 rounded bg-white text-black text-[8.5px] font-black tabular-nums">
+                <span className="px-0.5 rounded bg-white text-black text-[7.5px] font-black tabular-nums">
                   {customWordsCount}
                 </span>
               )}
@@ -1041,10 +1350,10 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             <button
               type="button"
               onClick={handleResetAllFilters}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-mono font-bold bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white border border-white/10 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-mono font-bold bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white border border-white/10 transition-colors cursor-pointer"
               title="Reset all active filters"
             >
-              <RotateCcw className="w-2.5 h-2.5" />
+              <RotateCcw className="w-2 h-2" />
               <span>Reset</span>
             </button>
           )}
@@ -1053,30 +1362,30 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
 
       {/* Quick Substring Search Input */}
       {onSearchQueryChange && (
-        <div className="relative flex items-center mb-2">
-          <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 pointer-events-none" />
+        <div className="relative flex items-center mb-1">
+          <Search className="w-3 h-3 text-zinc-400 absolute left-2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchQueryChange(e.target.value)}
             placeholder="Search candidate words..."
-            className="w-full h-7.5 pl-8 pr-7 rounded-lg bg-black/60 border border-white/15 focus:border-white text-xs font-mono text-white placeholder:text-zinc-500 outline-none transition-colors"
+            className="w-full h-6 pl-6 pr-6 rounded-md bg-black/60 border border-white/15 focus:border-white text-[10px] font-mono text-white placeholder:text-zinc-500 outline-none transition-colors"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => onSearchQueryChange('')}
-              className="absolute right-2 text-zinc-400 hover:text-white p-0.5 cursor-pointer"
+              className="absolute right-1.5 text-zinc-400 hover:text-white p-0.5 cursor-pointer"
               title="Clear search"
             >
-              <X className="w-3 h-3" />
+              <X className="w-2.5 h-2.5" />
             </button>
           )}
         </div>
       )}
 
       {/* 3x3 Filter Preset Matrix */}
-      <div className="grid grid-cols-3 gap-1 mb-2">
+      <div className="grid grid-cols-3 gap-0.5 mb-1">
         {ALL_MODES.map((modeKey) => {
           const config = MODE_CONFIGS[modeKey];
           const count = safeCounts[modeKey] || 0;
@@ -1088,19 +1397,19 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
               key={modeKey}
               type="button"
               onClick={() => handleSelectFilterMode(modeKey)}
-              className={`flex items-center justify-between px-2 py-1.5 rounded-lg border text-left transition-all cursor-pointer ${
+              className={`flex items-center justify-between px-1 py-0.5 h-5 rounded border text-left transition-all cursor-pointer ${
                 isSelected
-                  ? 'bg-white text-black border-white font-black shadow-xs'
+                  ? 'bg-white text-black border-white font-black shadow-2xs'
                   : isZero
                   ? 'bg-white/[0.02] text-zinc-500 border-white/5 hover:border-white/15 font-medium'
                   : 'bg-white/[0.05] text-zinc-200 border-white/10 hover:bg-white/10 hover:border-white/25 font-bold'
               }`}
             >
-              <span className="text-[9px] font-mono uppercase tracking-tight truncate">
+              <span className="text-[8px] font-mono uppercase tracking-tight truncate">
                 {config.shortLabel}
               </span>
               <span
-                className={`text-[8.5px] font-mono tabular-nums ml-1 shrink-0 px-1 py-0.2 rounded ${
+                className={`text-[7.5px] font-mono tabular-nums ml-0.5 shrink-0 px-0.5 rounded ${
                   isSelected
                     ? 'bg-black/15 text-black font-black'
                     : isZero
@@ -1117,22 +1426,22 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
 
       {/* Quick Word Length Multi-Select Pills */}
       {availableLengths.length > 0 && onSelectLengthFilter && (
-        <div className="pt-1.5 border-t border-white/10">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400">
-              Word Length Filter
+        <div className="pt-1 border-t border-white/10">
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[8px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+              Length Filter
             </span>
             {activeLengthArray.length > 0 && onClearLengthFilter && (
               <button
                 type="button"
                 onClick={onClearLengthFilter}
-                className="text-[9px] font-mono text-zinc-400 hover:text-white cursor-pointer"
+                className="text-[8px] font-mono text-zinc-400 hover:text-white cursor-pointer"
               >
                 Clear ({activeLengthArray.length})
               </button>
             )}
           </div>
-          <div className="flex items-center gap-1 flex-wrap">
+          <div className="flex items-center gap-0.5 flex-wrap">
             {availableLengths.map((bin) => {
               const isLenActive = activeLengthArray.includes(bin.length);
               return (
@@ -1140,14 +1449,14 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                   key={bin.length}
                   type="button"
                   onClick={() => handleToggleLengthChip(bin.length)}
-                  className={`px-2 py-0.5 rounded-md text-[9.5px] font-mono tabular-nums border transition-all cursor-pointer ${
+                  className={`px-1 py-0.2 rounded text-[8px] font-mono tabular-nums border transition-all cursor-pointer ${
                     isLenActive
                       ? 'bg-white text-black border-white font-black'
                       : 'bg-white/[0.05] text-zinc-300 border-white/10 hover:bg-white/15 hover:text-white font-bold'
                   }`}
                   title={`${bin.length} letters (${bin.count} words)`}
                 >
-                  {bin.length}L <span className="opacity-60 text-[8.5px]">{bin.count}</span>
+                  {bin.length}L <span className="opacity-60 text-[7.5px]">{bin.count}</span>
                 </button>
               );
             })}
@@ -1287,7 +1596,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
         return (
           <div
             key="composer"
-            className={`w-full relative overflow-hidden flex flex-col min-h-0 shrink-0 bg-transparent px-1 sm:px-1.5 transition-all ${
+            className={`w-full relative overflow-hidden flex flex-col min-h-0 shrink-0 bg-transparent px-2 sm:px-2.5 transition-all ${
               activeDrag ? 'duration-0' : 'duration-350 ease-[cubic-bezier(0.16,1,0.3,1)]'
             } ${
               isBeingDragged
@@ -1428,6 +1737,9 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                 centerContent={undefined}
                 leadingAccessories={isDivider1 ? resolvedDivider1Leading : resolvedDivider2Leading}
                 leadingMenu={isDivider1 ? undefined : divider2LeadingMenu}
+                splitRatio={!isDivider1 && isSplitActive ? splitRatio : undefined}
+                rightLeadingAccessories={!isDivider1 ? resolvedDivider2RightLeading : undefined}
+                rightLeadingMenu={!isDivider1 ? divider2RightLeadingMenu : undefined}
                 trailingAccessories={isDivider1 ? resolvedDivider1Trailing : resolvedDivider2Trailing}
                 trailingMenu={isDivider1 ? divider1TrailingMenu : divider2TrailingMenu}
               />

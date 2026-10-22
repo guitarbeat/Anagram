@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { X, ArrowLeftRight, Pencil, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, ArrowLeftRight, Pencil, Check, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProgressBus } from '../hooks/useProgressBus';
 import type { FinisherPair } from '../engine/types';
@@ -22,6 +22,13 @@ export interface TargetHistogramWindowProps {
   onRemoveLastWord?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  totalSolveCount?: number;
+  isSolving?: boolean;
+  isSolveVisible?: boolean;
+  onToggleSolve?: () => void;
+  onApplyTopSolve?: () => void;
+  splitRatio?: number;
+  isSplitActive?: boolean;
 }
 
 interface EditableBoxProps {
@@ -254,7 +261,7 @@ const TargetPhraseBox: React.FC<TargetPhraseBoxProps> = ({
         }
       }}
       onDrop={handleContainerDrop}
-      className="relative w-full h-full flex items-center justify-center bg-transparent px-3 sm:px-6 transition-all overflow-hidden"
+      className="relative w-full h-full flex items-center justify-center bg-transparent pl-3 pr-20 sm:pl-6 sm:pr-28 transition-all overflow-hidden"
     >
       {isEditing || !value.trim() ? (
         <div
@@ -414,7 +421,7 @@ const TargetPhraseBox: React.FC<TargetPhraseBoxProps> = ({
       )}
 
       {!value.trim() && !isInputFocused && (
-        <span className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-300 font-black uppercase tracking-widest text-center px-4 sm:px-6 select-none unified-app-text transition-all duration-300 text-xs sm:text-sm font-extrabold tracking-wider">
+        <span className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-300 font-black uppercase tracking-widest text-center pl-3 pr-20 sm:pl-6 sm:pr-28 select-none unified-app-text transition-all duration-300 text-xs sm:text-sm font-extrabold tracking-wider">
           {placeholder}
         </span>
       )}
@@ -427,11 +434,24 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
   onSourceNameChange,
   targetPhrase,
   onTargetPhraseChange,
+  remainingLetters = [],
+  isExactMatch = false,
   onShowToast,
+  exactClosers = [],
+  onAddWordToTarget,
   isCollapsed = false,
   onToggleCollapse,
+  totalSolveCount = 0,
+  isSolving = false,
+  isSolveVisible = false,
+  onToggleSolve,
+  onApplyTopSolve,
+  splitRatio = 0.5,
+  isSplitActive = false,
 }) => {
   const hasSource = Boolean(sourceText.trim());
+  const hasPartialTarget = Boolean(targetPhrase.trim() && remainingLetters.length > 0 && !isExactMatch);
+  const topCloser = exactClosers.length > 0 ? exactClosers[0] : null;
 
   // Subtle visual feedback pulse on the target card when words are added
   const [cardPulse, setCardPulse] = useState(false);
@@ -506,12 +526,26 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
     );
   }
 
+  // Synchronize left/right card flex widths with the Split View below so "Remix it" sits directly over SOLVE
+  const sourceCardStyle: React.CSSProperties | undefined =
+    hasSource && isSplitActive
+      ? { flex: `${splitRatio} 1 0%` }
+      : undefined;
+
+  const targetCardStyle: React.CSSProperties | undefined =
+    hasSource && isSplitActive
+      ? { flex: `${1 - splitRatio} 1 0%` }
+      : undefined;
+
   return (
     <div className="w-full h-full flex flex-col items-stretch p-0 text-zinc-900 select-none">
-      {/* Unified Input Pair: Side-by-side white cards */}
-      <div className="w-full h-full flex flex-row items-stretch min-w-0 gap-1.5 sm:gap-2">
-        {/* Source Input Card */}
-        <div className="group flex-1 flex flex-col min-w-0 bg-white border-2 border-black rounded-xl sm:rounded-2xl overflow-hidden shadow-xs relative">
+      {/* Unified Input Pair: Side-by-side white cards aligned with the workspace below */}
+      <div className="w-full h-full flex flex-row items-stretch min-w-0 gap-1 sm:gap-1.5">
+        {/* Source Input Card (Left Column — aligned above WORDS) */}
+        <div
+          style={sourceCardStyle}
+          className="group flex-1 flex flex-col min-w-0 bg-white border-2 border-black rounded-xl sm:rounded-2xl overflow-hidden shadow-xs relative"
+        >
           <div className="flex-1 relative min-h-0 flex items-center justify-center">
             {onToggleCollapse && (
               <button
@@ -547,9 +581,13 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
           </div>
         </div>
 
-        {/* Target Input Card (shown alongside source input) */}
+        {/* Center Spacer matching the vertical split divider when Split View is active */}
+        {hasSource && isSplitActive && <div className="w-1.5 sm:w-2 shrink-0" />}
+
+        {/* Target Input Card ("Remix it" — Right Column aligned directly above SOLVE) */}
         {hasSource && (
           <div
+            style={targetCardStyle}
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = 'copy';
@@ -570,9 +608,7 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
                 handleInsertWord(word.trim());
               }
             }}
-            className={`group flex flex-col min-w-0 bg-white border-2 rounded-xl sm:rounded-2xl overflow-hidden shadow-xs relative transition-all duration-300 ${
-              targetPhrase.trim() ? 'flex-1' : 'flex-[0_0_auto] w-[140px] sm:w-[200px] md:w-[240px]'
-            } ${
+            className={`group flex-1 flex flex-col min-w-0 bg-white border-2 rounded-xl sm:rounded-2xl overflow-hidden shadow-xs relative transition-all duration-300 ${
               isCardDragOver
                 ? 'border-black ring-2 ring-black bg-zinc-50 border-dashed scale-[1.01]'
                 : cardPulse
@@ -594,13 +630,71 @@ export const TargetHistogramWindow: React.FC<TargetHistogramWindowProps> = ({
               {isCardDragOver && (
                 <div className="absolute bottom-1 inset-x-0 flex items-center justify-center pointer-events-none z-20">
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-black text-white shadow-xs tracking-wider uppercase animate-pulse">
-                    Drop word to insert into sentence
+                    Drop word to insert into Remix
                   </span>
                 </div>
               )}
 
-              {/* Action buttons (Edit mode & Clear) */}
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
+              {/* Right-side Tethered Controls: 1-Click Closer + Live SOLVE Tether Button + Edit/Clear */}
+              <div className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 z-20">
+                {/* 1-Click Instant Closer Chip when user has partial Remix words and an exact 1-word closer exists */}
+                {hasPartialTarget && topCloser && onAddWordToTarget && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      triggerHaptic('success');
+                      onAddWordToTarget(topCloser);
+                    }}
+                    title={`1-click complete Remix with "+${topCloser.toUpperCase()}"`}
+                    className="hidden md:inline-flex items-center gap-0.5 px-2 py-1 rounded-lg bg-zinc-100 hover:bg-black text-black hover:text-white border border-black font-mono text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-[1px_1px_0px_#000]"
+                  >
+                    <span>+{topCloser}</span>
+                  </button>
+                )}
+
+                {/* Tethered SOLVE Pill inside the "Remix it" field */}
+                {(totalSolveCount > 0 || isSolving || onToggleSolve) && !isExactMatch && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      triggerHaptic('snap');
+                      if (isSolveVisible && onApplyTopSolve && totalSolveCount > 0) {
+                        onApplyTopSolve();
+                      } else if (onToggleSolve) {
+                        onToggleSolve();
+                      }
+                    }}
+                    title={
+                      isSolveVisible && totalSolveCount > 0
+                        ? hasPartialTarget
+                          ? `Complete "${targetPhrase.trim().toUpperCase()}" with top solution (${totalSolveCount} matches)`
+                          : `Fill Remix it with top solution (${totalSolveCount} matches)`
+                        : hasPartialTarget
+                        ? `Open SOLVE tethered to "${targetPhrase.trim().toUpperCase()}" (${totalSolveCount} completions)`
+                        : `Open SOLVE below Remix it (${totalSolveCount} exact solutions)`
+                    }
+                    className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg font-mono text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95 ${
+                      isSolveVisible
+                        ? 'bg-black text-white border border-black shadow-[1px_1px_0px_#000]'
+                        : 'bg-zinc-900 hover:bg-black text-white border border-black'
+                    }`}
+                  >
+                    <Sparkles
+                      className={`w-2.5 h-2.5 shrink-0 ${
+                        isSolving ? 'animate-spin' : 'fill-white'
+                      }`}
+                    />
+                    <span className="hidden sm:inline">
+                      {hasPartialTarget ? 'Complete' : 'Solve'}
+                    </span>
+                    <span className="px-1 py-0.1 rounded bg-white/20 text-white text-[9px] tabular-nums">
+                      {isSolving && totalSolveCount === 0 ? '…' : totalSolveCount}
+                    </span>
+                  </button>
+                )}
+
                 {targetPhrase && (
                   <button
                     type="button"

@@ -66,6 +66,8 @@ export interface CandidateWordsListProps {
   onSplitLeftViewChange?: (view: 'graph' | 'pebbles' | 'blocks' | 'solutions' | 'inspector') => void;
   splitRightView?: 'inspector' | 'blocks' | 'pebbles' | 'solutions' | 'graph';
   onSplitRightViewChange?: (view: 'inspector' | 'blocks' | 'pebbles' | 'solutions' | 'graph') => void;
+  splitRatio?: number;
+  onSplitRatioChange?: (ratio: number) => void;
   wordFilterMode?: WordFilterMode;
   countsByMode?: Record<WordFilterMode, number>;
   onCycleWordFilter?: () => void;
@@ -76,6 +78,11 @@ export interface CandidateWordsListProps {
   onSortByChange?: (sort: WordSortOption) => void;
   searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
+  autoHideDimmedNames?: boolean;
+  onAutoHideDimmedNamesChange?: (val: boolean) => void;
+  zoomScale?: number;
+  onZoomScaleChange?: (zoom: number | ((prev: number) => number)) => void;
+  onResetZoomFit?: () => void;
 }
 
 export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
@@ -110,12 +117,14 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   onAvoidDeadEndsChange,
   showGraphPanel = true,
   showInspectorPanel = true,
-  explorerViewMode = 'pebbles',
+  explorerViewMode = 'graph',
   onSelectExplorerView,
   splitLeftView: externalSplitLeftView,
   onSplitLeftViewChange,
   splitRightView: externalSplitRightView,
   onSplitRightViewChange,
+  splitRatio: externalSplitRatio,
+  onSplitRatioChange,
   wordFilterMode,
   countsByMode,
   onCycleWordFilter,
@@ -126,6 +135,11 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   onSortByChange,
   searchQuery: externalSearchQuery,
   onSearchQueryChange,
+  autoHideDimmedNames,
+  onAutoHideDimmedNamesChange,
+  zoomScale,
+  onZoomScaleChange,
+  onResetZoomFit,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [internalSearchQuery, setInternalSearchQuery] = useState<string>('');
@@ -134,8 +148,8 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   const setSearchQuery = onSearchQueryChange || setInternalSearchQuery;
   const sortBy = externalSortBy !== undefined ? externalSortBy : internalSortBy;
   const setSortBy = onSortByChange || setInternalSortBy;
-  const [internalSplitLeft, setInternalSplitLeft] = useState<'graph' | 'pebbles' | 'blocks' | 'solutions' | 'inspector'>('pebbles');
-  const [internalSplitRight, setInternalSplitRight] = useState<'inspector' | 'blocks' | 'pebbles' | 'solutions' | 'graph'>('solutions');
+  const [internalSplitLeft, setInternalSplitLeft] = useState<'graph' | 'pebbles' | 'blocks' | 'solutions' | 'inspector'>('graph');
+  const [internalSplitRight, setInternalSplitRight] = useState<'inspector' | 'blocks' | 'pebbles' | 'solutions' | 'graph'>('inspector');
   const [selectedWord, setSelectedWord] = useState<CandidateWordItem | null>(null);
 
   const currentLeftView = externalSplitLeftView || internalSplitLeft;
@@ -338,22 +352,38 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   }, [hoveredGraphWord]);
 
   // Compute compatible words that can be formed concurrently with hoveredGraphWord
+  // using the active remaining letter pool (Source \ "Remix it" \ hoveredWord)
   const compatibleData = useMemo(() => {
     if (!hoveredGraphWord || !sourceText) return null;
 
-    const cleanSource = sourceText.toLowerCase().replace(/[^a-z]/g, '');
     const cleanHovered = hoveredGraphWord.toLowerCase().replace(/[^a-z]/g, '');
+    if (!cleanHovered) return null;
 
-    const sourceCounts = new Uint8Array(26);
-    for (let i = 0; i < cleanSource.length; i++) {
-      sourceCounts[cleanSource.charCodeAt(i) - 97]++;
+    const availableCounts = new Uint8Array(26);
+    if (remainingLetters && remainingLetters.length > 0) {
+      for (let i = 0; i < remainingLetters.length; i++) {
+        const ch = remainingLetters[i].toLowerCase().charCodeAt(0) - 97;
+        if (ch >= 0 && ch < 26) {
+          availableCounts[ch]++;
+        }
+      }
+    } else {
+      const cleanSource = sourceText.toLowerCase().replace(/[^a-z]/g, '');
+      const cleanTarget = activeTargetPhrase.toLowerCase().replace(/[^a-z]/g, '');
+      for (let i = 0; i < cleanSource.length; i++) {
+        availableCounts[cleanSource.charCodeAt(i) - 97]++;
+      }
+      for (let i = 0; i < cleanTarget.length; i++) {
+        const code = cleanTarget.charCodeAt(i) - 97;
+        if (availableCounts[code] > 0) availableCounts[code]--;
+      }
     }
 
     // Subtract hovered word letters
     for (let i = 0; i < cleanHovered.length; i++) {
       const code = cleanHovered.charCodeAt(i) - 97;
-      if (sourceCounts[code] === 0) return null;
-      sourceCounts[code]--;
+      if (availableCounts[code] === 0) return null;
+      availableCounts[code]--;
     }
 
     const posCountsMap: Record<string, number> = {
@@ -364,6 +394,8 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
       other: 0,
     };
     const lengthCountsMap: Record<number, number> = {};
+    const compatibleWordSet = new Set<string>();
+    compatibleWordSet.add(cleanHovered);
     let totalCompatible = 0;
 
     for (let idx = 0; idx < candidateWords.length; idx++) {
@@ -375,8 +407,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
       let fits = true;
       for (let i = 0; i < w.length; i++) {
         const code = w.charCodeAt(i) - 97;
+        if (code < 0 || code >= 26) continue;
         testCounts[code]++;
-        if (testCounts[code] > sourceCounts[code]) {
+        if (testCounts[code] > availableCounts[code]) {
           fits = false;
           break;
         }
@@ -384,6 +417,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
 
       if (fits) {
         totalCompatible++;
+        compatibleWordSet.add(w);
         const p = pos(w);
         const mappedP: POS = (p === 'noun' || p === 'verb' || p === 'adj' || p === 'adv') ? p : 'other';
         posCountsMap[mappedP] = (posCountsMap[mappedP] || 0) + 1;
@@ -395,8 +429,10 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
       compatiblePosCounts: posCountsMap,
       compatibleLengthCounts: lengthCountsMap,
       totalCompatible,
+      compatibleWordSet,
+      postHoverCounts: availableCounts,
     };
-  }, [hoveredGraphWord, sourceText, candidateWords]);
+  }, [hoveredGraphWord, sourceText, activeTargetPhrase, remainingLetters, candidateWords]);
 
   // Compute histogram data filtered by the active POS filter and avoidDeadEnds
   const effectiveHistogramData = useMemo(() => {
@@ -436,7 +472,18 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   }, [histogramData]);
 
   // Chrome Split Screen Draggable Ratio State
-  const [splitRatio, setSplitRatio] = useState<number>(0.5);
+  const [internalSplitRatio, setInternalSplitRatio] = useState<number>(0.5);
+  const splitRatio = externalSplitRatio !== undefined ? externalSplitRatio : internalSplitRatio;
+  const setSplitRatio = useCallback(
+    (next: number) => {
+      if (onSplitRatioChange) {
+        onSplitRatioChange(next);
+      } else {
+        setInternalSplitRatio(next);
+      }
+    },
+    [onSplitRatioChange]
+  );
   const [isDraggingSplitter, setIsDraggingSplitter] = useState<boolean>(false);
   const splitContainerRef = useRef<HTMLDivElement>(null);
 
@@ -446,22 +493,28 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, []);
 
-  const handleSplitterPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDraggingSplitter || !splitContainerRef.current) return;
-    const rect = splitContainerRef.current.getBoundingClientRect();
-    if (rect.width <= 0) return;
-    const newRatio = (e.clientX - rect.left) / rect.width;
-    setSplitRatio(Math.max(0.2, Math.min(0.8, newRatio)));
-  }, [isDraggingSplitter]);
+  const handleSplitterPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!isDraggingSplitter || !splitContainerRef.current) return;
+      const rect = splitContainerRef.current.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const newRatio = (e.clientX - rect.left) / rect.width;
+      setSplitRatio(Math.max(0.2, Math.min(0.8, newRatio)));
+    },
+    [isDraggingSplitter, setSplitRatio]
+  );
 
-  const handleSplitterPointerUp = useCallback((e: React.PointerEvent) => {
-    if (isDraggingSplitter) {
-      setIsDraggingSplitter(false);
-      try {
-        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {}
-    }
-  }, [isDraggingSplitter]);
+  const handleSplitterPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (isDraggingSplitter) {
+        setIsDraggingSplitter(false);
+        try {
+          (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+        } catch {}
+      }
+    },
+    [isDraggingSplitter]
+  );
 
   const totalSolveCount =
     completeSolutions.length +
@@ -470,13 +523,12 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     websiteSolutions.length;
 
   const CHROME_SPLIT_TABS: {
-    id: 'pebbles' | 'graph' | 'blocks' | 'inspector' | 'solutions';
+    id: 'graph' | 'blocks' | 'inspector' | 'solutions';
     label: string;
     icon: React.ReactNode;
     badge?: number;
   }[] = useMemo(
     () => [
-      { id: 'pebbles', label: 'WORDS', icon: <Layers className="w-3 h-3" /> },
       { id: 'graph', label: 'GRAPH', icon: <Network className="w-3 h-3" /> },
       { id: 'blocks', label: 'BLOCKS', icon: <LayoutGrid className="w-3 h-3" /> },
       { id: 'inspector', label: 'STATS', icon: <BarChart3 className="w-3 h-3" /> },
@@ -532,7 +584,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             onSetWordAsTarget={onSetWordAsTarget}
             activeTargetPhrase={activeTargetPhrase}
             onShowToast={onShowToast}
+            hoveredWord={hoveredGraphWord}
             onHoverWordChange={setHoveredGraphWord}
+            compatibleWordSet={compatibleData?.compatibleWordSet ?? null}
             hoveredPosFilter={hoveredTreemapPos}
             hoveredLengthFilter={hoveredTreemapLength}
             wordFilterMode={wordFilterMode}
@@ -542,6 +596,11 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             onCycleWordFilter={onCycleWordFilter}
             selectedWord={selectedWord}
             onSelectWord={setSelectedWord}
+            autoHideDimmedNames={autoHideDimmedNames}
+            onAutoHideDimmedNamesChange={onAutoHideDimmedNamesChange}
+            zoomScale={zoomScale}
+            onZoomScaleChange={onZoomScaleChange}
+            onResetZoomFit={onResetZoomFit}
           />
         );
       }
@@ -557,6 +616,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             sourceText={sourceText}
             selectedWord={selectedWord}
             onSelectWord={setSelectedWord}
+            hoveredWord={hoveredGraphWord}
+            onHoverWordChange={setHoveredGraphWord}
+            compatibleWordSet={compatibleData?.compatibleWordSet ?? null}
           />
         );
       }
@@ -574,6 +636,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             onSetWordAsTarget={onSetWordAsTarget}
             onShowToast={onShowToast}
             sourceText={sourceText}
+            hoveredWord={hoveredGraphWord}
+            postHoverCounts={compatibleData?.postHoverCounts ?? null}
+            onHoverWordChange={setHoveredGraphWord}
           />
         );
       }
@@ -604,46 +669,44 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             onSelectFreqFilter={onSelectFreqFilter}
             onClearFreqFilter={onClearFreqFilter}
             histogramData={histogramData}
-            hoveredWordInfo={null}
+            hoveredWordInfo={hoveredWordInfo}
             compatibleData={compatibleData}
             posCounts={posCounts}
             otherSubtypeCounts={otherSubtypeCounts}
             onHoverTreemapLength={setHoveredTreemapLength}
             onHoverTreemapPos={setHoveredTreemapPos}
+            onHoverWordChange={setHoveredGraphWord}
           />
         );
       }
-      // Default: 'pebbles' (WORDS)
+      // Default: 'graph' (Graph View)
       return (
-        <WordPebblesExplorer
+        <WordsGraphView
+          sourceText={sourceText}
           candidateWords={searchFilteredWords}
-          selectedWord={selectedWord}
-          onSelectWord={setSelectedWord}
+          selectedLengthFilter={selectedLengthFilter}
+          selectedPosFilter={activePosFilter}
           onAddWordToTarget={onAddWordToTarget}
           onSetWordAsTarget={onSetWordAsTarget}
-          onShowToast={onShowToast}
-          exactClosers={exactClosers}
           activeTargetPhrase={activeTargetPhrase}
-          sourceText={sourceText}
-          selectedLengthFilter={selectedLengthFilter}
-          onClearLengthFilter={onClearLengthFilter}
-          selectedPosFilter={activePosFilter}
-          onClearPosFilter={() => handlePosFilterChange(null)}
-          sortBy={sortBy}
-          onSortByChange={setSortBy}
-          searchQuery={searchQuery}
-          onSearchQueryChange={setSearchQuery}
-          watermarkLabel={
-            wordFilterMode === 'domains'
-              ? 'DOMAINS & TLDS'
-              : wordFilterMode === 'safe'
-              ? 'SOLVABLE WORDS'
-              : wordFilterMode === 'closers'
-              ? '1-WORD WINS'
-              : wordFilterMode === 'pairs'
-              ? '2-WORD PAIRS'
-              : 'ALL WORDS'
+          onShowToast={onShowToast}
+          hoveredWord={hoveredGraphWord}
+          onHoverWordChange={setHoveredGraphWord}
+          compatibleWordSet={compatibleData?.compatibleWordSet ?? null}
+          hoveredPosFilter={hoveredTreemapPos}
+          hoveredLengthFilter={hoveredTreemapLength}
+          wordFilterMode={wordFilterMode}
+          wordFilterCount={
+            countsByMode ? countsByMode[wordFilterMode || 'safe'] : searchFilteredWords.length
           }
+          onCycleWordFilter={onCycleWordFilter}
+          selectedWord={selectedWord}
+          onSelectWord={setSelectedWord}
+          autoHideDimmedNames={autoHideDimmedNames}
+          onAutoHideDimmedNamesChange={onAutoHideDimmedNamesChange}
+          zoomScale={zoomScale}
+          onZoomScaleChange={onZoomScaleChange}
+          onResetZoomFit={onResetZoomFit}
         />
       );
     },
@@ -656,6 +719,8 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
       onSetWordAsTarget,
       activeTargetPhrase,
       onShowToast,
+      hoveredGraphWord,
+      hoveredWordInfo,
       hoveredTreemapPos,
       hoveredTreemapLength,
       wordFilterMode,
@@ -688,8 +753,10 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`w-full h-full relative flex flex-col min-h-0 text-zinc-900 select-none overflow-hidden border-x-2 border-b-2 border-black rounded-b-xl sm:rounded-b-2xl shadow-xs ${
-        explorerViewMode === 'both' ? 'bg-[#09090b]' : 'bg-white'
+      className={`w-full h-full relative flex flex-col min-h-0 text-zinc-900 select-none overflow-hidden ${
+        explorerViewMode === 'both'
+          ? 'bg-[#09090b]'
+          : 'bg-white border-2 border-black rounded-xl sm:rounded-2xl shadow-xs'
       }`}
     >
       {/* Workspace View Surface */}
@@ -699,94 +766,15 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             ref={splitContainerRef}
             onPointerMove={handleSplitterPointerMove}
             onPointerUp={handleSplitterPointerUp}
-            className="w-full h-full flex flex-row min-h-0 overflow-hidden select-none bg-[#09090b] p-1.5 sm:p-2 gap-1 sm:gap-1.5"
+            className="w-full h-full flex flex-row min-h-0 overflow-hidden select-none bg-[#09090b] gap-1 sm:gap-1.5"
           >
             {/* Left Split Pane */}
             <div
               style={{ flex: `${splitRatio} 1 0%` }}
               className="h-full min-w-[200px] flex flex-col min-h-0 overflow-hidden bg-white rounded-xl sm:rounded-2xl border-2 border-black shadow-xs"
             >
-              {/* Sleek Left Pane Header */}
-              <div className="h-7.5 bg-zinc-50 border-b border-black/15 flex items-center justify-between px-2.5 shrink-0 select-none rounded-t-[10px] sm:rounded-t-[14px]">
-                <div ref={leftDropdownRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsLeftDropdownOpen((prev) => !prev);
-                      setIsRightDropdownOpen(false);
-                    }}
-                    className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] sm:text-[10.5px] font-mono font-bold bg-white text-black border border-black/30 hover:border-black shadow-xs cursor-pointer transition-all active:scale-95"
-                    title="Switch left pane view"
-                  >
-                    {leftConfig.icon}
-                    <span>{leftConfig.label}</span>
-                    {leftConfig.badge !== undefined && (
-                      <span className="text-[8px] font-black px-1 rounded-full bg-black text-white">
-                        {leftConfig.badge}
-                      </span>
-                    )}
-                    <ChevronDown className="w-3 h-3 text-zinc-500" />
-                  </button>
-
-                  {/* Dropdown Menu */}
-                  {isLeftDropdownOpen && (
-                    <div className="absolute top-full mt-1 left-0 w-48 bg-[#141417]/98 backdrop-blur-md text-white border border-white/20 rounded-lg shadow-2xl p-1 z-50 animate-in fade-in zoom-in-95 duration-100">
-                      <div className="text-[9px] font-mono uppercase tracking-wider text-zinc-400 px-2 py-1">
-                        Left Pane View
-                      </div>
-                      {CHROME_SPLIT_TABS.map((tab) => (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          onClick={() => {
-                            handleSplitLeftChange(tab.id);
-                            setIsLeftDropdownOpen(false);
-                          }}
-                          className={`flex items-center justify-between w-full px-2 py-1.5 rounded text-left text-xs font-mono transition-colors cursor-pointer ${
-                            currentLeftView === tab.id
-                              ? 'bg-white text-black font-black'
-                              : 'text-zinc-300 hover:bg-white/10 hover:text-white'
-                          }`}
-                        >
-                          <span className="flex items-center gap-1.5">
-                            {tab.icon}
-                            <span>{tab.label}</span>
-                          </span>
-                          {tab.badge !== undefined && (
-                            <span
-                              className={`text-[8px] font-black px-1 rounded-full ${
-                                currentLeftView === tab.id
-                                  ? 'bg-black text-white'
-                                  : 'bg-white/20 text-zinc-200'
-                              }`}
-                            >
-                              {tab.badge}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Swap Left ⇄ Right Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const temp = currentLeftView;
-                    handleSplitLeftChange(currentRightView);
-                    handleSplitRightChange(temp);
-                  }}
-                  title="Swap left and right views"
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-zinc-500 hover:text-black hover:bg-black/5 transition-colors cursor-pointer"
-                >
-                  <ArrowLeftRight className="w-3 h-3" />
-                  <span className="hidden sm:inline">SWAP</span>
-                </button>
-              </div>
-
               {/* Left Pane Content */}
-              <div className="flex-1 w-full min-h-0 relative overflow-hidden rounded-b-[10px] sm:rounded-b-[14px]">
+              <div className="flex-1 w-full min-h-0 relative overflow-hidden rounded-[10px] sm:rounded-[14px]">
                 {renderViewContent(currentLeftView)}
               </div>
             </div>
@@ -797,7 +785,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
               onPointerUp={handleSplitterPointerUp}
               onDoubleClick={() => setSplitRatio(0.5)}
               title="Drag to resize split screen · Double click for 50/50"
-              className={`relative w-1.5 sm:w-2 h-[calc(100%-8px)] my-auto bg-black hover:bg-zinc-800 cursor-col-resize shrink-0 transition-all flex items-center justify-center group z-20 rounded-full border border-white/20 shadow-xs before:absolute before:inset-y-0 before:-inset-x-2.5 before:content-[''] ${
+              className={`relative w-1.5 sm:w-2 h-[calc(100%-12px)] my-auto bg-black hover:bg-zinc-800 cursor-col-resize shrink-0 transition-all flex items-center justify-center group z-20 rounded-full border border-white/20 shadow-xs before:absolute before:inset-y-0 before:-inset-x-2.5 before:content-[''] ${
                 isDraggingSplitter ? 'bg-zinc-800 ring-2 ring-white/30' : ''
               }`}
             >
@@ -809,93 +797,23 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
               style={{ flex: `${1 - splitRatio} 1 0%` }}
               className="h-full min-w-[200px] flex flex-col min-h-0 overflow-hidden bg-white rounded-xl sm:rounded-2xl border-2 border-black shadow-xs"
             >
-              {/* Sleek Right Pane Header */}
-              <div className="h-7.5 bg-zinc-50 border-b border-black/15 flex items-center justify-between px-2.5 shrink-0 select-none rounded-t-[10px] sm:rounded-t-[14px]">
-                <div ref={rightDropdownRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsRightDropdownOpen((prev) => !prev);
-                      setIsLeftDropdownOpen(false);
-                    }}
-                    className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] sm:text-[10.5px] font-mono font-bold bg-white text-black border border-black/30 hover:border-black shadow-xs cursor-pointer transition-all active:scale-95"
-                    title="Switch right pane view"
-                  >
-                    {rightConfig.icon}
-                    <span>{rightConfig.label}</span>
-                    {rightConfig.badge !== undefined && (
-                      <span className="text-[8px] font-black px-1 rounded-full bg-black text-white">
-                        {rightConfig.badge}
-                      </span>
-                    )}
-                    <ChevronDown className="w-3 h-3 text-zinc-500" />
-                  </button>
-
-                  {/* Dropdown Menu */}
-                  {isRightDropdownOpen && (
-                    <div className="absolute top-full mt-1 left-0 w-48 bg-[#141417]/98 backdrop-blur-md text-white border border-white/20 rounded-lg shadow-2xl p-1 z-50 animate-in fade-in zoom-in-95 duration-100">
-                      <div className="text-[9px] font-mono uppercase tracking-wider text-zinc-400 px-2 py-1">
-                        Right Pane View
-                      </div>
-                      {CHROME_SPLIT_TABS.map((tab) => (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          onClick={() => {
-                            handleSplitRightChange(tab.id);
-                            setIsRightDropdownOpen(false);
-                          }}
-                          className={`flex items-center justify-between w-full px-2 py-1.5 rounded text-left text-xs font-mono transition-colors cursor-pointer ${
-                            currentRightView === tab.id
-                              ? 'bg-white text-black font-black'
-                              : 'text-zinc-300 hover:bg-white/10 hover:text-white'
-                          }`}
-                        >
-                          <span className="flex items-center gap-1.5">
-                            {tab.icon}
-                            <span>{tab.label}</span>
-                          </span>
-                          {tab.badge !== undefined && (
-                            <span
-                              className={`text-[8px] font-black px-1 rounded-full ${
-                                currentRightView === tab.id
-                                  ? 'bg-black text-white'
-                                  : 'bg-white/20 text-zinc-200'
-                              }`}
-                            >
-                              {tab.badge}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Close Split Screen Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onSelectExplorerView) {
-                      onSelectExplorerView(currentLeftView);
-                    }
-                  }}
-                  title="Close split screen (Return to single tab)"
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-zinc-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">CLOSE</span>
-                </button>
-              </div>
-
               {/* Right Pane Content */}
-              <div className="flex-1 w-full min-h-0 relative overflow-hidden rounded-b-[10px] sm:rounded-b-[14px]">
+              <div className="flex-1 w-full min-h-0 relative overflow-hidden rounded-[10px] sm:rounded-[14px]">
                 {renderViewContent(currentRightView)}
               </div>
             </div>
           </div>
         ) : (
-          renderViewContent(explorerViewMode)
+          <div className="w-full h-full flex flex-row min-h-0 overflow-hidden">
+            <div className="flex-1 h-full min-w-0 min-h-0 relative overflow-hidden">
+              {renderViewContent(explorerViewMode)}
+            </div>
+            {selectedWord && explorerViewMode !== 'inspector' && (
+              <div className="w-[290px] sm:w-[340px] h-full shrink-0 border-l-2 border-black bg-white overflow-hidden">
+                {renderViewContent('inspector')}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

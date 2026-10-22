@@ -56,6 +56,11 @@ export function App() {
   // Stage animation state (strictly user-controlled via divider slider, no auto-moving)
   const progressBus = useProgressBus(0);
 
+  // In-App Custom Word & TLD Dictionary state
+  const [customWords, setCustomWords] = useState<string[]>(() => getStoredCustomWords());
+  const [isCustomWordModalOpen, setIsCustomWordModalOpen] = useState<boolean>(false);
+  const [lexiconVersion, setLexiconVersion] = useState<number>(0);
+
   // Dedicated solver hook extracting Web Worker lifecycle & debounced execution
   const {
     results,
@@ -69,6 +74,7 @@ export function App() {
     filterText,
     isAnchorPinned,
     allowSpicy,
+    customWords,
     onError: (err) => showToast(err, 'error'),
   });
 
@@ -122,11 +128,6 @@ export function App() {
   const [selectedLengthFilter, setSelectedLengthFilter] = useState<number[] | null>(null);
   const [selectedPosFilter, setSelectedPosFilter] = useState<POS | 'all' | null>(null);
   const [selectedFreqFilter, setSelectedFreqFilter] = useState<FrequencyTier | 'all' | null>(null);
-
-  // In-App Custom Word & TLD Dictionary state
-  const [customWords, setCustomWords] = useState<string[]>(() => getStoredCustomWords());
-  const [isCustomWordModalOpen, setIsCustomWordModalOpen] = useState<boolean>(false);
-  const [lexiconVersion, setLexiconVersion] = useState<number>(0);
 
   const handleAddCustomWord = useCallback((word: string) => {
     setCustomWords((prev) => {
@@ -223,44 +224,44 @@ export function App() {
   const [inspectorCategory, setInspectorCategory] = useState<'length' | 'pos'>('length');
   const [lexicalViewMode, setLexicalViewMode] = useState<LexicalViewMode>('treemap');
   const [avoidDeadEnds, setAvoidDeadEnds] = useState<boolean>(true);
-  const [showGraphPanel, setShowGraphPanel] = useState<boolean>(false);
+  const [autoHideDimmedNames, setAutoHideDimmedNames] = useState<boolean>(true);
+  const [zoomScale, setZoomScale] = useState<number>(1.0);
+  const handleZoomOut = useCallback(() => setZoomScale((z) => Math.max(0.25, z * 0.8)), []);
+  const handleZoomIn = useCallback(() => setZoomScale((z) => Math.min(12.0, z * 1.25)), []);
+  const handleResetZoomFit = useCallback(() => setZoomScale(1.0), []);
+  const [showGraphPanel, setShowGraphPanel] = useState<boolean>(true);
   const [showInspectorPanel, setShowInspectorPanel] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<WordSortOption>('length-desc');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Explorer View Mode: Words (Pebbles) -> Graph -> Blocks -> Stats (Inspector) -> Solve (Solutions) -> Split (Both)
+  // Explorer View Mode: Graph (Main Default) -> Words (Alternative) -> Split (Both: Graph + Live Companion)
   const [explorerViewMode, setExplorerViewMode] = useState<
     'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions'
-  >('pebbles');
+  >('graph');
   const [splitLeftView, setSplitLeftView] = useState<
     'graph' | 'pebbles' | 'blocks' | 'solutions' | 'inspector'
-  >('pebbles');
+  >('graph');
   const [splitRightView, setSplitRightView] = useState<
     'inspector' | 'blocks' | 'pebbles' | 'solutions' | 'graph'
-  >('solutions');
+  >('inspector');
+  const [splitRatio, setSplitRatio] = useState<number>(0.5);
 
   const ALL_EXPLORER_VIEWS = useMemo(
-    () => ['pebbles', 'graph', 'blocks', 'inspector', 'solutions', 'both'] as const,
+    () => ['graph', 'both'] as const,
     []
   );
 
   const handleCycleExplorerView = useCallback(() => {
     haptics.light();
     setExplorerViewMode((prev) => {
-      const idx = ALL_EXPLORER_VIEWS.indexOf(prev);
-      const nextIdx = (idx + 1) % ALL_EXPLORER_VIEWS.length;
+      const idx = (ALL_EXPLORER_VIEWS as readonly string[]).indexOf(prev);
+      const nextIdx = idx >= 0 ? (idx + 1) % ALL_EXPLORER_VIEWS.length : 0;
       const nextMode = ALL_EXPLORER_VIEWS[nextIdx];
       if (nextMode === 'both') {
         setShowGraphPanel(true);
         setShowInspectorPanel(true);
-      } else if (nextMode === 'graph') {
-        setShowGraphPanel(true);
-        setShowInspectorPanel(false);
-      } else if (nextMode === 'inspector') {
-        setShowGraphPanel(false);
-        setShowInspectorPanel(true);
       } else {
-        setShowGraphPanel(false);
+        setShowGraphPanel(true);
         setShowInspectorPanel(false);
       }
       return nextMode;
@@ -514,6 +515,80 @@ export function App() {
   const nextRecommendedCloser = exactClosers && exactClosers.length > 0 ? exactClosers[0] : null;
   const nextRecommendedPair = finisherPairs && finisherPairs.length > 0 ? finisherPairs[0] : null;
 
+  // Total live solutions anchored to the current "Remix it" state
+  const totalSolveCount =
+    results.length +
+    (websiteSolutions?.length || 0) +
+    (exactClosers?.length || 0) +
+    (finisherPairs?.length || 0);
+
+  const isSolveVisible =
+    explorerViewMode === 'solutions' ||
+    explorerViewMode === 'inspector' ||
+    (explorerViewMode === 'both' &&
+      (splitRightView === 'solutions' ||
+        splitRightView === 'inspector' ||
+        splitLeftView === 'solutions' ||
+        splitLeftView === 'inspector'));
+
+  // Open or focus Companion / Solve directly below the "Remix it" field (Right pane in Split View)
+  const handleToggleSolveFromRemix = useCallback(() => {
+    haptics.snap();
+    if (explorerViewMode === 'both') {
+      if (splitRightView !== 'solutions' && splitRightView !== 'inspector') {
+        setSplitRightView('inspector');
+      } else {
+        setExplorerViewMode(splitLeftView === 'pebbles' ? 'pebbles' : 'graph');
+      }
+    } else {
+      setExplorerViewMode('both');
+      setSplitRightView('inspector');
+    }
+  }, [explorerViewMode, splitRightView, splitLeftView, haptics]);
+
+  // Apply the highest-priority exact solution directly into "Remix it"
+  const handleApplyTopSolve = useCallback(() => {
+    const hasPartial = Boolean(targetPhrase.trim() && remainingLetters.length > 0);
+    if (exactClosers && exactClosers.length > 0) {
+      if (hasPartial) {
+        handleAddWordToTarget(exactClosers[0]);
+      } else {
+        handleSetWordAsTarget(exactClosers[0]);
+      }
+      return;
+    }
+    if (finisherPairs && finisherPairs.length > 0) {
+      const pairText = `${finisherPairs[0].word1} ${finisherPairs[0].word2}`;
+      if (hasPartial) {
+        handleAddWordToTarget(pairText);
+      } else {
+        handleSetWordAsTarget(pairText);
+      }
+      return;
+    }
+    if (results.length > 0) {
+      handleSetWordAsTarget(results[0].phrase);
+      return;
+    }
+    if (websiteSolutions && websiteSolutions.length > 0) {
+      const topSite = websiteSolutions[0];
+      if (hasPartial) {
+        handleSetWordAsTarget(`${targetPhrase.trim()} ${topSite.url.toUpperCase()}`);
+      } else {
+        handleSetWordAsTarget(topSite.url.toUpperCase());
+      }
+    }
+  }, [
+    targetPhrase,
+    remainingLetters.length,
+    exactClosers,
+    finisherPairs,
+    results,
+    websiteSolutions,
+    handleAddWordToTarget,
+    handleSetWordAsTarget,
+  ]);
+
   return (
     <div
       style={{
@@ -551,7 +626,7 @@ export function App() {
         candidateWordsCount={candidateWords.length}
         exactClosersCount={exactClosers?.length || 0}
         finisherPairsCount={finisherPairs?.length || 0}
-        completeSolutionsCount={results.length + (websiteSolutions?.length || 0)}
+        completeSolutionsCount={totalSolveCount}
         solvableWordsCount={solvableWordsCount}
         wordFilterMode={wordFilterMode}
         onCycleWordFilter={handleCycleWordFilter}
@@ -564,6 +639,7 @@ export function App() {
         onSplitLeftViewChange={setSplitLeftView}
         splitRightView={splitRightView}
         onSplitRightViewChange={setSplitRightView}
+        splitRatio={splitRatio}
         showGraphPanel={showGraphPanel}
         onToggleGraphPanel={handleToggleGraphPanel}
         showInspectorPanel={showInspectorPanel}
@@ -583,6 +659,12 @@ export function App() {
         onClearFreqFilter={() => setSelectedFreqFilter(null)}
         customWordsCount={customWords.length}
         onOpenCustomWordManager={() => setIsCustomWordModalOpen(true)}
+        autoHideDimmedNames={autoHideDimmedNames}
+        onAutoHideDimmedNamesChange={setAutoHideDimmedNames}
+        zoomScale={zoomScale}
+        onZoomOut={handleZoomOut}
+        onZoomIn={handleZoomIn}
+        onResetZoomFit={handleResetZoomFit}
         /* WINDOW 1: TOP KINETIC ANAGRAM STAGE */
         card1={
           sourceName.trim() && targetPhrase.trim() ? (
@@ -664,6 +746,13 @@ export function App() {
             deadEndWordsCount={deadEndWordsCount}
             onAddWordToTarget={handleAddWordToTarget}
             onRemoveLastWord={handleRemoveLastWord}
+            totalSolveCount={totalSolveCount}
+            isSolving={isSolving}
+            isSolveVisible={isSolveVisible}
+            onToggleSolve={handleToggleSolveFromRemix}
+            onApplyTopSolve={handleApplyTopSolve}
+            splitRatio={splitRatio}
+            isSplitActive={explorerViewMode === 'both'}
           />
         }
         /* WINDOW 3: BOTTOM GRAPH VIEW + HISTOGRAM SIDEBAR */
@@ -707,6 +796,8 @@ export function App() {
               onSplitLeftViewChange={setSplitLeftView}
               splitRightView={splitRightView}
               onSplitRightViewChange={setSplitRightView}
+              splitRatio={splitRatio}
+              onSplitRatioChange={setSplitRatio}
               wordFilterMode={wordFilterMode}
               countsByMode={countsByMode}
               onCycleWordFilter={handleCycleWordFilter}
@@ -717,6 +808,11 @@ export function App() {
               onSortByChange={setSortBy}
               searchQuery={searchQuery}
               onSearchQueryChange={setSearchQuery}
+              autoHideDimmedNames={autoHideDimmedNames}
+              onAutoHideDimmedNamesChange={setAutoHideDimmedNames}
+              zoomScale={zoomScale}
+              onZoomScaleChange={setZoomScale}
+              onResetZoomFit={handleResetZoomFit}
             />
           ) : null
         }

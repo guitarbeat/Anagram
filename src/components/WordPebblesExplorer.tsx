@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, ArrowDownUp, Sparkles, SlidersHorizontal } from 'lucide-react';
 import type { CandidateWordItem, POS } from '../engine/types';
@@ -26,6 +26,9 @@ export interface WordPebblesExplorerProps {
   onSortByChange?: (sort: WordSortOption) => void;
   searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
+  hoveredWord?: string | null;
+  onHoverWordChange?: (word: string | null) => void;
+  compatibleWordSet?: Set<string> | null;
 }
 
 export const WordPebblesExplorer: React.FC<WordPebblesExplorerProps> = ({
@@ -45,10 +48,33 @@ export const WordPebblesExplorer: React.FC<WordPebblesExplorerProps> = ({
   onSortByChange: externalOnSortByChange,
   searchQuery: externalSearchQuery,
   onSearchQueryChange: externalOnSearchQueryChange,
+  hoveredWord: externalHoveredWord,
+  onHoverWordChange,
+  compatibleWordSet,
 }) => {
   const [internalSearchQuery, setInternalSearchQuery] = useState<string>('');
   const [internalSortBy, setInternalSortBy] = useState<WordSortOption>('length-desc');
-  const [displayLimit, setDisplayLimit] = useState<number>(140);
+  const [displayLimit, setDisplayLimit] = useState<number>(() =>
+    watermarkLabel === 'ALL WORDS' ? 5000 : 250
+  );
+  const [internalHoveredWord, setInternalHoveredWord] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (watermarkLabel === 'ALL WORDS') {
+      setDisplayLimit(5000);
+    }
+  }, [watermarkLabel]);
+
+  const activeHoveredWord =
+    externalHoveredWord !== undefined ? externalHoveredWord : internalHoveredWord;
+
+  const handleHoverWord = (word: string | null) => {
+    if (onHoverWordChange) {
+      onHoverWordChange(word);
+    } else {
+      setInternalHoveredWord(word);
+    }
+  };
 
   const searchQuery = externalSearchQuery !== undefined ? externalSearchQuery : internalSearchQuery;
   const setSearchQuery = (val: string) => {
@@ -206,6 +232,7 @@ export const WordPebblesExplorer: React.FC<WordPebblesExplorerProps> = ({
       {/* Organic Pebble Word Field with Framer Motion Layout Animation */}
       <motion.div
         layout
+        onPointerLeave={() => handleHoverWord(null)}
         className="flex-1 w-full min-h-0 overflow-y-auto p-3 sm:p-4 flex flex-wrap items-center justify-center content-start gap-2 sm:gap-2.5"
       >
         <AnimatePresence mode="popLayout">
@@ -245,24 +272,40 @@ export const WordPebblesExplorer: React.FC<WordPebblesExplorerProps> = ({
               const isCloser = closersSet.has(item.word.toUpperCase());
               const isSelected = selectedWord?.word.toUpperCase() === item.word.toUpperCase();
               const isPopping = poppingWord === item.word.toUpperCase();
+              const isHovered = activeHoveredWord?.toLowerCase() === item.word.toLowerCase();
+              const isDimmedByHover = Boolean(
+                activeHoveredWord &&
+                  !isHovered &&
+                  compatibleWordSet &&
+                  !compatibleWordSet.has(item.word.toLowerCase())
+              );
               const blobRadius = getBlobBorderRadius(item.word, 'tile');
 
               return (
                 <motion.button
                   key={item.word}
-                  layout="position"
+                  layout={displayedWords.length <= 250 ? 'position' : false}
                   initial={{ opacity: 0, scale: 0.7, y: 12 }}
-                  animate={{ opacity: 1, scale: isPopping ? 1.25 : isSelected ? 1.05 : 1, y: 0 }}
+                  animate={{
+                    opacity: isDimmedByHover ? 0.15 : 1,
+                    scale: isPopping ? 1.25 : isSelected || isHovered ? 1.05 : 1,
+                    y: 0,
+                  }}
                   exit={{ opacity: 0, scale: 0.7, y: -12 }}
                   whileTap={{ scale: 1.18 }}
                   transition={{
                     layout: { type: 'spring', damping: 22, stiffness: 380, mass: 0.8 },
-                    opacity: { duration: 0.2, delay: Math.min(index * 0.012, 0.25) },
-                    y: { type: 'spring', damping: 24, stiffness: 400, delay: Math.min(index * 0.012, 0.25) },
+                    opacity: {
+                      duration: activeHoveredWord ? 0.12 : 0.2,
+                      delay: activeHoveredWord ? 0 : Math.min(index * 0.008, 0.2),
+                    },
+                    y: { type: 'spring', damping: 24, stiffness: 400, delay: Math.min(index * 0.008, 0.2) },
                     scale: { type: 'spring', damping: 14, stiffness: 480 },
                   }}
                   type="button"
                   draggable
+                  onPointerEnter={() => handleHoverWord(item.word)}
+                  onPointerLeave={() => handleHoverWord(null)}
                   onDragStartCapture={(e: React.DragEvent<HTMLButtonElement>) => {
                     e.dataTransfer.setData('text/plain', item.word);
                     e.dataTransfer.setData('application/x-anagram-word', item.word);
@@ -272,14 +315,16 @@ export const WordPebblesExplorer: React.FC<WordPebblesExplorerProps> = ({
                   onDoubleClick={(e) => handleWordDoubleClick(e, item.word)}
                   style={{ borderRadius: blobRadius }}
                   aria-label={`Word ${item.word}, ${item.length} letters${isCloser ? ', exact closer' : ''}`}
-                  className={`min-h-[36px] sm:min-h-[38px] min-w-[42px] px-3 py-1.5 border-2 border-black font-mono font-bold text-xs sm:text-sm tracking-wide lowercase cursor-grab active:cursor-grabbing select-none focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-hidden touch-manipulation flex items-center justify-center gap-1 transition-all ${
+                  className={`min-h-[36px] sm:min-h-[38px] min-w-[42px] px-3 py-1.5 border-2 font-mono font-bold text-xs sm:text-sm tracking-wide lowercase cursor-grab active:cursor-grabbing select-none focus-visible:ring-2 focus-visible:ring-black focus-visible:outline-hidden touch-manipulation flex items-center justify-center gap-1 transition-colors duration-150 ${
                     isPopping
-                      ? 'bg-black text-white ring-4 ring-black shadow-xl z-30 font-black'
-                      : isSelected
-                      ? 'bg-black text-white ring-2 ring-black font-black shadow-[3px_3px_0px_#000000] z-10'
+                      ? 'bg-black text-white border-black ring-4 ring-black shadow-xl z-30 font-black'
+                      : isSelected || isHovered
+                      ? 'bg-black text-white border-black ring-2 ring-black font-black shadow-[3px_3px_0px_#000000] z-10'
+                      : isDimmedByHover
+                      ? 'bg-white text-zinc-400 border-zinc-300 shadow-none'
                       : isCloser
-                      ? 'bg-black text-white hover:bg-zinc-800 font-black shadow-[2px_2px_0px_#000000] hover:shadow-[3px_3px_0px_#000000] hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none'
-                      : 'bg-white hover:bg-zinc-50 text-zinc-900 shadow-[1.5px_1.5px_0px_#000000] hover:shadow-[2.5px_2.5px_0px_#000000] hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none'
+                      ? 'bg-black text-white border-black hover:bg-zinc-800 font-black shadow-[2px_2px_0px_#000000] hover:shadow-[3px_3px_0px_#000000] hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none'
+                      : 'bg-white hover:bg-zinc-50 text-zinc-900 border-black shadow-[1.5px_1.5px_0px_#000000] hover:shadow-[2.5px_2.5px_0px_#000000] hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none'
                   }`}
                 >
                   {isCloser && <span className="w-1.5 h-1.5 rounded-full bg-white inline-block shrink-0" />}
@@ -296,18 +341,28 @@ export const WordPebblesExplorer: React.FC<WordPebblesExplorerProps> = ({
           )}
         </AnimatePresence>
 
-        {/* Load More Button for large result sets to maintain 60fps layout animations */}
+        {/* Load More / Show All Buttons for large result sets */}
         {processedWords.length > displayLimit && (
-          <div className="w-full flex items-center justify-center pt-2 pb-4">
+          <div className="w-full flex items-center justify-center gap-2 pt-2 pb-4 flex-wrap">
             <button
               type="button"
               onClick={() => {
                 triggerHaptic('light');
-                setDisplayLimit((prev) => prev + 100);
+                setDisplayLimit((prev) => prev + 250);
               }}
               className="px-4 py-1.5 bg-zinc-100 hover:bg-black hover:text-white border-2 border-black text-black rounded-lg text-xs font-mono font-black uppercase tracking-wider transition-colors cursor-pointer shadow-[2px_2px_0px_#000] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
             >
-              Show More (+{Math.min(100, processedWords.length - displayLimit)} of {processedWords.length - displayLimit} remaining)
+              Show +{Math.min(250, processedWords.length - displayLimit)} More
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('snap');
+                setDisplayLimit(processedWords.length);
+              }}
+              className="px-4 py-1.5 bg-black hover:bg-zinc-800 border-2 border-black text-white rounded-lg text-xs font-mono font-black uppercase tracking-wider transition-colors cursor-pointer shadow-[2px_2px_0px_#000] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
+            >
+              Show All ({processedWords.length})
             </button>
           </div>
         )}
