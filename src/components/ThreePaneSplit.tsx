@@ -21,6 +21,7 @@ import {
   Globe,
   SlidersHorizontal,
   Theater,
+  Columns2,
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,
   ArrowDownAZ,
@@ -228,6 +229,10 @@ export interface ThreePaneSplitProps {
   onSelectExplorerView?: (
     mode: 'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions'
   ) => void;
+  splitLeftView?: 'graph' | 'pebbles' | 'blocks' | 'solutions' | 'inspector';
+  onSplitLeftViewChange?: (view: 'graph' | 'pebbles' | 'blocks' | 'solutions' | 'inspector') => void;
+  splitRightView?: 'inspector' | 'blocks' | 'pebbles' | 'solutions' | 'graph';
+  onSplitRightViewChange?: (view: 'inspector' | 'blocks' | 'pebbles' | 'solutions' | 'graph') => void;
   showGraphPanel?: boolean;
   onToggleGraphPanel?: () => void;
   showInspectorPanel?: boolean;
@@ -290,6 +295,10 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   onSelectModeFilter,
   explorerViewMode,
   onSelectExplorerView,
+  splitLeftView = 'pebbles',
+  onSplitLeftViewChange,
+  splitRightView = 'solutions',
+  onSplitRightViewChange,
   showGraphPanel = true,
   onToggleGraphPanel,
   showInspectorPanel = true,
@@ -698,7 +707,9 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     ? 'bottom-full mb-1.5'
     : 'top-full mt-1.5';
 
-  // DIVIDER 2 LEADING COMPLICATIONS: WORDS | GRAPH | BLOCKS | STATS | SOLVE
+  // DIVIDER 2 LEADING TABS & CHROME SPLIT SCREEN BUTTON
+  const isSplitActive = currentExplorerView === 'both';
+
   const VIEW_COMPLICATIONS: {
     id: 'pebbles' | 'graph' | 'blocks' | 'inspector' | 'solutions';
     label: string;
@@ -709,56 +720,112 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     {
       id: 'pebbles',
       label: 'WORDS',
-      title: 'Words View: Organic tactile word pebbles (Right-click for layout presets)',
-      icon: <Layers className="w-3 h-3 hidden md:inline" />,
+      title: 'Words Tab: Organic tactile word pebbles',
+      icon: <Layers className="w-3.5 h-3.5" />,
     },
     {
       id: 'graph',
       label: 'GRAPH',
-      title: 'Graph View: Interactive physics word network',
-      icon: <Network className="w-3 h-3 hidden md:inline" />,
+      title: 'Graph Tab: Interactive physics word network',
+      icon: <Network className="w-3.5 h-3.5" />,
     },
     {
       id: 'blocks',
       label: 'BLOCKS',
-      title: 'Blocks View: Proportional squarified word treemap',
-      icon: <LayoutGrid className="w-3 h-3 hidden md:inline" />,
+      title: 'Blocks Tab: Squarified word treemap',
+      icon: <LayoutGrid className="w-3.5 h-3.5" />,
     },
     {
       id: 'inspector',
       label: 'STATS',
-      title: 'Stats View: Word length, part of speech & frequency distributions',
-      icon: <BarChart3 className="w-3 h-3 hidden md:inline" />,
+      title: 'Stats Tab: Word length & speech distributions',
+      icon: <BarChart3 className="w-3.5 h-3.5" />,
     },
     {
       id: 'solutions',
       label: 'SOLVE',
-      title: `Solve View: Direct 1-word wins, 2-word pairs & full anagram solutions (${totalSolveCount})`,
-      icon: <Sparkles className="w-3 h-3 hidden md:inline" />,
+      title: `Solve Tab: Exact 1-word wins, 2-word pairs & full anagram solutions (${totalSolveCount})`,
+      icon: <Sparkles className="w-3.5 h-3.5" />,
       badge: totalSolveCount > 0 ? totalSolveCount : undefined,
     },
   ];
 
-  const resolvedDivider2Leading: SplitAccessory[] = VIEW_COMPLICATIONS.map((view) => ({
-    id: `view-complication-${view.id}`,
-    title: view.title,
-    icon: view.icon,
-    label: view.label,
-    badge: view.badge,
-    active:
-      !isCard3Minimized &&
-      (currentExplorerView === view.id ||
-        (currentExplorerView === 'both' && (view.id === 'graph' || view.id === 'inspector'))),
-    action: () => handleSelectViewMode(view.id),
-    onContextMenu: (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      triggerHaptic('medium');
-      setShowFilterMenu(false);
-      setShowSortMenu(false);
-      setShowViewMenu((prev) => !prev);
-    },
-  }));
+  const leftConfig =
+    VIEW_COMPLICATIONS.find((v) => v.id === splitLeftView) || VIEW_COMPLICATIONS[0];
+  const rightConfig =
+    VIEW_COMPLICATIONS.find((v) => v.id === splitRightView) || VIEW_COMPLICATIONS[4];
+
+  const resolvedDivider2Leading: SplitAccessory[] = isSplitActive
+    ? [
+        // Merged Chrome Split Tab (Active tab flowing directly from the page)
+        {
+          id: 'chrome-split-tab',
+          title: `Chrome Split Screen: ${leftConfig.label} + ${rightConfig.label}`,
+          variant: 'tab' as const,
+          active: !isCard3Minimized,
+          action: () => triggerHaptic('light'),
+          label: `${leftConfig.label} ⫽ ${rightConfig.label}`,
+          icon: <Columns2 className="w-3.5 h-3.5" />,
+          badge: rightConfig.badge,
+        },
+        // Inactive tabs to switch to single tab mode
+        ...VIEW_COMPLICATIONS.filter(
+          (view) => view.id !== splitLeftView && view.id !== splitRightView
+        ).map((view) => ({
+          id: `view-tab-${view.id}`,
+          title: `Switch to ${view.label} (Single Tab)`,
+          icon: view.icon,
+          label: view.label,
+          badge: view.badge,
+          variant: 'tab' as const,
+          active: false,
+          action: () => handleSelectViewMode(view.id),
+        })),
+        // Close split button in tab strip
+        {
+          id: 'exit-split-btn',
+          title: 'Exit Split Screen (Return to Single Tab)',
+          icon: <X className="w-3.5 h-3.5 text-zinc-400 hover:text-white" />,
+          label: 'EXIT',
+          action: () => handleSelectViewMode(splitLeftView || 'pebbles'),
+        },
+      ]
+    : [
+        // Standard Chrome Single Tabs
+        ...VIEW_COMPLICATIONS.map((view) => ({
+          id: `view-tab-${view.id}`,
+          title: view.title,
+          icon: view.icon,
+          label: view.label,
+          badge: view.badge,
+          variant: 'tab' as const,
+          active:
+            !isCard3Minimized &&
+            !isSplitActive &&
+            currentExplorerView === view.id,
+          action: () => handleSelectViewMode(view.id),
+          onContextMenu: (e: React.MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            triggerHaptic('medium');
+            setShowFilterMenu(false);
+            setShowSortMenu(false);
+            setShowViewMenu((prev) => !prev);
+          },
+        })),
+        // Dedicated Split Screen Toggle Complication Button
+        {
+          id: 'split-screen-toggle',
+          title: 'Chrome Split Screen: View two tabs side-by-side',
+          icon: <Columns2 className="w-3.5 h-3.5" />,
+          label: 'SPLIT',
+          active: false,
+          action: () => {
+            triggerHaptic('snap');
+            handleSelectViewMode('both');
+          },
+        },
+      ];
 
   // DIVIDER 2 LEADING MENU: Layout & Split View Context Menu (on right-click of view complications)
   const divider2LeadingMenu = showViewMenu ? (
@@ -870,19 +937,16 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   const activeSortConfig =
     SORT_OPTIONS.find((s) => s.id === sortBy) || SORT_OPTIONS[0];
 
-  // DIVIDER 2 TRAILING COMPLICATIONS: FILTER + SORT
+  // DIVIDER 2 TRAILING COMPLICATIONS: FILTER + SORT (Sort shown only in WORDS pebble explorer)
   const resolvedDivider2Trailing: SplitAccessory[] = [
     {
       id: 'filterComplication',
       title: MODE_CONFIGS[currentMode].getDescription(safeCounts[currentMode]),
       icon: <SlidersHorizontal className="w-3 h-3" />,
-      label:
-        currentMode === 'safe' && !hasActiveFilterModifiers
-          ? 'FILTER'
-          : MODE_CONFIGS[currentMode].shortLabel,
-      badge: safeCounts[currentMode],
+      label: 'FILTER',
+      badge: hasActiveFilterModifiers ? '●' : undefined,
       shortcut: 'S',
-      active: showFilterMenu || hasActiveFilterModifiers,
+      active: showFilterMenu,
       action: (e?: React.MouseEvent) => {
         if (e?.shiftKey) {
           // Shift-click: cycle filter preset directly
@@ -906,14 +970,14 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
         if (onCycleWordFilter) onCycleWordFilter();
       },
     },
-    ...(onSortByChange
+    ...(onSortByChange && currentExplorerView === 'pebbles'
       ? [
           {
             id: 'sortComplication',
             title: `Sort Words: ${activeSortConfig.label} (Click for menu, Shift-click to cycle)`,
             icon: activeSortConfig.icon,
             label: activeSortConfig.shortLabel,
-            active: showSortMenu || sortBy !== 'length-desc',
+            active: showSortMenu,
             action: (e?: React.MouseEvent) => {
               if (e?.shiftKey) {
                 triggerHaptic('light');
@@ -1263,6 +1327,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           <BottomWrapper
             key="explorer"
             id="explorer"
+            className="px-2 sm:px-2.5"
             title="Word Explorer"
             isFirst={isFirst}
             isLast={isLast}
@@ -1307,7 +1372,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`ThreePaneSplit relative flex flex-col w-full h-full min-h-0 select-none overflow-hidden bg-[#09090b] gap-0.5 ${className}`}
+      className={`ThreePaneSplit relative flex flex-col w-full h-full min-h-0 select-none overflow-hidden bg-[#09090b] ${className}`}
     >
       {visiblePanels.map((panelId, index) => (
         <React.Fragment key={panelId}>

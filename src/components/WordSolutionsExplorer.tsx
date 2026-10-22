@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { Sparkles, Play, Search, Zap, Check, ArrowRight, Layers, Flame, Trophy } from 'lucide-react';
-import type { AnagramResult, FinisherPair } from '../engine/types';
+import React, { useMemo } from 'react';
+import { Sparkles, Play, Zap, ArrowRight, Layers, Flame, Trophy, Globe } from 'lucide-react';
+import type { AnagramResult, FinisherPair, WebsiteSolution } from '../engine/types';
+import { getTLDCategory, getTLDQualityScore } from '../engine/tlds';
 import { findProgressiveCompletions, type ProgressiveCompletion } from '../engine/progressiveSolver';
 import { getBlobBorderRadius } from '../utils/blobStyle';
 import { triggerHaptic } from '../hooks/useHaptics';
@@ -8,6 +9,7 @@ import { triggerHaptic } from '../hooks/useHaptics';
 export interface WordSolutionsExplorerProps {
   exactClosers?: string[];
   finisherPairs?: FinisherPair[];
+  websiteSolutions?: WebsiteSolution[];
   completeSolutions?: AnagramResult[];
   isSolvingSolutions?: boolean;
   onAddWordToTarget: (word: string) => void;
@@ -21,6 +23,7 @@ export interface WordSolutionsExplorerProps {
 export const WordSolutionsExplorer: React.FC<WordSolutionsExplorerProps> = ({
   exactClosers = [],
   finisherPairs = [],
+  websiteSolutions = [],
   completeSolutions = [],
   isSolvingSolutions = false,
   onAddWordToTarget,
@@ -30,16 +33,53 @@ export const WordSolutionsExplorer: React.FC<WordSolutionsExplorerProps> = ({
   targetPhrase = '',
   remainingLetters = [],
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [wordCountFilter, setWordCountFilter] = useState<'all' | '1' | '2' | '3' | '4+'>('all');
-  const [sortBy, setSortBy] = useState<'score' | 'shortest' | 'longest'>('score');
+  const hasPartialTarget = Boolean(targetPhrase.trim() && remainingLetters.length > 0);
+
+  // Combine real-time delta websiteSolutions with full-solver website URLs
+  const allWebsiteSolutions = useMemo(() => {
+    const map = new Map<string, WebsiteSolution & { isFullPhrase?: boolean }>();
+
+    for (const site of websiteSolutions) {
+      const key = site.url.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { ...site, isFullPhrase: !hasPartialTarget });
+      }
+    }
+
+    for (const sol of completeSolutions) {
+      if (sol.websiteUrl) {
+        const key = sol.websiteUrl.toLowerCase();
+        if (!map.has(key)) {
+          const dotParts = sol.websiteUrl.split('/')[0].split('.');
+          const tld = dotParts[dotParts.length - 1] || 'com';
+          map.set(key, {
+            url: sol.websiteUrl,
+            domain: sol.websiteUrl.split('/')[0],
+            tld,
+            tldCategory: getTLDCategory(tld),
+            format: sol.websiteUrl.includes('/')
+              ? 'url-path'
+              : dotParts.length > 2
+              ? 'subdomain'
+              : 'domain',
+            words: sol.words,
+            score: sol.score + getTLDQualityScore(tld),
+            isFullPhrase: true,
+          });
+        }
+      }
+    }
+
+    const list = Array.from(map.values());
+    list.sort((a, b) => b.score - a.score);
+    return list;
+  }, [websiteSolutions, completeSolutions, hasPartialTarget]);
 
   // Progressive completions for remaining unplaced letters (when user has typed partial phrase)
   const progressiveCompletions: ProgressiveCompletion[] = useMemo(() => {
     if (!remainingLetters || remainingLetters.length === 0 || !targetPhrase.trim()) {
       return [];
     }
-    // Only run if remaining letters fit within reasonable search budget
     if (remainingLetters.length > 15) {
       return [];
     }
@@ -56,6 +96,18 @@ export const WordSolutionsExplorer: React.FC<WordSolutionsExplorerProps> = ({
     onShowToast(`Solved with "${phrase}"!`, 'success');
   };
 
+  const handlePlayWebsite = (site: WebsiteSolution & { isFullPhrase?: boolean }) => {
+    triggerHaptic('success');
+    if (hasPartialTarget && !site.isFullPhrase) {
+      const combined = `${targetPhrase.trim()} ${site.url.toUpperCase()}`;
+      onSetWordAsTarget(combined);
+      onShowToast(`Solved with "${combined}"!`, 'success');
+    } else {
+      onSetWordAsTarget(site.url.toUpperCase());
+      onShowToast(`Solved with website "${site.url}"!`, 'success');
+    }
+  };
+
   const handleAppendSolution = (phrase: string) => {
     triggerHaptic('light');
     onAddWordToTarget(phrase);
@@ -64,134 +116,49 @@ export const WordSolutionsExplorer: React.FC<WordSolutionsExplorerProps> = ({
 
   const handlePlayOneWord = (word: string) => {
     triggerHaptic('success');
-    onSetWordAsTarget(word);
+    if (hasPartialTarget) {
+      onAddWordToTarget(word);
+    } else {
+      onSetWordAsTarget(word);
+    }
     onShowToast(`Solved with 1-word win "${word}"!`, 'success');
   };
 
   const handlePlayPair = (pair: FinisherPair) => {
     triggerHaptic('success');
     const pairText = `${pair.word1} ${pair.word2}`;
-    onSetWordAsTarget(pairText);
+    if (hasPartialTarget) {
+      onAddWordToTarget(pairText);
+    } else {
+      onSetWordAsTarget(pairText);
+    }
     onShowToast(`Solved with pair: "${pairText}"!`, 'success');
   };
 
-  // Filter & sort complete multi-word solutions
-  const filteredCompleteSolutions = useMemo(() => {
-    let list = [...completeSolutions];
-
-    // Filter by query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      list = list.filter((item) => item.phrase.toLowerCase().includes(q));
-    }
-
-    // Filter by word count
-    if (wordCountFilter === '2') {
-      list = list.filter((item) => item.words.length === 2);
-    } else if (wordCountFilter === '3') {
-      list = list.filter((item) => item.words.length === 3);
-    } else if (wordCountFilter === '4+') {
-      list = list.filter((item) => item.words.length >= 4);
-    }
-
-    // Sort
-    if (sortBy === 'score') {
-      list.sort((a, b) => b.score - a.score);
-    } else if (sortBy === 'shortest') {
-      list.sort((a, b) => a.words.length - b.words.length || b.score - a.score);
-    } else if (sortBy === 'longest') {
-      list.sort((a, b) => b.words.length - a.words.length || b.score - a.score);
-    }
-
+  // Sort complete multi-word solutions by score
+  const sortedSolutions = useMemo(() => {
+    const list = [...completeSolutions];
+    list.sort((a, b) => b.score - a.score);
     return list;
-  }, [completeSolutions, searchQuery, wordCountFilter, sortBy]);
+  }, [completeSolutions]);
 
   const totalExactSolutions =
     completeSolutions.length +
+    allWebsiteSolutions.length +
     exactClosers.length +
     finisherPairs.length +
     progressiveCompletions.length;
 
   return (
     <div className="w-full h-full relative bg-white select-none flex flex-col p-3 overflow-hidden text-zinc-900">
-      {/* Top Header & Search Controls */}
-      <div className="shrink-0 mb-3 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <div className="p-1 rounded-md bg-black text-white border border-black shadow-[1.5px_1.5px_0px_#000]">
-              <Sparkles className="w-3.5 h-3.5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-xs font-mono font-black uppercase tracking-wider text-black flex items-center gap-1.5">
-                Complete Anagram Solutions
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-100 border border-black text-black font-extrabold">
-                  {totalExactSolutions}
-                </span>
-              </h2>
-            </div>
-          </div>
-
-          {/* Quick Solver Indicator */}
-          {isSolvingSolutions && (
-            <div className="flex items-center gap-1.5 text-[10.5px] font-mono font-bold text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded-full border border-zinc-400 animate-pulse">
-              <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping" />
-              <span>Solving...</span>
-            </div>
-          )}
-        </div>
-
-        {/* Search Input & Quick Filter Controls */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-          <div className="relative flex-1 min-w-[140px]">
-            <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search solutions..."
-              className="w-full pl-7 pr-2 py-1 text-xs font-mono bg-zinc-50 border border-zinc-300 rounded-md focus:outline-none focus:border-black focus:ring-1 focus:ring-black text-zinc-900 placeholder:text-zinc-400"
-            />
-          </div>
-
-          {/* Word Count Text Tabs */}
-          <nav className="flex items-center gap-1.5" aria-label="Word count filters">
-            {(['all', '2', '3', '4+'] as const).map((count) => (
-              <button
-                key={count}
-                type="button"
-                onClick={() => setWordCountFilter(count)}
-                className={`py-0.5 px-1 text-[10px] font-mono transition-all cursor-pointer ${
-                  wordCountFilter === count
-                    ? 'font-black text-black border-b-2 border-black'
-                    : 'font-bold text-zinc-400 hover:text-black border-b-2 border-transparent'
-                }`}
-              >
-                {count === 'all' ? 'ALL' : `${count} W`}
-              </button>
-            ))}
-          </nav>
-
-          {/* Sort Selector */}
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
-            className="text-[10px] font-mono font-bold px-2 py-1 bg-white border border-zinc-300 rounded-md text-zinc-700 focus:outline-none focus:border-black cursor-pointer"
-          >
-            <option value="score">Best Score</option>
-            <option value="shortest">Fewest Words</option>
-            <option value="longest">Most Words</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Main Solutions Surface */}
+      {/* Main Solutions Surface - Pure content, zero toolbars */}
       <div className="flex-1 w-full min-h-0 overflow-y-auto space-y-4 pr-1">
         {/* Loading Banner when Engine is Searching */}
-        {isSolvingSolutions && completeSolutions.length === 0 && (
+        {isSolvingSolutions && completeSolutions.length === 0 && allWebsiteSolutions.length === 0 && (
           <div className="w-full p-6 flex flex-col items-center justify-center text-center bg-zinc-50 border-2 border-black rounded-xl space-y-2">
             <Sparkles className="w-5 h-5 text-black animate-spin" />
             <span className="font-mono text-xs font-bold text-black">
-              Exploring 270,000+ words for exact anagram solutions...
+              Exploring 270,000+ words & global domains for exact solutions...
             </span>
             <span className="font-mono text-[10px] text-zinc-600">
               Matching every character with 0 leftovers
@@ -200,7 +167,7 @@ export const WordSolutionsExplorer: React.FC<WordSolutionsExplorerProps> = ({
         )}
 
         {/* 1. Direct 1-Word Wins (Immediate 1-Click Closers) */}
-        {exactClosers.length > 0 && wordCountFilter !== '2' && wordCountFilter !== '3' && wordCountFilter !== '4+' && (
+        {exactClosers.length > 0 && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono font-black uppercase tracking-wider text-black flex items-center gap-1">
@@ -241,8 +208,102 @@ export const WordSolutionsExplorer: React.FC<WordSolutionsExplorerProps> = ({
           </div>
         )}
 
-        {/* 2. 2-Word Finisher Pairs */}
-        {finisherPairs.length > 0 && (wordCountFilter === 'all' || wordCountFilter === '2') && (
+        {/* 2. Website & Domain Solutions (domain.tld, sub.domain.tld, domain.tld/path) */}
+        {allWebsiteSolutions.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono font-black uppercase tracking-wider text-black flex items-center gap-1">
+                <Globe className="w-3 h-3 text-black" />
+                Website & Domain Solutions ({allWebsiteSolutions.length})
+              </span>
+              <div className="flex-1 h-px bg-zinc-200" />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {allWebsiteSolutions.map((site) => (
+                <div
+                  key={site.url}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', site.url);
+                    e.dataTransfer.setData('application/x-anagram-word', site.url);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  className="p-3 border-2 border-black bg-white hover:bg-zinc-50 rounded-xl flex flex-col justify-between gap-2 transition-all duration-75 shadow-[2px_2px_0px_#000000] hover:shadow-[3px_3px_0px_#000000] hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none group cursor-grab active:cursor-grabbing"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 text-[9px] font-mono font-bold text-zinc-500 mb-1">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-black text-white font-extrabold uppercase tracking-wider">
+                        <Globe className="w-2.5 h-2.5" />
+                        .{site.tld}
+                      </span>
+                      <span className="px-1.5 py-0.2 rounded bg-zinc-100 border border-zinc-300 text-zinc-700 uppercase">
+                        {site.format === 'url-path'
+                          ? 'URL + PATH'
+                          : site.format === 'domain-hack'
+                          ? 'DOMAIN HACK'
+                          : site.format === 'subdomain'
+                          ? 'SUBDOMAIN'
+                          : `${site.tldCategory} DOMAIN`}
+                      </span>
+                    </div>
+
+                    {/* Formatted Website URL */}
+                    <div className="font-mono font-black text-sm text-black tracking-wide leading-snug lowercase break-all">
+                      {site.url}
+                    </div>
+
+                    {/* Constituent Words */}
+                    <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                      {site.words.map((w, idx) => (
+                        <span
+                          key={`${w}-${idx}`}
+                          className={`px-1.5 py-0.5 rounded text-[9.5px] font-mono font-semibold ${
+                            w.toLowerCase() === site.tld.toLowerCase()
+                              ? 'bg-zinc-900 text-white'
+                              : 'bg-zinc-100 text-zinc-700'
+                          }`}
+                        >
+                          {w.toLowerCase() === site.tld.toLowerCase() ? `.${w}` : w}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-1 border-t border-zinc-100">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePlayWebsite(site);
+                      }}
+                      className="flex-1 py-1.5 px-2 bg-black hover:bg-zinc-800 text-white rounded-md text-[10px] font-mono font-black uppercase flex items-center justify-center gap-1 transition-transform active:scale-95 cursor-pointer shadow-2xs"
+                      title={`Set "${site.url}" as target solution`}
+                    >
+                      <Play className="w-2.5 h-2.5 fill-white" />
+                      Solve Website
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAppendSolution(site.url);
+                      }}
+                      className="py-1.5 px-2.5 bg-zinc-100 hover:bg-zinc-200 text-black border border-zinc-300 rounded-md text-[10px] font-mono font-bold uppercase transition-transform active:scale-95 cursor-pointer"
+                      title="Append website to sentence"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 3. 2-Word Finisher Pairs */}
+        {finisherPairs.length > 0 && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono font-black uppercase tracking-wider text-black flex items-center gap-1">
@@ -285,7 +346,7 @@ export const WordSolutionsExplorer: React.FC<WordSolutionsExplorerProps> = ({
           </div>
         )}
 
-        {/* 3. Progressive Sentence Completions (Matching unplaced remainder) */}
+        {/* 4. Progressive Sentence Completions (Matching unplaced remainder) */}
         {progressiveCompletions.length > 0 && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -331,19 +392,19 @@ export const WordSolutionsExplorer: React.FC<WordSolutionsExplorerProps> = ({
           </div>
         )}
 
-        {/* 4. Complete Exact Anagram Solutions (Full Multi-Word Solutions) */}
-        {filteredCompleteSolutions.length > 0 && (
+        {/* 5. Complete Exact Anagram Solutions (Full Multi-Word Solutions) */}
+        {sortedSolutions.length > 0 && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono font-black uppercase tracking-wider text-black flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-black" />
-                Complete Exact Anagrams ({filteredCompleteSolutions.length})
+                Complete Exact Anagrams ({sortedSolutions.length})
               </span>
               <div className="flex-1 h-px bg-zinc-200" />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {filteredCompleteSolutions.map((sol) => (
+              {sortedSolutions.map((sol) => (
                 <div
                   key={sol.phrase}
                   draggable
@@ -374,6 +435,22 @@ export const WordSolutionsExplorer: React.FC<WordSolutionsExplorerProps> = ({
                     <div className="font-mono font-black text-sm text-black tracking-wide leading-snug uppercase">
                       {sol.phrase}
                     </div>
+
+                    {/* Optional Website Form Preview Pill */}
+                    {sol.websiteUrl && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePlaySolution(sol.websiteUrl!.toUpperCase());
+                        }}
+                        className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-700 text-white text-[9.5px] font-mono font-bold lowercase transition-colors cursor-pointer"
+                        title={`Solve as website: ${sol.websiteUrl}`}
+                      >
+                        <Globe className="w-2.5 h-2.5 shrink-0" />
+                        <span>{sol.websiteUrl}</span>
+                      </button>
+                    )}
 
                     {/* Words breakdown chips */}
                     <div className="flex flex-wrap gap-1 mt-1.5">

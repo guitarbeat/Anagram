@@ -1,125 +1,107 @@
-# Workspace Streamlining: Stage Header Composer & Collapsible Dock
+# Smart Dynamic Single-Path Filing Folder Tab
 
-Streamline Anagram Lab's workspace layout by integrating the target phrase builder directly into the Stage header with tactile inline word chips (1-click removal and drag ordering) while converting the middle composer row into a minimized, collapsible dock within the 3-pane split architecture.
+Implement an elegant, single-component dynamic SVG filing folder tab that measures the active tab button's width and renders a unified mathematical path with an 8px outward-curved flared base and 9px rounded shoulders, completely eliminating multi-piece seams, rectangular mask leaks, and visual artifacts.
 
----
-
-### User Review & Critical Decisions
+## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following design choices were confirmed in Phase 1:
-> - **Stage Header Integration**: Target phrase composition is cleanly represented within the Kinetic Stage top container, allowing users to preview animations and letter flight paths in direct visual continuity with the active sentence.
-> - **Inline Interactive Word Chips**: Words in the target sentence render as tactile chips with 1-click removal (`×`) and drag-and-drop / swap ordering, eliminating cumbersome text-selection gymnastics.
-> - **3-Pane Split with Minimized Collapsible Composer Dock**: The middle row transitions into a sleek, minimized collapsible dock (`56px` expanded, compacting down to `28px` or collapsing seamlessly) so the viewport feels airy and spacious like a 2-pane split while keeping quick-input capabilities 1 tap away.
+> The user confirmed the following architectural decisions in Phase 1 clarification:
+> - **Architecture**: Single continuous SVG tab shell that scales dynamically.
+> - **Proportions & Fit**: Snug fit with consistent horizontal padding (`px-3.5 sm:px-4`).
 
 ---
 
-### 1. Overview & Core Concept
+## 1. Overview & Core Concept
 
-- **What It Delivers**: Unifies sentence composition and kinetic animation by displaying the evolving phrase directly alongside the animated canvas, while turning the secondary input row into an unobtrusive collapsible dock.
-- **Target Experience**: Seamless word discovery where tapping words in the Word Explorer immediately populates the sentence chips in the Stage header, with immediate animation playback and parity feedback.
-- **Key Value**: Reclaims vertical screen real estate, eliminates visual redundancy between the composer and canvas, and prevents awkward scrolling on smaller desktop and mobile viewports.
+- **The Problem in Previous Implementations**:
+  Slicing the tab into 3 separate elements (LeftCap SVG, Center div, RightCap SVG) and applying a rectangular white mask caused:
+  1. Subpixel alignment seams where the center div met the SVG curves.
+  2. Rectangular white shelves/steps (as seen in `image_cc7ef136.png`) because the rectangular mask extended horizontally past where the curved flare ended.
+- **The Smart Solution**:
+  Build a dedicated `<FilingTabShell />` component that:
+  1. Uses a `useResizeObserver` / `useCallback` ref to measure the active tab's exact natural width $W$ and height $H$.
+  2. Generates **one single mathematical SVG `<path>`** for the entire tab:
+     - Outward-curved flared base ($r = 8\text{px}$) starting tangent to the horizontal baseline.
+     - Straight vertical walls carrying the icon, label, and badge.
+     - Smooth convex top shoulders ($r = 9\text{px}$) curving into the top horizontal edge.
+     - Symmetrical right convex shoulder and right $r = 8\text{px}$ concave flared base.
+     - White fill path that strictly hugs the outer contour and closes 3px below the baseline to seamlessly connect into the white page below.
+  3. No separate pieces, no rectangular masks, no CSS border conflicts, and zero right angles.
 
 ---
 
-### 2. User Experience & Visual Design
+## 2. Technical Architecture & Component Specification
 
-#### Interaction & Layout Architecture
+### Dynamic SVG Geometry Generator
+
+Given measured width $W$ and height $H = 34\text{px}$:
+- $r_{\text{base}} = 8\text{px}$ (concave outward flare)
+- $r_{\text{top}} = 9\text{px}$ (convex shoulder)
+- Total SVG width: $W + 2 \times r_{\text{base}} = W + 16\text{px}$
+- Total SVG height: $H + 3\text{px} = 37\text{px}$
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│ TOP PANE: Kinetic Stage + Integrated Header Composer                   │
-│   • Top Bar: Source Name ─── [Editable Sentence Chips ×] ─── Status   │
-│   • Canvas: 60fps Kinetic Flight Trajectories                          │
-├────────────────────────────────────────────────────────────────────────┤
-│ DIVIDER 1: Stage Controls (Play/Rewind/Scrubber) · Grab Notch · Presets│
-├────────────────────────────────────────────────────────────────────────┤
-│ MIDDLE PANE: Minimized Collapsible Composer Dock                       │
-│   • Compact single-line input pill with expand/collapse chevron        │
-├────────────────────────────────────────────────────────────────────────┤
-│ DIVIDER 2: Lexicon Controls (Filters/Mode) · Grab Notch · Layout View  │
-├────────────────────────────────────────────────────────────────────────┤
-│ BOTTOM PANE: Word Explorer (Graph / Blocks / Pebbles / Stats)          │
-└────────────────────────────────────────────────────────────────────────┘
+(17, 1)                      (W-1, 1)
+   ╭────────────────────────────╮
+  ╱                              ╲
+(8, 10)                        (W+8, 10)
+  │                                │
+  │        WORDS / STATS           │
+  │                                │
+(8, 26)                        (W+8, 26)
+ ╰╮                              ╭╯
+──┴──────────────────────────────┴── Baseline (y = 34)
+(0, 34)                        (W+16, 34)
+  └──────────────────────────────┘   Fill closure (y = 37)
 ```
 
-#### Visual Tokens & Component Styling
+### Path Generation Algorithm
 
-1. **Integrated Stage Header Composer**:
-   - Clean obsidian bar (`bg-zinc-950/80 backdrop-blur-md border-b border-white/[0.08] px-3 py-1.5 flex items-center justify-between gap-3`).
-   - Left: Source Name label.
-   - Center: Interactive sentence chip bank:
-     - Each word rendered as an individual chip: `bg-zinc-900 border border-zinc-700/80 hover:border-zinc-500 text-zinc-100 rounded-lg px-2.5 py-1 text-xs font-mono font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95`.
-     - 1-click delete button: `text-zinc-500 hover:text-white p-0.5 rounded-full hover:bg-white/10`.
-     - Drag handle or swap affordances for instant reordering.
-   - Right: Parity status pill (e.g. `100% Solved` in emerald or `2 remaining`).
-2. **Minimized Collapsible Composer Dock**:
-   - Resting state: Sleek, compact dock ($28\text{px}$–$32\text{px}$) with quick text input and a collapse/expand chevron.
-   - Expanded state: Full source & target input card pair with drag-and-drop dropzones.
-   - Keyboard awareness: Automatically adapts height when mobile keyboard engages.
+```typescript
+function generateFilingTabPaths(w: number, h: number = 34, rBase: number = 8, rTop: number = 9) {
+  const x0 = 0;
+  const x1 = rBase;              // 8
+  const x2 = rBase + rTop;       // 17
+  const x3 = Math.max(x2, w + rBase - rTop);
+  const x4 = w + rBase;
+  const x5 = w + 2 * rBase;
+
+  const yBase = h;               // 34
+  const yWallBottom = h - rBase; // 26
+  const yWallTop = rTop + 1;     // 10
+  const yTop = 1;
+
+  // Single continuous contour stroke
+  const strokePath = [
+    `M ${x0} ${yBase}`,
+    `A ${rBase} ${rBase} 0 0 0 ${x1} ${yWallBottom}`,
+    `L ${x1} ${yWallTop}`,
+    `A ${rTop} ${rTop} 0 0 1 ${x2} ${yTop}`,
+    `L ${x3} ${yTop}`,
+    `A ${rTop} ${rTop} 0 0 1 ${x4} ${yWallTop}`,
+    `L ${x4} ${yWallBottom}`,
+    `A ${rBase} ${rBase} 0 0 0 ${x5} ${yBase}`,
+  ].join(' ');
+
+  // Single fill path: follows the exact contour, then closes under baseline
+  const fillPath = `${strokePath} L ${x5} ${yBase + 3} L ${x0} ${yBase + 3} Z`;
+
+  return { strokePath, fillPath, totalWidth: x5, totalHeight: h + 3 };
+}
+```
 
 ---
 
-### 3. Key Product Decisions & Trade-Offs
+## 3. Implementation Steps
 
-- **Header Word Chips vs. Raw Text Input**:
-  - *Chosen Approach*: Render target words as discrete interactive chips in the header while keeping text editing available in the collapsible dock.
-  - *Why*: Eliminates accidental cursor misplacements when clicking words in the explorer, making building anagrams tactile and mistake-proof.
-- **Collapsible Middle Dock vs. Complete Removal**:
-  - *Chosen Approach*: Retain the middle pane as a collapsible dock rather than removing it completely.
-  - *Why*: Satisfies the user's choice for 3-pane topology with a minimized dock, preserving quick manual typing of custom names while keeping the viewport uncluttered.
-- **Drag & Swap Word Ordering**:
-  - *Chosen Approach*: Support instant word swapping via click or drag-and-drop between adjacent chips, with smooth Framer Motion layout transitions.
-
----
-
-### 4. Technical Architecture & Component Changes
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│ src/components/NameAnagramStage.tsx                                    │
-│  - Add Integrated Header Composer bar above canvas                     │
-│  - Render interactive word chips with delete, swap, and add handlers   │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌───────────────────────────────────┴────────────────────────────────────┐
-│ src/components/TargetHistogramWindow.tsx                               │
-│  - Add collapsible dock mode (compact 28px bar with expand chevron)    │
-│  - Sync state with Stage header composer                               │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌───────────────────────────────────┴────────────────────────────────────┐
-│ src/components/ThreePaneSplit.tsx & src/App.tsx                        │
-│  - Adjust middle pane height allocation (compact 32px vs full 64px)    │
-│  - Wire word chip interactions to update targetPhrase state            │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-#### Step-by-Step Implementation Sequence
-
-1. **`src/components/NameAnagramStage.tsx`**:
-   - Add the `IntegratedHeaderComposer` inside `NameAnagramStage`:
-     - Split `targetPhrase` into word tokens.
-     - Render word chips with 1-click removal, quick swap, and empty placeholder when blank.
-     - Connect to `onTargetPhraseChange` and toast notifications.
-2. **`src/components/TargetHistogramWindow.tsx`**:
-   - Introduce an `isCollapsed` toggle state with local storage persistence.
-   - Render a compact dock bar when collapsed: `Write name · Remix phrase` with quick expand button.
-   - Render the full input deck when expanded.
-3. **`src/components/ThreePaneSplit.tsx`**:
-   - Update `middleHeight` dynamic calculation to support collapsed height ($32\text{px}$) and expanded height ($64\text{px}$).
-4. **`src/App.tsx`**:
-   - Ensure all word addition and removal handlers trigger smooth animation updates without layout glitches.
-
----
-
-### 5. Verification Plan
-
-- **Compilation**: Run `compile_applet` and `lint_applet` to verify zero TypeScript errors.
-- **Interactive Verification**:
-  - Tap candidate words in Word Explorer $\to$ Verify word chips appear immediately in the Stage header.
-  - Click the `×` on a word chip $\to$ Verify word is removed and letter tiles rewind.
-  - Toggle collapse on the middle composer dock $\to$ Verify it smoothly contracts to 32px and expands on click.
-  - Test animation playback $\to$ Verify canvas renders correctly with the new header bar.
+1. **Create `src/components/FilingTabShell.tsx`**:
+   - Encapsulates the dynamic path math and single SVG element.
+   - Accepts `width` and `height`, and renders the `<svg>` with zero subpixel seams.
+2. **Integrate into `src/components/SplitDivider.tsx` (`AccessoryItem`)**:
+   - Attach a resize ref to the active button to obtain its measured width.
+   - Render `<FilingTabShell width={buttonWidth} height={34} />` positioned at `left-[-8px] top-0 pointer-events-none -z-10`.
+   - Remove all previous 3-piece SVGs and rectangular baseline masks.
+   - Keep inactive complication tabs as smooth rounded pills (`rounded-xl`).
+3. **Verification**:
+   - Test across all tabs (`WORDS`, `GRAPH`, `BLOCKS`, `STATS`, `SOLVE`, `WORDS ⫽ SOLVE 3682`).
+   - Run `lint_applet` and `compile_applet`.

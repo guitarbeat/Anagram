@@ -95,12 +95,23 @@ export function renderRearrangementCanvas(
   });
   ctx.restore();
 
-  // 4. Draw static non-letter punctuation symbols (e.g. '-' or "'") from source
+  // 4. Draw static non-letter punctuation symbols (e.g. '-', "'", '.', '/') from source and destination
   const nonLetterPunctuation = src.filter(g => !g.letter && g.char.trim());
   if (nonLetterPunctuation.length > 0) {
     ctx.save();
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     nonLetterPunctuation.forEach(g => {
+      ctx.fillText(g.char, g.x, g.y);
+    });
+    ctx.restore();
+  }
+
+  const dstNonLetterPunctuation = dst.filter(g => !g.letter && g.char.trim());
+  if (dstNonLetterPunctuation.length > 0) {
+    ctx.save();
+    const punctAlpha = clamp(0.28 + progress * 0.72, 0.28, 1);
+    ctx.fillStyle = `rgba(0, 0, 0, ${punctAlpha})`;
+    dstNonLetterPunctuation.forEach(g => {
       ctx.fillText(g.char, g.x, g.y);
     });
     ctx.restore();

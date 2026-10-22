@@ -83,6 +83,52 @@ const AccessoryItem: React.FC<{ accessory: SplitAccessory }> = ({ accessory }) =
   }
 
   const isIconOnly = !accessory.label && (accessory.badge === undefined || accessory.badge === null);
+  const isTab = accessory.variant === 'tab';
+
+  if (isTab) {
+    return (
+      <button
+        type="button"
+        onClick={accessory.action}
+        onContextMenu={accessory.onContextMenu}
+        onDoubleClick={accessory.onDoubleClick}
+        onPointerDown={accessory.onPointerDown}
+        onPointerUp={accessory.onPointerUp}
+        onPointerLeave={accessory.onPointerLeave}
+        title={accessory.title}
+        className={`relative flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer shrink-0 select-none whitespace-nowrap active:scale-[0.98] ${
+          accessory.active
+            ? 'h-8 sm:h-8.5 px-3.5 sm:px-4 bg-white text-black font-black rounded-t-xl sm:rounded-t-2xl rounded-b-none border-t-2 border-l-2 border-r-2 border-black border-b-0 z-30 translate-y-[2px] self-end shadow-xs'
+            : 'h-6.5 sm:h-7 px-2.5 sm:px-3 bg-white/[0.05] text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.12] font-bold rounded-xl border border-white/10 hover:border-white/25 z-10 self-center my-auto shadow-xs'
+        }`}
+      >
+        {/* Seamless bottom mask bridging active tab directly into the white card below */}
+        {accessory.active && (
+          <span className="absolute -bottom-[2px] inset-x-0 h-[3px] bg-white pointer-events-none z-30" />
+        )}
+
+        {accessory.icon && (
+          <span className="shrink-0 flex items-center justify-center">{accessory.icon}</span>
+        )}
+        {accessory.label && (
+          <span className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider leading-none whitespace-nowrap">
+            {accessory.label}
+          </span>
+        )}
+        {accessory.badge !== undefined && accessory.badge !== null && (
+          <span
+            className={`text-[8.5px] sm:text-[9px] font-mono font-black tabular-nums px-1.5 py-0.2 rounded-full leading-none shrink-0 ${
+              accessory.active
+                ? 'bg-black text-white'
+                : 'bg-white/15 text-zinc-200'
+            }`}
+          >
+            {accessory.badge}
+          </span>
+        )}
+      </button>
+    );
+  }
 
   return (
     <button
@@ -96,15 +142,15 @@ const AccessoryItem: React.FC<{ accessory: SplitAccessory }> = ({ accessory }) =
       title={accessory.title}
       className={
         isIconOnly
-          ? `h-6 w-6 flex items-center justify-center rounded-md border transition-all duration-150 ease-out cursor-pointer shrink-0 select-none active:scale-[0.88] ${
+          ? `h-6.5 w-6.5 flex items-center justify-center rounded-lg border transition-all duration-150 ease-out cursor-pointer shrink-0 select-none active:scale-[0.88] ${
               accessory.active
                 ? 'bg-white text-black border-white shadow-xs'
-                : 'bg-white/[0.04] border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.1] hover:border-white/15'
+                : 'bg-white/[0.04] border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.1] hover:border-white/20'
             }`
-          : `h-6 sm:h-6.5 px-1.5 sm:px-2.5 min-w-[24px] flex items-center justify-center gap-1 rounded-md border transition-all duration-150 ease-out cursor-pointer shrink-0 select-none whitespace-nowrap active:scale-[0.92] ${
+          : `h-6.5 sm:h-7 px-2 sm:px-3 min-w-[24px] flex items-center justify-center gap-1 rounded-lg sm:rounded-xl border transition-all duration-150 ease-out cursor-pointer shrink-0 select-none whitespace-nowrap active:scale-[0.92] ${
               accessory.active
-                ? 'bg-white text-black border-white font-black shadow-[0_1px_8px_rgba(255,255,255,0.22)]'
-                : 'bg-white/[0.04] text-zinc-400 border-white/[0.07] hover:text-zinc-100 hover:bg-white/[0.1] hover:border-white/15 font-bold'
+                ? 'bg-white text-black border-white font-black shadow-xs'
+                : 'bg-white/[0.04] text-zinc-400 border-white/[0.08] hover:text-zinc-100 hover:bg-white/[0.1] hover:border-white/20 font-bold'
             }`
       }
     >
@@ -215,6 +261,8 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
     }
   };
 
+  const hasTabs = resolvedLeading?.some((a) => a.variant === 'tab');
+
   return (
     <div
       role="separator"
@@ -228,14 +276,16 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
         hasOpenMenu ? 'z-50' : 'z-30'
       } touch-none group transition-colors duration-150 ${
         isHorizontal
-          ? 'w-full h-8 sm:h-9 bg-[#09090b] flex items-center justify-between gap-1.5 px-1.5 sm:px-2 cursor-row-resize'
+          ? hasTabs
+            ? 'w-full h-8 sm:h-8.5 bg-[#09090b] flex items-end justify-between px-2 sm:px-2.5 cursor-row-resize border-b-2 border-black'
+            : 'w-full h-8 sm:h-9 bg-[#09090b] flex items-center justify-between gap-1.5 px-1.5 sm:px-2 cursor-row-resize'
           : 'h-full w-7 sm:w-8 bg-[#09090b] flex flex-col items-center justify-between py-1.5 sm:py-2 cursor-col-resize'
       } ${isDragging ? 'bg-[#121217]' : 'hover:bg-[#0d0d11]'} ${className}`}
     >
       {/* LEADING COMPLICATIONS (Left / Top) */}
       <div
-        className={`flex items-center shrink-0 z-30 relative ${
-          isHorizontal ? 'gap-1' : 'flex-col gap-1'
+        className={`flex shrink-0 z-30 relative ${
+          isHorizontal ? 'gap-1.5 sm:gap-2 h-full items-end' : 'flex-col gap-1 items-center'
         }`}
       >
         {resolvedLeading?.map((accessory) => (
@@ -248,7 +298,9 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
       <div
         className={`flex items-center justify-center z-20 pointer-events-auto shrink-0 ${
           isHorizontal
-            ? 'mx-auto xl:absolute xl:left-1/2 xl:-translate-x-1/2 h-full'
+            ? hasTabs
+              ? 'mx-auto xl:absolute xl:left-1/2 xl:-translate-x-1/2 mb-1'
+              : 'mx-auto xl:absolute xl:left-1/2 xl:-translate-x-1/2 h-full'
             : 'my-auto xl:absolute xl:top-1/2 xl:-translate-y-1/2 w-full'
         }`}
       >
@@ -307,7 +359,7 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
       <div
         className={`flex items-center shrink-0 z-30 relative ${
           isHorizontal ? 'gap-1' : 'flex-col gap-1'
-        }`}
+        } ${hasTabs && isHorizontal ? 'mb-1' : ''}`}
       >
         {resolvedTrailing?.map((accessory) => (
           <AccessoryItem key={accessory.id} accessory={accessory} />

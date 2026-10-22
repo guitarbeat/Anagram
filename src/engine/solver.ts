@@ -8,6 +8,7 @@ import {
   hasInvalidArticle,
 } from './lexicon';
 import { scorePhrase, bestOrder, funniness } from './scoring';
+import { formatWordsAsWebsite } from './tlds';
 import type { POS, AnagramResult, SolveMetrics, SolveOptions } from './types';
 
 export type { POS, AnagramResult, SolveMetrics, SolveOptions };
@@ -397,10 +398,15 @@ export function solveAnagrams(opts: SolveOptions): {
     if (!isEx) continue; // Hard rule: Every result must remain an EXACT anagram
     if (hasInvalidArticle(ordered)) continue; // Discard invalid article usage
 
+    const websiteInfo = formatWordsAsWebsite(ordered);
+
     scoredList.push({
       ...scored,
+      score: websiteInfo ? scored.score + Math.round(websiteInfo.qualityBonus * 0.25) : scored.score,
       wordScore: scored.wordScoreTotal,
       isExact: isEx,
+      websiteUrl: websiteInfo ? websiteInfo.url : undefined,
+      isWebsite: Boolean(websiteInfo),
     });
   }
 

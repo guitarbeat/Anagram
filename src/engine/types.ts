@@ -18,6 +18,18 @@ export interface AnagramResult {
   grammarScore: number;
   funninessScore: number;
   isExact: boolean;
+  websiteUrl?: string;
+  isWebsite?: boolean;
+}
+
+export interface WebsiteSolution {
+  url: string;
+  domain: string;
+  tld: string;
+  tldCategory: 'ccTLD' | 'tech' | 'classic' | 'creative' | 'business' | 'other';
+  format: 'domain' | 'subdomain' | 'url-path' | 'domain-hack';
+  words: string[];
+  score: number;
 }
 
 export interface SolveMetrics {
@@ -97,4 +109,5 @@ export interface ConstructionState extends MultisetDelta {
   solvableWordsCount: number;
   deadEndWordsCount: number;
   finisherPairs: FinisherPair[];
+  websiteSolutions: WebsiteSolution[];
 }

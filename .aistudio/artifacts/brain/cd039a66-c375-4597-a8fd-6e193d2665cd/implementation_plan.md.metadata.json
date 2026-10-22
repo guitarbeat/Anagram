@@ -1,6 +1,6 @@
 {
-  "summary": "Implementation plan to streamline the workspace layout: integrating the target phrase builder directly into the Stage header with interactive word chips (1-click removal and drag ordering), and transforming the middle composer into a sleek, minimized collapsible composer dock within the 3-pane split.",
-  "updatedAt": "2026-10-16T16:24:38.251229150Z",
-  "requestFeedback": true,
-  "userFacing": true
+  "summary":  "Architecture plan for a smarter, unified dynamic SVG filing folder tab. Replaces multiple sliced SVG parts and rectangular masks with a single, dynamically generated SVG component that measures button width and renders a continuous mathematical path with an 8px flared base and 9px rounded shoulders.",
+  "updatedAt":  "2026-10-22T15:40:03.954067673Z",
+  "requestFeedback":  true,
+  "userFacing":  true
 }

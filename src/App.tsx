@@ -174,6 +174,7 @@ export function App() {
     histogramData,
     exactClosers,
     finisherPairs,
+    websiteSolutions,
     solvableWordsCount,
     deadEndWordsCount,
     budget,
@@ -231,6 +232,12 @@ export function App() {
   const [explorerViewMode, setExplorerViewMode] = useState<
     'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions'
   >('pebbles');
+  const [splitLeftView, setSplitLeftView] = useState<
+    'graph' | 'pebbles' | 'blocks' | 'solutions' | 'inspector'
+  >('pebbles');
+  const [splitRightView, setSplitRightView] = useState<
+    'inspector' | 'blocks' | 'pebbles' | 'solutions' | 'graph'
+  >('solutions');
 
   const ALL_EXPLORER_VIEWS = useMemo(
     () => ['pebbles', 'graph', 'blocks', 'inspector', 'solutions', 'both'] as const,
@@ -544,7 +551,7 @@ export function App() {
         candidateWordsCount={candidateWords.length}
         exactClosersCount={exactClosers?.length || 0}
         finisherPairsCount={finisherPairs?.length || 0}
-        completeSolutionsCount={results.length}
+        completeSolutionsCount={results.length + (websiteSolutions?.length || 0)}
         solvableWordsCount={solvableWordsCount}
         wordFilterMode={wordFilterMode}
         onCycleWordFilter={handleCycleWordFilter}
@@ -553,6 +560,10 @@ export function App() {
         explorerViewMode={explorerViewMode}
         onCycleExplorerView={handleCycleExplorerView}
         onSelectExplorerView={handleSelectExplorerView}
+        splitLeftView={splitLeftView}
+        onSplitLeftViewChange={setSplitLeftView}
+        splitRightView={splitRightView}
+        onSplitRightViewChange={setSplitRightView}
         showGraphPanel={showGraphPanel}
         onToggleGraphPanel={handleToggleGraphPanel}
         showInspectorPanel={showInspectorPanel}
@@ -676,6 +687,7 @@ export function App() {
               onShowToast={showToast}
               exactClosers={exactClosers}
               finisherPairs={finisherPairs}
+              websiteSolutions={websiteSolutions}
               completeSolutions={results}
               isSolvingSolutions={isSolving}
               remainingLetters={remainingLetters}
@@ -690,6 +702,11 @@ export function App() {
               showGraphPanel={showGraphPanel}
               showInspectorPanel={showInspectorPanel}
               explorerViewMode={explorerViewMode}
+              onSelectExplorerView={handleSelectExplorerView}
+              splitLeftView={splitLeftView}
+              onSplitLeftViewChange={setSplitLeftView}
+              splitRightView={splitRightView}
+              onSplitRightViewChange={setSplitRightView}
               wordFilterMode={wordFilterMode}
               countsByMode={countsByMode}
               onCycleWordFilter={handleCycleWordFilter}

@@ -121,6 +121,7 @@ const TargetPhraseBox: React.FC<TargetPhraseBoxProps> = ({
   });
 
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isInputFocused, setIsInputFocused] = useState<boolean>(false);
   const editableRef = useRef<HTMLDivElement>(null);
 
   // Synchronize tokens when value changes from outside (e.g. word added from graph, suggestions, or cleared)
@@ -160,24 +161,30 @@ const TargetPhraseBox: React.FC<TargetPhraseBoxProps> = ({
     });
   }, [value]);
 
-  // When entering editing mode, populate contentEditable and place cursor at end
+  // Always keep contentEditable DOM text synchronized with value (including when cleared while not editing)
+  useEffect(() => {
+    if (editableRef.current && editableRef.current.innerText !== value) {
+      editableRef.current.innerText = value;
+    }
+  }, [value, isEditing]);
+
+  // When explicitly entering editing mode, focus contentEditable and place cursor at end
   useEffect(() => {
     if (isEditing && editableRef.current) {
-      if (editableRef.current.innerText !== value) {
-        editableRef.current.innerText = value;
+      if (editableRef.current !== document.activeElement) {
+        editableRef.current.focus();
+        requestAnimationFrame(() => {
+          if (!editableRef.current) return;
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.selectNodeContents(editableRef.current);
+          range.collapse(false);
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        });
       }
-      editableRef.current.focus();
-      requestAnimationFrame(() => {
-        if (!editableRef.current) return;
-        const range = document.createRange();
-        const sel = window.getSelection();
-        range.selectNodeContents(editableRef.current);
-        range.collapse(false);
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-      });
     }
-  }, [isEditing, value]);
+  }, [isEditing]);
 
   const handleSwap = (i: number, j: number) => {
     if (i < 0 || j < 0 || i >= tokens.length || j >= tokens.length || i === j) return;
@@ -256,6 +263,10 @@ const TargetPhraseBox: React.FC<TargetPhraseBoxProps> = ({
           contentEditable
           suppressContentEditableWarning
           onFocus={() => {
+            setIsInputFocused(true);
+            if (!isEditing) {
+              onToggleEditing(true);
+            }
             requestAnimationFrame(() => {
               window.scrollTo(0, 0);
               if (document.documentElement) document.documentElement.scrollTop = 0;
@@ -263,11 +274,10 @@ const TargetPhraseBox: React.FC<TargetPhraseBoxProps> = ({
             });
           }}
           onBlur={(e) => {
+            setIsInputFocused(false);
             const text = e.currentTarget.innerText.replace(/\n/g, ' ').trim();
             onChange(text);
-            if (text) {
-              onToggleEditing(false);
-            }
+            onToggleEditing(false);
           }}
           onInput={(e) => {
             const text = e.currentTarget.innerText.replace(/\n/g, ' ');
@@ -279,10 +289,11 @@ const TargetPhraseBox: React.FC<TargetPhraseBoxProps> = ({
               editableRef.current?.blur();
             } else if (e.key === 'Escape') {
               e.preventDefault();
+              editableRef.current?.blur();
               onToggleEditing(false);
             }
           }}
-          className="w-full text-center bg-transparent text-zinc-900 font-black uppercase tracking-widest outline-none select-text break-words cursor-text py-0.5 px-1.5 sm:px-3 max-h-full overflow-y-auto no-scrollbar unified-app-text transition-all duration-300 text-xs sm:text-sm md:text-base font-extrabold tracking-wider"
+          className="w-full text-center bg-transparent text-zinc-900 font-black uppercase tracking-widest outline-none select-text break-words cursor-text py-0.5 px-1.5 sm:px-3 max-h-full overflow-y-auto no-scrollbar unified-app-text transition-all duration-300 text-xs sm:text-sm md:text-base font-extrabold tracking-wider z-10"
         />
       ) : (
         <div
@@ -402,7 +413,7 @@ const TargetPhraseBox: React.FC<TargetPhraseBoxProps> = ({
         </div>
       )}
 
-      {!value && (
+      {!value.trim() && !isInputFocused && (
         <span className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-300 font-black uppercase tracking-widest text-center px-4 sm:px-6 select-none unified-app-text transition-all duration-300 text-xs sm:text-sm font-extrabold tracking-wider">
           {placeholder}
         </span>

@@ -122,6 +122,7 @@ export interface SplitAccessory {
   action: (e?: React.MouseEvent) => void;
   color?: string;
   active?: boolean;
+  variant?: 'pill' | 'tab';
   customContent?: React.ReactNode;
   onContextMenu?: (e: React.MouseEvent) => void;
   onDoubleClick?: (e: React.MouseEvent) => void;

@@ -1,4 +1,5 @@
 import { WORDS, LETTER_COUNTS, LETTER_MASKS, FREQ, isTLD, isCustomWord } from './lexicon';
+import { getTLDCategory, getTLDQualityScore, formatWordsAsWebsite } from './tlds';
 import type {
   CandidateWordItem,
   HistogramBin,
@@ -7,6 +8,7 @@ import type {
   MultisetDelta,
   ConstructionState,
   FinisherPair,
+  WebsiteSolution,
 } from './types';
 
 const VOWELS = new Set(['a', 'e', 'i', 'o', 'u']);
@@ -480,6 +482,307 @@ export function auditCandidateSolvability(
 }
 
 /**
+ * Discovers exact website / domain name solutions (e.g. domain.tld, sub.domain.tld, domain.tld/path, or wor.ld domain hacks)
+ * that consume 100% of the active letter pool with 0 leftover letters.
+ */
+export function findWebsiteSolutions(
+  letterPool: string,
+  candidateWords: CandidateWordItem[],
+  exactClosers: string[] = [],
+  limit = 36
+): WebsiteSolution[] {
+  const clean = normalizeLetters(letterPool);
+  if (!clean || clean.length < 3) return [];
+
+  const { counts: poolCounts } = toCountAndMask(clean);
+  const poolLen = clean.length;
+
+  const solutions: WebsiteSolution[] = [];
+  const seenUrls = new Set<string>();
+
+  const addSolution = (sol: WebsiteSolution) => {
+    const key = sol.url.toLowerCase();
+    if (!seenUrls.has(key)) {
+      seenUrls.add(key);
+      solutions.push(sol);
+    }
+  };
+
+  // 1. Check 1-word exact closers for Domain Hacks (e.g., "radio" -> "rad.io", "delicious" -> "delicio.us")
+  for (const closer of exactClosers) {
+    const formatted = formatWordsAsWebsite([closer]);
+    if (formatted) {
+      const freq = FREQ.get(closer) || 10;
+      addSolution({
+        url: formatted.url,
+        domain: formatted.domain,
+        tld: formatted.tld,
+        tldCategory: formatted.tldCategory,
+        format: formatted.format,
+        words: [closer],
+        score: 120 + formatted.qualityBonus + Math.log10(freq + 1) * 18,
+      });
+    }
+  }
+
+  // Pre-index candidates by length and precompute letter count arrays
+  const byLength = new Map<number, CandidateWordItem[]>();
+  const candCountMaps = new Map<string, Uint8Array>();
+  const tldCandidates: CandidateWordItem[] = [];
+
+  for (const c of candidateWords) {
+    if (c.length < 2) continue;
+    let list = byLength.get(c.length);
+    if (!list) {
+      list = [];
+      byLength.set(c.length, list);
+    }
+    list.push(c);
+
+    const arr = new Uint8Array(26);
+    for (let i = 0; i < c.word.length; i++) {
+      arr[c.word.charCodeAt(i) - 97]++;
+    }
+    candCountMaps.set(c.word, arr);
+
+    if (c.isTLD) {
+      tldCandidates.push(c);
+    }
+  }
+
+  // Sort TLD candidates by TLD quality score descending so iconic TLDs (.com, .io, .ai, .co, .org, .us, .me, .dev, .app, etc.) are explored first
+  tldCandidates.sort((a, b) => {
+    const qDiff = getTLDQualityScore(b.word) - getTLDQualityScore(a.word);
+    if (qDiff !== 0) return qDiff;
+    return b.freq - a.freq;
+  });
+
+  // 2. 2-Word Exact Domains: [hostWord].[tld]
+  for (const tldCand of tldCandidates) {
+    const tld = tldCand.word;
+    const remLen = poolLen - tld.length;
+    if (remLen < 2) continue;
+
+    const hostList = byLength.get(remLen);
+    if (!hostList) continue;
+
+    const tldCounts = candCountMaps.get(tld)!;
+    const tldQuality = getTLDQualityScore(tld);
+    const tldCat = getTLDCategory(tld);
+
+    for (const hostCand of hostList) {
+      if (hostCand.word === tld) {
+        let canDouble = true;
+        for (let i = 0; i < 26; i++) {
+          if (tldCounts[i] * 2 !== poolCounts[i]) {
+            canDouble = false;
+            break;
+          }
+        }
+        if (!canDouble) continue;
+      } else {
+        const hCounts = candCountMaps.get(hostCand.word)!;
+        let exactFit = true;
+        for (let i = 0; i < 26; i++) {
+          if (hCounts[i] + tldCounts[i] !== poolCounts[i]) {
+            exactFit = false;
+            break;
+          }
+        }
+        if (!exactFit) continue;
+      }
+
+      const url = `${hostCand.word}.${tld}`;
+      addSolution({
+        url,
+        domain: url,
+        tld,
+        tldCategory: tldCat,
+        format: 'domain',
+        words: [hostCand.word, tld],
+        score:
+          140 +
+          tldQuality +
+          hostCand.length * 6 +
+          Math.log10((hostCand.freq || 1) + 1) * 16,
+      });
+    }
+  }
+
+  // 3. 3-Word Exact Websites: [w1][w2].[tld], [w1].[w2].[tld], and [w1].[tld]/[w2]
+  if (poolLen >= 6 && poolLen <= 22) {
+    const topTlds = tldCandidates.slice(0, 32);
+    for (const tldCand of topTlds) {
+      if (solutions.length >= limit * 2) break;
+      const tld = tldCand.word;
+      const remLen = poolLen - tld.length;
+      if (remLen < 4) continue;
+
+      const tldCounts = candCountMaps.get(tld)!;
+      const remCounts = new Uint8Array(26);
+      for (let i = 0; i < 26; i++) {
+        remCounts[i] = poolCounts[i] - tldCounts[i];
+      }
+
+      const tldQuality = getTLDQualityScore(tld);
+      const tldCat = getTLDCategory(tld);
+
+      for (let l1 = Math.min(remLen - 2, 12); l1 >= Math.ceil(remLen / 2); l1--) {
+        const l2 = remLen - l1;
+        if (l2 < 2) continue;
+
+        const list1 = byLength.get(l1);
+        const list2 = byLength.get(l2);
+        if (!list1 || !list2) continue;
+
+        for (const w1 of list1.slice(0, 28)) {
+          const c1 = candCountMaps.get(w1.word)!;
+          let fits1 = true;
+          for (let i = 0; i < 26; i++) {
+            if (c1[i] > remCounts[i]) {
+              fits1 = false;
+              break;
+            }
+          }
+          if (!fits1) continue;
+
+          for (const w2 of list2.slice(0, 28)) {
+            const c2 = candCountMaps.get(w2.word)!;
+            let fits2 = true;
+            for (let i = 0; i < 26; i++) {
+              if (c1[i] + c2[i] !== remCounts[i]) {
+                fits2 = false;
+                break;
+              }
+            }
+            if (!fits2) continue;
+
+            const freqScore =
+              Math.log10((w1.freq || 1) + 1) * 12 +
+              Math.log10((w2.freq || 1) + 1) * 12;
+
+            // Format A: Compound Domain (e.g. solarwood.ae, aaronwoods.re)
+            const compoundDomain = `${w1.word}${w2.word}.${tld}`;
+            addSolution({
+              url: compoundDomain,
+              domain: compoundDomain,
+              tld,
+              tldCategory: tldCat,
+              format: 'domain',
+              words: [w1.word, w2.word, tld],
+              score: 112 + tldQuality + freqScore + (w1.length + w2.length) * 2,
+            });
+
+            // Format B: URL with Path (e.g. woods.io/learn)
+            const pathUrl = `${w1.word}.${tld}/${w2.word}`;
+            addSolution({
+              url: pathUrl,
+              domain: `${w1.word}.${tld}`,
+              tld,
+              tldCategory: tldCat,
+              format: 'url-path',
+              words: [w1.word, tld, w2.word],
+              score: 104 + tldQuality + freqScore,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 4. 4-Word Exact Websites for longer names (e.g. 14-22 letters): [w1][w2].[tld]/[w3]
+  if (poolLen >= 13 && poolLen <= 24 && solutions.length < 18) {
+    const topTlds = tldCandidates.slice(0, 18);
+    const longWords = candidateWords.filter((c) => c.length >= 5 && c.length <= poolLen - 6).slice(0, 30);
+
+    for (const tldCand of topTlds) {
+      if (solutions.length >= limit * 2) break;
+      const tld = tldCand.word;
+      const tldCounts = candCountMaps.get(tld)!;
+      const tldQuality = getTLDQualityScore(tld);
+      const tldCat = getTLDCategory(tld);
+
+      for (const w1 of longWords) {
+        if (w1.word === tld) continue;
+        const c1 = candCountMaps.get(w1.word)!;
+        const remAfterW1 = new Uint8Array(26);
+        let fitsW1 = true;
+        for (let i = 0; i < 26; i++) {
+          const used = tldCounts[i] + c1[i];
+          if (used > poolCounts[i]) {
+            fitsW1 = false;
+            break;
+          }
+          remAfterW1[i] = poolCounts[i] - used;
+        }
+        if (!fitsW1) continue;
+
+        const remLen23 = poolLen - tld.length - w1.length;
+        if (remLen23 < 4) continue;
+
+        let foundForW1 = false;
+        for (let l2 = Math.min(remLen23 - 2, 9); l2 >= Math.ceil(remLen23 / 2); l2--) {
+          if (foundForW1) break;
+          const l3 = remLen23 - l2;
+          if (l3 < 2) continue;
+
+          const list2 = byLength.get(l2);
+          const list3 = byLength.get(l3);
+          if (!list2 || !list3) continue;
+
+          for (const w2 of list2.slice(0, 18)) {
+            if (foundForW1) break;
+            const c2 = candCountMaps.get(w2.word)!;
+            let fits2 = true;
+            for (let i = 0; i < 26; i++) {
+              if (c2[i] > remAfterW1[i]) {
+                fits2 = false;
+                break;
+              }
+            }
+            if (!fits2) continue;
+
+            for (const w3 of list3.slice(0, 18)) {
+              const c3 = candCountMaps.get(w3.word)!;
+              let fits3 = true;
+              for (let i = 0; i < 26; i++) {
+                if (c2[i] + c3[i] !== remAfterW1[i]) {
+                  fits3 = false;
+                  break;
+                }
+              }
+              if (!fits3) continue;
+
+              const domain = `${w1.word}${w2.word}.${tld}`;
+              const url = `${domain}/${w3.word}`;
+              const freqScore =
+                Math.log10((w1.freq || 1) + 1) * 10 +
+                Math.log10((w2.freq || 1) + 1) * 8 +
+                Math.log10((w3.freq || 1) + 1) * 8;
+
+              addSolution({
+                url,
+                domain,
+                tld,
+                tldCategory: tldCat,
+                format: 'url-path',
+                words: [w1.word, w2.word, tld, w3.word],
+                score: 98 + tldQuality + freqScore + w1.length * 2,
+              });
+              foundForW1 = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  solutions.sort((a, b) => b.score - a.score);
+  return solutions.slice(0, limit);
+}
+
+/**
  * Full unified pipeline calculating the complete ConstructionState
  */
 export function getConstructionState(sourceText: string, targetText: string): ConstructionState {
@@ -493,9 +796,10 @@ export function getConstructionState(sourceText: string, targetText: string): Co
       ? delta.remainingLetters.join('')
       : delta.sourceLetters.join('');
 
-  const exactClosers = delta.isLegalPrefix && delta.remainingLetters.length > 0
-    ? findExactClosers(delta.remainingLetters)
-    : [];
+  const exactClosers =
+    delta.remainingLetters.length > 0 && !delta.isSurplus
+      ? findExactClosers(delta.remainingLetters)
+      : [];
 
   const rawCandidateWords = findCandidateWords(activePool);
 
@@ -505,6 +809,12 @@ export function getConstructionState(sourceText: string, targetText: string): Co
     deadEndWordsCount,
     finisherPairs,
   } = auditCandidateSolvability(activePool, rawCandidateWords);
+
+  const websiteSolutions = findWebsiteSolutions(
+    activePool,
+    auditedCandidates,
+    exactClosers
+  );
 
   const histogramData = computeLengthHistogram(
     auditedCandidates,
@@ -520,5 +830,6 @@ export function getConstructionState(sourceText: string, targetText: string): Co
     solvableWordsCount,
     deadEndWordsCount,
     finisherPairs,
+    websiteSolutions,
   };
 }

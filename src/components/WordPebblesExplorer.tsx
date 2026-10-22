@@ -281,11 +281,6 @@ export const WordPebblesExplorer: React.FC<WordPebblesExplorerProps> = ({
                       ? 'bg-black text-white hover:bg-zinc-800 font-black shadow-[2px_2px_0px_#000000] hover:shadow-[3px_3px_0px_#000000] hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none'
                       : 'bg-white hover:bg-zinc-50 text-zinc-900 shadow-[1.5px_1.5px_0px_#000000] hover:shadow-[2.5px_2.5px_0px_#000000] hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none'
                   }`}
-                  title={`Word: "${item.word.toUpperCase()}" (${item.length} letters)${
-                    isCloser ? ' · Exact Closer!' : ''
-                  }${item.isTLD ? ' · Domain / TLD Extension' : ''}${
-                    item.isCustom ? ' · Custom User Word' : ''
-                  }\nClick to inspect in Lens · Drag & drop into sentence`}
                 >
                   {isCloser && <span className="w-1.5 h-1.5 rounded-full bg-white inline-block shrink-0" />}
                   {item.isTLD && <span className="text-[11px] font-mono opacity-50 font-normal mr-[-1px]">.</span>}

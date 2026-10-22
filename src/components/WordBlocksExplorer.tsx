@@ -192,9 +192,6 @@ export const WordBlocksExplorer: React.FC<WordBlocksExplorerProps> = ({
                   transition: 'left 220ms cubic-bezier(0.2, 0.8, 0.2, 1), top 220ms cubic-bezier(0.2, 0.8, 0.2, 1), width 220ms cubic-bezier(0.2, 0.8, 0.2, 1), height 220ms cubic-bezier(0.2, 0.8, 0.2, 1), transform 100ms ease, box-shadow 100ms ease',
                 }}
                 className={`absolute border-2 border-black flex flex-col items-center justify-center cursor-grab active:cursor-grabbing select-none transition-all duration-75 overflow-hidden p-1 touch-manipulation active:scale-[0.96] ${tileColor}`}
-                title={`Word: ${tile.id.toUpperCase()} (${tile.id.length} letters)${
-                  isCloser ? ' · Exact Closer!' : ''
-                }\nClick to add to sentence · Drag & drop into target input`}
               >
                 {/* Big Bold Centered Word */}
                 <span

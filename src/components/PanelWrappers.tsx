@@ -113,15 +113,15 @@ export const BottomWrapper: React.FC<PanelWrapperProps> = ({
   const activeBg =
     bgColorClass ||
     (isMinimized
-      ? 'bg-[#0c0c0f] hover:bg-[#111116] border border-white/[0.07] hover:border-white/15 group'
-      : 'bg-[#09090b] border-2 border-black shadow-sm');
+      ? 'bg-[#0c0c0f] hover:bg-[#111116] border border-white/[0.07] hover:border-white/15 rounded-xl sm:rounded-2xl group'
+      : 'bg-transparent border-0 rounded-none shadow-none');
 
   return (
     <div
       style={style}
       className={`BottomWrapper relative flex flex-col min-h-0 ${
-        isMinimized ? 'shrink-0' : 'shrink'
-      } w-full overflow-hidden select-none rounded-xl sm:rounded-2xl transition-all ${activeBg} ${
+        isMinimized ? 'shrink-0 rounded-xl sm:rounded-2xl' : 'shrink rounded-none'
+      } w-full overflow-visible select-none transition-all ${activeBg} ${
         isResizing
           ? 'duration-0'
           : 'duration-350 ease-[cubic-bezier(0.16,1,0.3,1)]'
