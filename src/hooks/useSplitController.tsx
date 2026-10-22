@@ -185,6 +185,13 @@ export function useSplitController({
     hasExceededSlop: boolean;
   } | null>(null);
 
+  // Track timestamp of the most recent completed drag to suppress stray clicks on complication buttons
+  const lastDragEndTimeRef = useRef<number>(0);
+
+  const shouldSuppressClick = useCallback(() => {
+    return performance.now() - lastDragEndTimeRef.current < 180;
+  }, []);
+
   // Start dragging panel to reposition
   const startPanelDrag = useCallback((panelId: PanelId, e: React.PointerEvent) => {
     e.preventDefault();
@@ -196,68 +203,52 @@ export function useSplitController({
   }, [panelOrder]);
 
   const startDrag1 = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.cancelable) {
+    const target = e.target as HTMLElement | null;
+    const isInteractiveChild = Boolean(
+      target?.closest('button, input, select, a, [role="menu"]')
+    );
+    if (!isInteractiveChild && e.cancelable) {
       e.preventDefault();
     }
     const isTouch = e.pointerType === 'touch';
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // Ignore
-    }
 
     const now = performance.now();
     dragContextRef.current = {
       startX: e.clientX,
       startY: e.clientY,
       startTime: now,
-      startRatio: ratio1,
+      startRatio: isCard1Minimized ? 0.14 : isCard3Minimized ? 0.86 : ratio1,
       dragType: 1,
       pointerId: e.pointerId,
       isTouch,
-      hasExceededSlop: !isTouch, // mice have zero slop; touch devices get refined deadzone
+      hasExceededSlop: false,
     };
     pointerHistoryRef.current = [{ y: e.clientY, time: now }];
-
-    if (!isTouch) {
-      setHasUserCustomized(true);
-      setIsCard1Minimized(false);
-      setSoloCard(null);
-      setActiveDrag(1);
-    }
-  }, [ratio1]);
+  }, [ratio1, isCard1Minimized, isCard3Minimized]);
 
   const startDrag2 = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.cancelable) {
+    const target = e.target as HTMLElement | null;
+    const isInteractiveChild = Boolean(
+      target?.closest('button, input, select, a, [role="menu"]')
+    );
+    if (!isInteractiveChild && e.cancelable) {
       e.preventDefault();
     }
     const isTouch = e.pointerType === 'touch';
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // Ignore
-    }
 
     const now = performance.now();
     dragContextRef.current = {
       startX: e.clientX,
       startY: e.clientY,
       startTime: now,
-      startRatio: ratio1,
+      startRatio: isCard1Minimized ? 0.14 : isCard3Minimized ? 0.86 : ratio1,
       dragType: 2,
       pointerId: e.pointerId,
       isTouch,
-      hasExceededSlop: !isTouch,
+      hasExceededSlop: false,
     };
     pointerHistoryRef.current = [{ y: e.clientY, time: now }];
-
-    if (!isTouch) {
-      setHasUserCustomized(true);
-      setIsCard3Minimized(false);
-      setSoloCard(null);
-      setActiveDrag(2);
-    }
-  }, [ratio1]);
+  }, [ratio1, isCard1Minimized, isCard3Minimized]);
 
   const handlePointerMove = useCallback(
     (e: PointerEvent) => {
@@ -278,44 +269,29 @@ export function useSplitController({
       const absX = Math.abs(deltaX);
       const absY = Math.abs(deltaY);
 
-      // On mobile touch devices, refine touch-drag sensitivity:
-      // Require clear intentional vertical motion (7px) and ensure vertical motion dominates
-      // to avoid unintentional horizontal swipes or micro-jitter triggering panel resize.
+      // Slop disambiguation: allow normal taps (< 5px mouse, < 7px touch) to trigger complication buttons,
+      // while intentional vertical pulls smoothly engage the VerticalSplit drag resizer!
       if (!ctx.hasExceededSlop) {
-        if (ctx.isTouch) {
-          // If gesture is predominantly horizontal (e.g. swiping word pills or scrubbing), abort split drag
-          if (absX > 12 && absX > absY * 1.4) {
-            dragContextRef.current = null;
-            return;
-          }
-          // Deadzone for touch: require 7px vertical motion with clear vertical dominance
-          if (absY >= 7 && absY > absX * 1.1) {
-            ctx.hasExceededSlop = true;
-            setHasUserCustomized(true);
-            if (ctx.dragType === 1) {
-              setIsCard1Minimized(false);
-            } else {
-              setIsCard3Minimized(false);
-            }
-            setSoloCard(null);
-            setActiveDrag(ctx.dragType);
-            triggerHaptic('notch');
-          } else {
-            return;
-          }
-        } else {
-          // Desktop pointer/mouse: immediate drag engagement
+        const slopThreshold = ctx.isTouch ? 7 : 5;
+        if (absX > 12 && absX > absY * 1.3) {
+          dragContextRef.current = null;
+          return;
+        }
+        if (absY >= slopThreshold && absY >= absX) {
           ctx.hasExceededSlop = true;
+          lastDragEndTimeRef.current = performance.now();
           setHasUserCustomized(true);
-          if (ctx.dragType === 1) {
-            setIsCard1Minimized(false);
-          } else {
-            setIsCard3Minimized(false);
-          }
+          setIsCard1Minimized(false);
+          setIsCard3Minimized(false);
           setSoloCard(null);
           setActiveDrag(ctx.dragType);
+          triggerHaptic('notch');
+        } else {
+          return;
         }
       }
+
+      lastDragEndTimeRef.current = performance.now();
 
       // Record trajectory history for velocity detection within last 120ms
       const now = performance.now();
@@ -328,15 +304,13 @@ export function useSplitController({
       }
 
       const rect = containerRef.current.getBoundingClientRect();
-      // Deadband smoothing compensation to prevent sudden jumps upon crossing slop threshold
-      const effectiveDeltaY = ctx.isTouch
-        ? (deltaY > 0 ? deltaY - 7 : deltaY + 7)
-        : deltaY;
+      const slopOffset = ctx.isTouch ? 7 : 5;
+      const effectiveDeltaY = deltaY > 0 ? deltaY - slopOffset : deltaY + slopOffset;
       const deltaRatio = effectiveDeltaY / Math.max(1, rect.height);
 
-      // Delta-based relative tracking prevents abrupt jumps on touch
+      // Delta-based relative tracking prevents abrupt jumps on touch or mouse
       const nextRatio = ctx.startRatio + deltaRatio;
-      const clamped = Math.max(0.14, Math.min(0.86, nextRatio));
+      const clamped = Math.max(0.12, Math.min(0.88, nextRatio));
 
       // Magnetic attractor fields around harmonic detents (0.28, 0.48, 0.72)
       let magneticRatio = clamped;
@@ -779,6 +753,7 @@ export function useSplitController({
     bottomHeight,
     startDrag1,
     startDrag2,
+    shouldSuppressClick,
     resetRatios,
     applyPreset,
     cyclePresets,

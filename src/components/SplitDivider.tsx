@@ -48,6 +48,9 @@ export interface SplitDividerProps {
   isCollapsed?: boolean;
   collapseTooltip?: string;
 
+  /** Optional callback to suppress stray clicks immediately after a drag gesture */
+  shouldSuppressClick?: () => boolean;
+
   // Backwards compatibility fallbacks
   presets?: React.ReactNode;
   onReset?: (e: React.MouseEvent) => void;
@@ -63,16 +66,17 @@ export interface SplitDividerProps {
 
 /**
  * SplitDivider
- * Directly inspired by VerticalSplit (SwiftUI) & Amie splitscreen.
- * A full-width dark toolbar dock featuring:
- * - Left: Leading accessory buttons (modes, toggles)
+ * Directly inspired by VerticalSplit (vedantgurav/VerticalSplit) & Amie splitscreen.
+ * A full-width dark complication dock featuring:
+ * - Left: Leading complication buttons (e.g. WORDS, GRAPH, BLOCKS, STATS, SOLVE)
  * - Center: Tactile drag notch pill combined with show/hide toggle
- * - Right: Trailing accessory buttons (presets, actions)
+ * - Right: Trailing complication buttons (e.g. FILTER, SORT, Split Presets)
+ * - Pop-out Menu Accessories that bloom directly from the split bar
  */
 const AccessoryItem: React.FC<{ accessory: SplitAccessory }> = ({ accessory }) => {
   if (accessory.customContent) {
     return (
-      <div className="flex items-center shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="flex items-center shrink-0">
         {accessory.customContent}
       </div>
     );
@@ -92,27 +96,45 @@ const AccessoryItem: React.FC<{ accessory: SplitAccessory }> = ({ accessory }) =
       title={accessory.title}
       className={
         isIconOnly
-          ? 'p-1 flex items-center justify-center bg-transparent border-0 ring-0 shadow-none outline-none transition-all duration-150 ease-out cursor-pointer shrink-0 select-none active:scale-[0.85] text-zinc-400 hover:text-white hover:scale-110'
-          : `h-6 sm:h-6.5 px-2 min-w-[24px] sm:min-w-[26px] flex items-center justify-center gap-1.5 rounded-full sm:rounded-md border border-white/5 transition-all duration-150 ease-out cursor-pointer shrink-0 select-none active:scale-[0.88] active:opacity-80 ${
+          ? `h-6 w-6 flex items-center justify-center rounded-md border transition-all duration-150 ease-out cursor-pointer shrink-0 select-none active:scale-[0.88] ${
               accessory.active
-                ? 'text-white bg-white/20 border-white/25 shadow-xs ring-1 ring-white/15 font-semibold'
-                : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.07] hover:border-white/10'
+                ? 'bg-white text-black border-white shadow-xs'
+                : 'bg-white/[0.04] border-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.1] hover:border-white/15'
+            }`
+          : `h-6 sm:h-6.5 px-1.5 sm:px-2.5 min-w-[24px] flex items-center justify-center gap-1 rounded-md border transition-all duration-150 ease-out cursor-pointer shrink-0 select-none whitespace-nowrap active:scale-[0.92] ${
+              accessory.active
+                ? 'bg-white text-black border-white font-black shadow-[0_1px_8px_rgba(255,255,255,0.22)]'
+                : 'bg-white/[0.04] text-zinc-400 border-white/[0.07] hover:text-zinc-100 hover:bg-white/[0.1] hover:border-white/15 font-bold'
             }`
       }
     >
-      {accessory.icon}
+      {accessory.icon && (
+        <span className="shrink-0 flex items-center justify-center">{accessory.icon}</span>
+      )}
       {accessory.label && (
-        <span className="text-[11px] tracking-tight font-medium whitespace-nowrap">
+        <span className="text-[9.5px] sm:text-[10.5px] font-mono uppercase tracking-wider leading-none whitespace-nowrap">
           {accessory.label}
         </span>
       )}
       {accessory.badge !== undefined && accessory.badge !== null && (
-        <span className="text-[9.5px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-white/20 text-white leading-none">
+        <span
+          className={`text-[8.5px] sm:text-[9px] font-mono font-black tabular-nums px-1 py-0.2 rounded leading-none shrink-0 ${
+            accessory.active
+              ? 'bg-black/15 text-black'
+              : 'bg-white/15 text-zinc-200'
+          }`}
+        >
           {accessory.badge}
         </span>
       )}
       {accessory.shortcut && !isIconOnly && (
-        <kbd className="hidden lg:inline text-[8.5px] font-mono font-semibold px-1 py-0.2 rounded bg-white/10 text-zinc-300 border border-white/10 leading-none">
+        <kbd
+          className={`hidden xl:inline text-[8px] font-mono font-bold px-1 py-0.2 rounded leading-none ${
+            accessory.active
+              ? 'bg-black/10 text-zinc-800 border border-black/15'
+              : 'bg-white/10 text-zinc-400 border border-white/10'
+          }`}
+        >
           {accessory.shortcut}
         </kbd>
       )}
@@ -125,7 +147,6 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
   isDragging,
   onPointerDown,
   onDoubleClick,
-  title,
   className = '',
   leadingAccessories,
   leadingMenu,
@@ -138,9 +159,8 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
   onToggleCollapse,
   isCollapsed = false,
   collapseTooltip,
+  shouldSuppressClick,
   presets,
-  onReset,
-  showReset = false,
   onCollapsePrev,
   collapsePrevTitle,
   collapsePrevIcon,
@@ -149,6 +169,7 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
   collapseNextIcon,
 }) => {
   const isHorizontal = orientation === 'horizontal';
+  const hasOpenMenu = Boolean(leadingMenu || trailingMenu);
 
   // Synthesize from legacy props if explicit accessories are not provided
   const resolvedLeading =
@@ -187,26 +208,35 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
         ]
       : []);
 
+  const handleCaptureClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (shouldSuppressClick && shouldSuppressClick()) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  };
+
   return (
     <div
       role="separator"
       tabIndex={0}
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
-      aria-label="Split resizer"
+      onClickCapture={handleCaptureClick}
+      aria-label="Split resizer and complications bar"
       style={{ touchAction: 'none' }}
-      className={`SplitDivider relative select-none shrink-0 z-30 touch-none group transition-colors duration-150 ${
+      className={`SplitDivider relative select-none shrink-0 ${
+        hasOpenMenu ? 'z-50' : 'z-30'
+      } touch-none group transition-colors duration-150 ${
         isHorizontal
-          ? 'w-full h-5 sm:h-5.5 bg-[#09090b] flex items-center justify-between px-1.5 sm:px-2.5 cursor-row-resize border-y border-white/[0.06]'
-          : 'h-full w-5 sm:w-5.5 bg-[#09090b] flex flex-col items-center justify-between py-1.5 sm:py-2.5 cursor-col-resize border-x border-white/[0.06]'
-      } ${isDragging ? 'bg-[#121217]' : 'hover:bg-[#0e0e12]'} ${className}`}
+          ? 'w-full h-8 sm:h-9 bg-[#09090b] flex items-center justify-between gap-1.5 px-1.5 sm:px-2 cursor-row-resize'
+          : 'h-full w-7 sm:w-8 bg-[#09090b] flex flex-col items-center justify-between py-1.5 sm:py-2 cursor-col-resize'
+      } ${isDragging ? 'bg-[#121217]' : 'hover:bg-[#0d0d11]'} ${className}`}
     >
-      {/* LEADING ACCESSORIES (Left / Top) */}
+      {/* LEADING COMPLICATIONS (Left / Top) */}
       <div
         className={`flex items-center shrink-0 z-30 relative ${
           isHorizontal ? 'gap-1' : 'flex-col gap-1'
         }`}
-        onPointerDown={(e) => e.stopPropagation()}
       >
         {resolvedLeading?.map((accessory) => (
           <AccessoryItem key={accessory.id} accessory={accessory} />
@@ -214,21 +244,12 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
         {leadingMenu}
       </div>
 
-      {/* Expanded invisible touch hit-target on mobile to prevent missing the divider */}
+      {/* CENTER TACTILE VERTICALSPLIT DRAG NOTCH & SHOW/HIDE HANDLE */}
       <div
-        className="absolute -top-3.5 -bottom-3.5 inset-x-0 z-10 pointer-events-auto touch-none cursor-row-resize"
-        onPointerDown={onPointerDown}
-        onDoubleClick={onDoubleClick}
-        aria-label="Drag edge to resize panels"
-        data-drag-handle="split-divider-hitbox"
-      />
-
-      {/* CENTER TACTILE DRAG NOTCH & COMBINED SHOW/HIDE HANDLE OR UNIFIED CENTER CONTENT */}
-      <div
-        className={`flex items-center justify-center z-20 pointer-events-auto h-full max-w-[calc(100vw-16px)] ${
+        className={`flex items-center justify-center z-20 pointer-events-auto shrink-0 ${
           isHorizontal
-            ? 'absolute left-1/2 -translate-x-1/2'
-            : 'absolute top-1/2 -translate-y-1/2'
+            ? 'mx-auto xl:absolute xl:left-1/2 xl:-translate-x-1/2 h-full'
+            : 'my-auto xl:absolute xl:top-1/2 xl:-translate-y-1/2 w-full'
         }`}
       >
         {centerContent ? (
@@ -240,24 +261,28 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
               e.stopPropagation();
               onToggleCollapse();
             }}
-            onPointerDown={(e) => {
-              // Permit parent divider drag while allowing click to toggle
-            }}
+            title={
+              collapseTooltip ||
+              statusTooltip ||
+              (isCollapsed ? 'Tap to expand · Drag to resize' : 'Tap to minimize · Drag to resize')
+            }
             aria-label={
               collapseTooltip ||
               statusTooltip ||
-              (isCollapsed
-                ? 'Expand panel'
-                : 'Minimize panel')
+              (isCollapsed ? 'Expand panel' : 'Minimize panel')
             }
             data-drag-handle="split-divider-notch"
-            className="flex items-center justify-center py-1 px-3 bg-transparent border-0 ring-0 shadow-none outline-none cursor-row-resize select-none group/notch active:scale-95 transition-all duration-150"
+            className="flex items-center justify-center py-1.5 px-2 bg-transparent border-0 ring-0 shadow-none outline-none cursor-row-resize select-none group/notch active:scale-95 transition-all duration-150"
           >
             <div
               className={`rounded-full transition-all duration-200 flex items-center justify-center border ${
                 isDragging
-                  ? 'w-16 sm:w-22 h-1.5 bg-white border-white shadow-[0_0_14px_rgba(255,255,255,0.95)] scale-105'
-                  : 'w-12 sm:w-14 h-1 sm:h-1.5 bg-zinc-700 hover:bg-zinc-600 border-zinc-600/80 hover:border-zinc-400 group-hover/notch:w-18'
+                  ? 'w-14 sm:w-18 h-1.5 bg-white border-white shadow-[0_0_14px_rgba(255,255,255,0.95)] scale-95'
+                  : isSuccess
+                  ? 'w-12 sm:w-14 h-1.5 bg-emerald-400 border-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.7)]'
+                  : isBusy
+                  ? 'w-11 sm:w-13 h-1.5 bg-zinc-300 border-white/60 animate-pulse'
+                  : 'w-9 sm:w-12 h-1.5 bg-zinc-600/90 hover:bg-zinc-300 border-white/15 hover:border-white/50 group-hover/notch:w-14'
               }`}
             />
           </button>
@@ -268,22 +293,21 @@ export const SplitDivider: React.FC<SplitDividerProps> = ({
             className={`rounded-full transition-all duration-200 pointer-events-none flex items-center justify-center border ${
               isHorizontal
                 ? isDragging
-                  ? 'w-16 sm:w-22 h-1.5 bg-white border-white shadow-[0_0_14px_rgba(255,255,255,0.95)] scale-105'
-                  : 'w-12 sm:w-14 h-1 sm:h-1.5 bg-zinc-700 border-zinc-600/80 group-hover:bg-zinc-600 group-hover:w-18'
+                  ? 'w-14 sm:w-18 h-1.5 bg-white border-white shadow-[0_0_14px_rgba(255,255,255,0.95)] scale-95'
+                  : 'w-9 sm:w-12 h-1.5 bg-zinc-600/90 border-white/15 group-hover:bg-zinc-400 group-hover:w-14'
                 : isDragging
-                  ? 'w-1.5 h-16 sm:h-22 bg-white border-white shadow-[0_0_14px_rgba(255,255,255,0.95)] scale-105'
-                  : 'w-1 sm:w-1.5 h-12 sm:h-14 bg-zinc-700 border-zinc-600/80 group-hover:bg-zinc-600 group-hover:h-18'
+                ? 'w-1.5 h-14 sm:h-18 bg-white border-white shadow-[0_0_14px_rgba(255,255,255,0.95)] scale-95'
+                : 'w-1.5 h-9 sm:h-12 bg-zinc-600/90 border-white/15 group-hover:bg-zinc-400 group-hover:h-14'
             }`}
           />
         )}
       </div>
 
-      {/* TRAILING ACCESSORIES (Right / Bottom) + PRESETS MENU */}
+      {/* TRAILING COMPLICATIONS (Right / Bottom) + POP-OUT MENUS */}
       <div
         className={`flex items-center shrink-0 z-30 relative ${
           isHorizontal ? 'gap-1' : 'flex-col gap-1'
         }`}
-        onPointerDown={(e) => e.stopPropagation()}
       >
         {resolvedTrailing?.map((accessory) => (
           <AccessoryItem key={accessory.id} accessory={accessory} />

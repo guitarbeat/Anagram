@@ -14,7 +14,6 @@ import { PosHistogram } from './PosHistogram';
 import { WordLengthLabels } from './WordLengthLabels';
 import { PosLabels } from './PosLabels';
 import type { WordFilterMode } from '../types/split';
-import { BottomExplorerToolbar } from './BottomExplorerToolbar';
 
 export type LexicalViewMode = 'treemap' | 'histogram' | 'labels';
 
@@ -71,6 +70,10 @@ export interface CandidateWordsListProps {
   onSelectWordFilterMode?: (mode: WordFilterMode) => void;
   customWordsCount?: number;
   onOpenCustomWordManager?: () => void;
+  sortBy?: WordSortOption;
+  onSortByChange?: (sort: WordSortOption) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
 }
 
 export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
@@ -104,7 +107,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   onAvoidDeadEndsChange,
   showGraphPanel = true,
   showInspectorPanel = true,
-  explorerViewMode = 'both',
+  explorerViewMode = 'pebbles',
   splitLeftView: externalSplitLeftView,
   onSplitLeftViewChange,
   splitRightView: externalSplitRightView,
@@ -115,15 +118,21 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   onSelectWordFilterMode,
   customWordsCount,
   onOpenCustomWordManager,
+  sortBy: externalSortBy,
+  onSortByChange,
+  searchQuery: externalSearchQuery,
+  onSearchQueryChange,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [sortBy, setSortBy] = useState<WordSortOption>('length-desc');
+  const [internalSearchQuery, setInternalSearchQuery] = useState<string>('');
+  const [internalSortBy, setInternalSortBy] = useState<WordSortOption>('length-desc');
+  const searchQuery = externalSearchQuery !== undefined ? externalSearchQuery : internalSearchQuery;
+  const setSearchQuery = onSearchQueryChange || setInternalSearchQuery;
+  const sortBy = externalSortBy !== undefined ? externalSortBy : internalSortBy;
+  const setSortBy = onSortByChange || setInternalSortBy;
   const [internalSplitLeft, setInternalSplitLeft] = useState<'graph' | 'pebbles' | 'blocks' | 'solutions' | 'stats'>('pebbles');
   const [internalSplitRight, setInternalSplitRight] = useState<'inspector' | 'blocks' | 'pebbles' | 'solutions'>('inspector');
   const [selectedWord, setSelectedWord] = useState<CandidateWordItem | null>(null);
-  const [mobileViewTab, setMobileViewTab] = useState<'words' | 'stats'>('words');
-  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState<boolean>(false);
 
   const currentLeftView = externalSplitLeftView || internalSplitLeft;
   const currentRightView = externalSplitRightView || internalSplitRight;
@@ -422,81 +431,6 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     return histogramData.reduce((acc, curr) => acc + curr.count, 0);
   }, [histogramData]);
 
-  if (explorerViewMode === 'blocks' || explorerViewMode === 'cards') {
-    return (
-      <div
-        ref={containerRef}
-        className="w-full h-full relative min-h-0 select-none overflow-hidden bg-transparent"
-      >
-        <WordBlocksExplorer
-          candidateWords={safeCandidateWords}
-          onAddWordToTarget={onAddWordToTarget}
-          onSetWordAsTarget={onSetWordAsTarget}
-          onShowToast={onShowToast}
-          exactClosers={exactClosers}
-          activeTargetPhrase={activeTargetPhrase}
-          sourceText={sourceText}
-        />
-      </div>
-    );
-  }
-
-  if (explorerViewMode === 'pebbles') {
-    return (
-      <div
-        ref={containerRef}
-        className="w-full h-full relative min-h-0 select-none overflow-hidden bg-transparent"
-      >
-        <WordPebblesExplorer
-          candidateWords={safeCandidateWords}
-          onAddWordToTarget={onAddWordToTarget}
-          onSetWordAsTarget={onSetWordAsTarget}
-          onShowToast={onShowToast}
-          exactClosers={exactClosers}
-          activeTargetPhrase={activeTargetPhrase}
-          sourceText={sourceText}
-          selectedWord={selectedWord}
-          onSelectWord={setSelectedWord}
-          selectedLengthFilter={selectedLengthFilter}
-          onClearLengthFilter={onClearLengthFilter}
-          selectedPosFilter={activePosFilter}
-          onClearPosFilter={() => handlePosFilterChange(null)}
-        />
-      </div>
-    );
-  }
-
-  if (explorerViewMode === 'solutions') {
-    return (
-      <div
-        ref={containerRef}
-        className="w-full h-full relative min-h-0 select-none overflow-hidden bg-transparent"
-      >
-        <WordSolutionsExplorer
-          exactClosers={exactClosers}
-          finisherPairs={finisherPairs}
-          completeSolutions={completeSolutions}
-          isSolvingSolutions={isSolvingSolutions}
-          targetPhrase={activeTargetPhrase}
-          remainingLetters={remainingLetters}
-          onAddWordToTarget={onAddWordToTarget}
-          onSetWordAsTarget={onSetWordAsTarget}
-          onShowToast={onShowToast}
-          sourceText={sourceText}
-        />
-      </div>
-    );
-  }
-
-  const showLeftGraph =
-    (explorerViewMode === 'both' || explorerViewMode === 'graph' || showGraphPanel) &&
-    explorerViewMode !== 'inspector' &&
-    totalWords > 0;
-  const showRightCards =
-    (explorerViewMode === 'both' || explorerViewMode === 'inspector' || showInspectorPanel) &&
-    explorerViewMode !== 'graph' &&
-    totalWords > 0;
-
   return (
     <div
       ref={containerRef}
@@ -504,10 +438,10 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
     >
       {/* Workspace View Surface */}
       <div className="flex-1 w-full min-h-0 relative overflow-hidden">
-        {currentLeftView === 'graph' && mobileViewTab !== 'stats' ? (
+        {explorerViewMode === 'graph' ? (
           <WordsGraphView
             sourceText={sourceText}
-            candidateWords={safeCandidateWords}
+            candidateWords={searchFilteredWords}
             selectedLengthFilter={selectedLengthFilter}
             selectedPosFilter={activePosFilter}
             onAddWordToTarget={onAddWordToTarget}
@@ -518,14 +452,16 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             hoveredPosFilter={hoveredTreemapPos}
             hoveredLengthFilter={hoveredTreemapLength}
             wordFilterMode={wordFilterMode}
-            wordFilterCount={countsByMode ? countsByMode[wordFilterMode || 'safe'] : safeCandidateWords.length}
+            wordFilterCount={
+              countsByMode ? countsByMode[wordFilterMode || 'safe'] : searchFilteredWords.length
+            }
             onCycleWordFilter={onCycleWordFilter}
             selectedWord={selectedWord}
             onSelectWord={setSelectedWord}
           />
-        ) : currentLeftView === 'blocks' && mobileViewTab !== 'stats' ? (
+        ) : explorerViewMode === 'blocks' || explorerViewMode === 'cards' ? (
           <WordBlocksExplorer
-            candidateWords={safeCandidateWords}
+            candidateWords={searchFilteredWords}
             onAddWordToTarget={onAddWordToTarget}
             onSetWordAsTarget={onSetWordAsTarget}
             onShowToast={onShowToast}
@@ -535,7 +471,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             selectedWord={selectedWord}
             onSelectWord={setSelectedWord}
           />
-        ) : currentLeftView === 'solutions' && mobileViewTab !== 'stats' ? (
+        ) : explorerViewMode === 'solutions' ? (
           <WordSolutionsExplorer
             exactClosers={exactClosers}
             finisherPairs={finisherPairs}
@@ -548,13 +484,13 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             onShowToast={onShowToast}
             sourceText={sourceText}
           />
-        ) : mobileViewTab === 'stats' || currentLeftView === 'stats' ? (
+        ) : explorerViewMode === 'inspector' ? (
           <ContextualLens
             selectedWord={selectedWord}
             onClearSelectedWord={() => setSelectedWord(null)}
             onSelectWord={setSelectedWord}
             sourceText={sourceText}
-            candidateWords={safeCandidateWords}
+            candidateWords={searchFilteredWords}
             exactClosers={exactClosers}
             finisherPairs={finisherPairs}
             completeSolutions={completeSolutions}
@@ -580,9 +516,77 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             onHoverTreemapLength={setHoveredTreemapLength}
             onHoverTreemapPos={setHoveredTreemapPos}
           />
+        ) : explorerViewMode === 'both' ? (
+          <div className="w-full h-full flex flex-col lg:flex-row min-h-0 overflow-hidden divide-y-2 lg:divide-y-0 lg:divide-x-2 divide-black">
+            <div className="flex-1 min-w-0 min-h-0 relative overflow-hidden">
+              <WordPebblesExplorer
+                candidateWords={searchFilteredWords}
+                selectedWord={selectedWord}
+                onSelectWord={setSelectedWord}
+                onAddWordToTarget={onAddWordToTarget}
+                onSetWordAsTarget={onSetWordAsTarget}
+                onShowToast={onShowToast}
+                exactClosers={exactClosers}
+                activeTargetPhrase={activeTargetPhrase}
+                sourceText={sourceText}
+                selectedLengthFilter={selectedLengthFilter}
+                onClearLengthFilter={onClearLengthFilter}
+                selectedPosFilter={activePosFilter}
+                onClearPosFilter={() => handlePosFilterChange(null)}
+                sortBy={sortBy}
+                onSortByChange={setSortBy}
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
+                watermarkLabel={
+                  wordFilterMode === 'domains'
+                    ? 'DOMAINS & TLDS'
+                    : wordFilterMode === 'safe'
+                    ? 'SOLVABLE WORDS'
+                    : wordFilterMode === 'closers'
+                    ? '1-WORD WINS'
+                    : wordFilterMode === 'pairs'
+                    ? '2-WORD PAIRS'
+                    : 'ALL WORDS'
+                }
+              />
+            </div>
+            <div className="w-full lg:w-[42%] xl:w-[38%] h-[45%] lg:h-full min-w-0 min-h-0 relative overflow-hidden">
+              <ContextualLens
+                selectedWord={selectedWord}
+                onClearSelectedWord={() => setSelectedWord(null)}
+                onSelectWord={setSelectedWord}
+                sourceText={sourceText}
+                candidateWords={searchFilteredWords}
+                exactClosers={exactClosers}
+                finisherPairs={finisherPairs}
+                completeSolutions={completeSolutions}
+                isSolvingSolutions={isSolvingSolutions}
+                targetPhrase={activeTargetPhrase}
+                remainingLetters={remainingLetters}
+                onAddWordToTarget={onAddWordToTarget}
+                onSetWordAsTarget={onSetWordAsTarget}
+                onShowToast={onShowToast}
+                selectedLengthFilter={selectedLengthFilter}
+                onSelectLengthFilter={onSelectLengthFilter}
+                onClearLengthFilter={onClearLengthFilter}
+                selectedPosFilter={activePosFilter}
+                onSelectPosFilter={handlePosFilterChange}
+                selectedFreqFilter={selectedFreqFilter}
+                onSelectFreqFilter={onSelectFreqFilter}
+                onClearFreqFilter={onClearFreqFilter}
+                histogramData={histogramData}
+                hoveredWordInfo={null}
+                compatibleData={compatibleData}
+                posCounts={posCounts}
+                otherSubtypeCounts={otherSubtypeCounts}
+                onHoverTreemapLength={setHoveredTreemapLength}
+                onHoverTreemapPos={setHoveredTreemapPos}
+              />
+            </div>
+          </div>
         ) : (
           <WordPebblesExplorer
-            candidateWords={safeCandidateWords}
+            candidateWords={searchFilteredWords}
             selectedWord={selectedWord}
             onSelectWord={setSelectedWord}
             onAddWordToTarget={onAddWordToTarget}
@@ -613,57 +617,6 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
           />
         )}
       </div>
-
-      {/* Single Integrated Bottom Control Rail */}
-      <BottomExplorerToolbar
-        currentView={
-          mobileViewTab === 'stats' || currentLeftView === 'stats'
-            ? 'stats'
-            : currentLeftView === 'solutions'
-            ? 'solutions'
-            : (currentLeftView as 'pebbles' | 'graph' | 'blocks' | 'stats' | 'solutions')
-        }
-        onViewChange={(view) => {
-          if (view === 'stats') {
-            setMobileViewTab('stats');
-            handleSplitLeftChange('stats' as any);
-          } else if (view === 'solutions') {
-            setMobileViewTab('words');
-            handleSplitLeftChange('solutions');
-          } else {
-            setMobileViewTab('words');
-            handleSplitLeftChange(view);
-          }
-        }}
-        showStatsTab={showRightCards}
-        activeFilterMode={wordFilterMode || (avoidDeadEnds ? 'safe' : 'all')}
-        onSelectFilterMode={(mode) => {
-          if (onSelectWordFilterMode) {
-            onSelectWordFilterMode(mode);
-          }
-        }}
-        onCycleFilterMode={onCycleWordFilter}
-        countsByMode={countsByMode}
-        totalFilteredWords={searchFilteredWords.length}
-        totalDictionaryWords={candidateWords.length}
-        isDrawerOpen={isFilterDrawerOpen}
-        onToggleDrawer={() => setIsFilterDrawerOpen((prev) => !prev)}
-        onCloseDrawer={() => setIsFilterDrawerOpen(false)}
-        customWordsCount={customWordsCount}
-        onOpenCustomWordManager={onOpenCustomWordManager}
-        selectedLengthFilter={selectedLengthFilter}
-        onSelectLengthFilter={onSelectLengthFilter}
-        onClearLengthFilter={onClearLengthFilter}
-        selectedFreqFilter={selectedFreqFilter}
-        onSelectFreqFilter={onSelectFreqFilter}
-        onClearFreqFilter={onClearFreqFilter}
-        avoidDeadEnds={avoidDeadEnds}
-        onToggleAvoidDeadEnds={() => setAvoidDeadEnds(!avoidDeadEnds)}
-        sortBy={sortBy}
-        onSortByChange={setSortBy}
-        searchQuery={searchQuery}
-        onSearchQueryChange={setSearchQuery}
-      />
     </div>
   );
 };

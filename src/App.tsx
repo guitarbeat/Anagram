@@ -20,6 +20,7 @@ import { SplitDetents } from './types/split';
 import { NameAnagramStage } from './components/NameAnagramStage';
 import { TargetHistogramWindow } from './components/TargetHistogramWindow';
 import { CandidateWordsList, type LexicalViewMode } from './components/CandidateWordsList';
+import type { WordSortOption } from './components/WordPebblesExplorer';
 import { ThreePaneSplit } from './components/ThreePaneSplit';
 import { ShareModal } from './components/ShareModal';
 import { CustomWordManagerModal } from './components/CustomWordManagerModal';
@@ -221,16 +222,18 @@ export function App() {
   const [inspectorCategory, setInspectorCategory] = useState<'length' | 'pos'>('length');
   const [lexicalViewMode, setLexicalViewMode] = useState<LexicalViewMode>('treemap');
   const [avoidDeadEnds, setAvoidDeadEnds] = useState<boolean>(true);
-  const [showGraphPanel, setShowGraphPanel] = useState<boolean>(true);
-  const [showInspectorPanel, setShowInspectorPanel] = useState<boolean>(true);
+  const [showGraphPanel, setShowGraphPanel] = useState<boolean>(false);
+  const [showInspectorPanel, setShowInspectorPanel] = useState<boolean>(false);
+  const [sortBy, setSortBy] = useState<WordSortOption>('length-desc');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // 6-Way Explorer View Mode: Both -> Graph -> Inspector -> Blocks -> Pebbles -> Solutions
+  // Explorer View Mode: Words (Pebbles) -> Graph -> Blocks -> Stats (Inspector) -> Solve (Solutions) -> Split (Both)
   const [explorerViewMode, setExplorerViewMode] = useState<
     'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions'
-  >('both');
+  >('pebbles');
 
   const ALL_EXPLORER_VIEWS = useMemo(
-    () => ['both', 'graph', 'inspector', 'blocks', 'pebbles', 'solutions'] as const,
+    () => ['pebbles', 'graph', 'blocks', 'inspector', 'solutions', 'both'] as const,
     []
   );
 
@@ -541,6 +544,7 @@ export function App() {
         candidateWordsCount={candidateWords.length}
         exactClosersCount={exactClosers?.length || 0}
         finisherPairsCount={finisherPairs?.length || 0}
+        completeSolutionsCount={results.length}
         solvableWordsCount={solvableWordsCount}
         wordFilterMode={wordFilterMode}
         onCycleWordFilter={handleCycleWordFilter}
@@ -553,6 +557,21 @@ export function App() {
         onToggleGraphPanel={handleToggleGraphPanel}
         showInspectorPanel={showInspectorPanel}
         onToggleInspectorPanel={handleToggleInspectorPanel}
+        sortBy={sortBy}
+        onSortByChange={setSortBy}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        selectedLengthFilter={selectedLengthFilter}
+        onSelectLengthFilter={setSelectedLengthFilter}
+        onClearLengthFilter={() => setSelectedLengthFilter(null)}
+        histogramData={histogramData}
+        selectedPosFilter={selectedPosFilter}
+        onSelectPosFilter={setSelectedPosFilter}
+        selectedFreqFilter={selectedFreqFilter}
+        onSelectFreqFilter={setSelectedFreqFilter}
+        onClearFreqFilter={() => setSelectedFreqFilter(null)}
+        customWordsCount={customWords.length}
+        onOpenCustomWordManager={() => setIsCustomWordModalOpen(true)}
         /* WINDOW 1: TOP KINETIC ANAGRAM STAGE */
         card1={
           sourceName.trim() && targetPhrase.trim() ? (
@@ -677,6 +696,10 @@ export function App() {
               onSelectWordFilterMode={handleSelectWordFilterMode}
               customWordsCount={customWords.length}
               onOpenCustomWordManager={() => setIsCustomWordModalOpen(true)}
+              sortBy={sortBy}
+              onSortByChange={setSortBy}
+              searchQuery={searchQuery}
+              onSearchQueryChange={setSearchQuery}
             />
           ) : null
         }

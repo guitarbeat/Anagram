@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   BookOpen,
-  Hash,
-  Tag,
   LayoutGrid,
   BarChart3,
   ShieldCheck,
@@ -14,8 +12,6 @@ import {
   ChevronUp,
   ChevronDown,
   Rows2,
-  Target,
-  Type,
   Sparkles,
   Link2,
   Star,
@@ -25,6 +21,12 @@ import {
   Globe,
   SlidersHorizontal,
   Theater,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  ArrowDownAZ,
+  TrendingUp,
+  Search,
+  X,
 } from 'lucide-react';
 import { triggerHaptic } from '../hooks/useHaptics';
 import { SplitDivider } from './SplitDivider';
@@ -34,10 +36,14 @@ import { useSplitController } from '../hooks/useSplitController';
 import type { SplitDetent, PanelId, SplitAccessory, WordFilterMode } from '../types/split';
 import { SplitDetents } from '../types/split';
 import type { LexicalViewMode } from './CandidateWordsList';
+import type { WordSortOption } from './WordPebblesExplorer';
 import type { ProgressBus } from '../hooks/useProgressBus';
+import type { POS, HistogramBin } from '../engine/types';
+import type { FrequencyTier } from '../engine/lexicon';
 
 interface ModeConfig {
   label: string;
+  shortLabel: string;
   sublabel: string;
   icon: React.ReactNode;
   color: string;
@@ -48,77 +54,124 @@ interface ModeConfig {
 const MODE_CONFIGS: Record<WordFilterMode, ModeConfig> = {
   safe: {
     label: 'Solvable Words',
+    shortLabel: 'SOLVABLE',
     sublabel: 'No dead ends',
-    icon: <ShieldCheck className="w-3.5 h-3.5 text-white" />,
+    icon: <ShieldCheck className="w-3 h-3" />,
     color: 'text-white',
     dotColor: 'bg-white',
-    getDescription: (count) => `Solvable Words (${count}): Words you can win with. Click to cycle, right-click for menu.`,
+    getDescription: (count) => `Solvable Words (${count}): Prevents dead ends. Click to open Filter menu, Shift-click to cycle.`,
   },
   domains: {
     label: 'Domains & TLDs',
+    shortLabel: 'DOMAINS',
     sublabel: 'Global extensions',
-    icon: <Globe className="w-3.5 h-3.5 text-white" />,
+    icon: <Globe className="w-3 h-3" />,
     color: 'text-white',
     dotColor: 'bg-white',
-    getDescription: (count) => `Domains & TLDs (${count}): Global ccTLDs and web extensions. Click to cycle.`,
+    getDescription: (count) => `Domains & TLDs (${count}): Global ccTLDs and web extensions. Click to open Filter menu.`,
   },
   all: {
     label: 'All Words',
-    sublabel: 'All matches',
-    icon: <BookOpen className="w-3.5 h-3.5 text-zinc-300" />,
+    shortLabel: 'ALL WORDS',
+    sublabel: 'Complete lexicon',
+    icon: <BookOpen className="w-3 h-3" />,
     color: 'text-zinc-300',
     dotColor: 'bg-zinc-400',
-    getDescription: (count) => `All Words (${count}): Complete dictionary. Click to cycle, right-click for menu.`,
+    getDescription: (count) => `All Words (${count}): Complete dictionary. Click to open Filter menu.`,
   },
   closers: {
-    label: '1-Word Solutions',
+    label: '1-Word Wins',
+    shortLabel: '1-WORD',
     sublabel: 'Instant wins',
-    icon: <Sparkles className="w-3.5 h-3.5 text-white" />,
+    icon: <Sparkles className="w-3 h-3" />,
     color: 'text-white',
     dotColor: 'bg-white',
-    getDescription: (count) => `1-Word Solutions (${count}): Words that finish the puzzle right now. Click to cycle, right-click for menu.`,
+    getDescription: (count) => `1-Word Solutions (${count}): Words that finish the puzzle right now.`,
   },
   pairs: {
-    label: '2-Word Solutions',
+    label: '2-Word Pairs',
+    shortLabel: '2-WORD',
     sublabel: 'Two-word finishes',
-    icon: <Link2 className="w-3.5 h-3.5 text-zinc-200" />,
+    icon: <Link2 className="w-3 h-3" />,
     color: 'text-zinc-200',
     dotColor: 'bg-zinc-300',
-    getDescription: (count) => `2-Word Solutions (${count}): Word pairs that finish the puzzle. Click to cycle, right-click for menu.`,
+    getDescription: (count) => `2-Word Solutions (${count}): Word pairs that finish the puzzle.`,
   },
   common: {
-    label: 'Common Words',
+    label: 'Common Tier',
+    shortLabel: 'COMMON',
     sublabel: 'Everyday English',
-    icon: <Star className="w-3.5 h-3.5 text-zinc-200" />,
+    icon: <Star className="w-3 h-3" />,
     color: 'text-zinc-200',
     dotColor: 'bg-zinc-300',
-    getDescription: (count) => `Common Words (${count}): Familiar everyday words. Click to cycle, right-click for menu.`,
+    getDescription: (count) => `Common Words (${count}): Familiar everyday words.`,
   },
   long: {
-    label: 'Long Words',
-    sublabel: '5+ letters',
-    icon: <Zap className="w-3.5 h-3.5 text-zinc-200" />,
+    label: '5+ Letters',
+    shortLabel: '5+ LET',
+    sublabel: 'Longer anagrams',
+    icon: <Zap className="w-3 h-3" />,
     color: 'text-zinc-200',
     dotColor: 'bg-zinc-300',
-    getDescription: (count) => `Long Words (${count}): Words with 5 or more letters. Click to cycle, right-click for menu.`,
+    getDescription: (count) => `Long Words (${count}): Words with 5 or more letters.`,
   },
   top: {
     label: 'Top Everyday',
+    shortLabel: 'TOP WORDS',
     sublabel: 'Most frequent',
-    icon: <Star className="w-3.5 h-3.5 text-white" />,
+    icon: <Star className="w-3 h-3" />,
     color: 'text-white',
     dotColor: 'bg-white',
-    getDescription: (count) => `Top Everyday Words (${count}): High-frequency spoken vocabulary. Click to cycle, right-click for menu.`,
+    getDescription: (count) => `Top Everyday Words (${count}): High-frequency spoken vocabulary.`,
   },
   rare: {
-    label: 'Rare & Literary',
+    label: 'Rare / Scrabble',
+    shortLabel: 'RARE',
     sublabel: 'Specialized words',
-    icon: <Sparkles className="w-3.5 h-3.5 text-zinc-300" />,
+    icon: <Sparkles className="w-3 h-3" />,
     color: 'text-zinc-300',
     dotColor: 'bg-zinc-400',
-    getDescription: (count) => `Rare & Literary Words (${count}): Less common or poetic words. Click to cycle, right-click for menu.`,
+    getDescription: (count) => `Rare & Literary Words (${count}): Less common or poetic words.`,
   },
 };
+
+const SORT_OPTIONS: {
+  id: WordSortOption;
+  label: string;
+  shortLabel: string;
+  icon: React.ReactNode;
+}[] = [
+  {
+    id: 'length-desc',
+    label: 'Length ↓ (Longest)',
+    shortLabel: 'LEN ↓',
+    icon: <ArrowDownWideNarrow className="w-3 h-3" />,
+  },
+  {
+    id: 'length-asc',
+    label: 'Length ↑ (Shortest)',
+    shortLabel: 'LEN ↑',
+    icon: <ArrowUpNarrowWide className="w-3 h-3" />,
+  },
+  {
+    id: 'freq',
+    label: 'Frequency (Common)',
+    shortLabel: 'FREQ',
+    icon: <TrendingUp className="w-3 h-3" />,
+  },
+  {
+    id: 'alpha',
+    label: 'Alphabetical (A–Z)',
+    shortLabel: 'A–Z',
+    icon: <ArrowDownAZ className="w-3 h-3" />,
+  },
+  {
+    id: 'closers',
+    label: 'Exact Closers First',
+    shortLabel: 'WINS',
+    icon: <Sparkles className="w-3 h-3" />,
+  },
+];
 
 export interface ThreePaneSplitProps {
   card1: React.ReactNode;
@@ -155,6 +208,7 @@ export interface ThreePaneSplitProps {
   candidateWordsCount?: number;
   exactClosersCount?: number;
   finisherPairsCount?: number;
+  completeSolutionsCount?: number;
   solvableWordsCount?: number;
   wordFilterMode?: WordFilterMode;
   onCycleWordFilter?: () => void;
@@ -178,6 +232,23 @@ export interface ThreePaneSplitProps {
   onToggleGraphPanel?: () => void;
   showInspectorPanel?: boolean;
   onToggleInspectorPanel?: () => void;
+
+  // Hoisted Filter, Sort, Search & Custom Words Complications
+  sortBy?: WordSortOption;
+  onSortByChange?: (sort: WordSortOption) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
+  selectedLengthFilter?: number[] | number | null;
+  onSelectLengthFilter?: (lengths: number[] | null) => void;
+  onClearLengthFilter?: () => void;
+  histogramData?: HistogramBin[];
+  selectedPosFilter?: POS | 'all' | null;
+  onSelectPosFilter?: (pos: POS | 'all' | null) => void;
+  selectedFreqFilter?: FrequencyTier | 'all' | null;
+  onSelectFreqFilter?: (tier: FrequencyTier | null) => void;
+  onClearFreqFilter?: () => void;
+  customWordsCount?: number;
+  onOpenCustomWordManager?: () => void;
 
   // Real-time Solver Indicator State
   isSolving?: boolean;
@@ -203,34 +274,40 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   isStagePlaying = false,
   onToggleStagePlay,
   onResetStage,
-  onExportStageVideo,
   solveProgressPercent = 0,
   placedLetterCount = 0,
   sourceLetterCount = 0,
-  remainingLettersCount,
-  inspectorCategory,
-  onInspectorCategoryChange,
-  lexicalViewMode,
-  onLexicalViewModeChange,
   avoidDeadEnds,
-  onAvoidDeadEndsChange,
   candidateWordsCount,
   exactClosersCount = 0,
   finisherPairsCount = 0,
+  completeSolutionsCount = 0,
   solvableWordsCount = 0,
   wordFilterMode,
   onCycleWordFilter,
   onSelectWordFilterMode,
   countsByMode,
-  activeModeFilter = 'all',
   onSelectModeFilter,
   explorerViewMode,
-  onCycleExplorerView,
   onSelectExplorerView,
   showGraphPanel = true,
   onToggleGraphPanel,
   showInspectorPanel = true,
   onToggleInspectorPanel,
+  sortBy = 'length-desc',
+  onSortByChange,
+  searchQuery = '',
+  onSearchQueryChange,
+  selectedLengthFilter,
+  onSelectLengthFilter,
+  onClearLengthFilter,
+  histogramData = [],
+  selectedPosFilter,
+  onSelectPosFilter,
+  selectedFreqFilter,
+  onClearFreqFilter,
+  customWordsCount = 0,
+  onOpenCustomWordManager,
   isSolving = false,
   justFoundResults = false,
   isComposerCollapsed: externalComposerCollapsed,
@@ -265,20 +342,16 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     draggedPanel,
     dropTargetIndex,
     startPanelDrag,
-    detentLabel,
+    hasUserCustomized,
     currentDetent,
     isCard1Minimized,
     isCard3Minimized,
     soloCard,
     ratio1,
     activeDrag,
-    showCard1,
-    showCard3,
-    topHeight,
-    middleHeight,
-    bottomHeight,
     startDrag1,
     startDrag2,
+    shouldSuppressClick,
     resetRatios,
     toggleMinimizeCard1,
     toggleMinimizeCard3,
@@ -287,8 +360,6 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     setIsCard1Minimized,
     setIsCard3Minimized,
     setSoloCard,
-    divider1MenuAccessories,
-    divider2MenuAccessories,
   } = useSplitController({
     hasStage,
     hasCard3,
@@ -318,12 +389,13 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
       ? [
           {
             id: 'stagePlayToggle',
-            title: isStagePlaying ? 'Pause Animation' : 'Play Kinetic Animation',
+            title: isStagePlaying ? 'Pause Animation (Space)' : 'Play Kinetic Animation (Space)',
             icon: isStagePlaying ? (
-              <Pause className="w-3 h-3 fill-current text-white" />
+              <Pause className="w-3 h-3 fill-current" />
             ) : (
-              <Play className="w-3 h-3 fill-current text-white ml-0.5" />
+              <Play className="w-3 h-3 fill-current" />
             ),
+            label: isStagePlaying ? 'PAUSE' : 'PLAY',
             action: onToggleStagePlay,
             active: isStagePlaying,
           },
@@ -333,7 +405,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
       ? [
           {
             id: 'stageReset',
-            title: 'Rewind Animation',
+            title: 'Rewind Animation (R)',
             icon: <RotateCcw className="w-3 h-3" />,
             action: onResetStage,
           },
@@ -346,7 +418,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             title: `Progress: ${Math.round(stageProgress * 100)}%`,
             customContent: (
               <div
-                className="flex items-center gap-1 sm:gap-1.5 px-2 py-0.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 transition-colors"
+                className="flex items-center gap-1.5 px-2 h-6 rounded-md bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 transition-colors"
                 onPointerDown={(e) => e.stopPropagation()}
               >
                 <div className="relative w-14 sm:w-20 md:w-28 h-1 bg-zinc-800 hover:bg-zinc-700 rounded-full flex items-center cursor-ew-resize group/slider">
@@ -372,7 +444,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                     style={{ left: `${Math.max(0, Math.min(1, stageProgress)) * 100}%` }}
                   />
                 </div>
-                <span className="text-[9.5px] font-mono tabular-nums text-zinc-300">
+                <span className="text-[9px] font-mono tabular-nums text-zinc-300 font-bold">
                   {Math.round(stageProgress * 100)}%
                 </span>
               </div>
@@ -390,17 +462,28 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           {
             id: 'solvedBanner',
             title: 'Exact Anagram Solved!',
-            icon: <Sparkles className="w-3.5 h-3.5 text-white" />,
-            label: <span className="text-white font-mono font-bold text-[11px]">Exact Match</span>,
+            icon: <Sparkles className="w-3 h-3" />,
+            label: 'EXACT MATCH',
             action: () => {},
             active: true,
+          },
+        ]
+      : sourceLetterCount > 0
+      ? [
+          {
+            id: 'placedProgressComplication',
+            title: `${placedLetterCount} of ${sourceLetterCount} source letters placed (${solveProgressPercent}%)`,
+            label: `${placedLetterCount}/${sourceLetterCount}`,
+            badge: `${solveProgressPercent}%`,
+            action: toggleMinimizeCard1,
+            active: !isCard1Minimized,
           },
         ]
       : []),
     {
       id: 'presetsMenuTrigger',
       title: 'Split Presets (VerticalSplit)',
-      icon: <SlidersHorizontal className="w-3.5 h-3.5" />,
+      icon: <SlidersHorizontal className="w-3 h-3" />,
       action: () => {
         triggerHaptic('snap');
         setShowDivider1Menu((prev) => !prev);
@@ -413,12 +496,13 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
   const divider1TrailingMenu = showDivider1Menu ? (
     <div
       ref={divider1MenuRef}
-      className="absolute top-full right-0 mt-2 w-52 bg-[#18181b]/98 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-1 z-50 select-none animate-in fade-in zoom-in-95 duration-100"
+      role="menu"
+      className="absolute top-full right-0 mt-1.5 w-52 bg-[#141417]/98 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl p-1.5 z-50 select-none animate-in fade-in zoom-in-95 duration-100"
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between px-2 py-1 mb-0.5 border-b border-white/5">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+      <div className="flex items-center justify-between px-2 py-1 mb-1 border-b border-white/10">
+        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
           Split Presets
         </span>
         <span className="text-[9px] font-mono text-zinc-400 bg-white/5 border border-white/10 px-1 py-0.2 rounded">
@@ -487,13 +571,13 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             }}
             className={`flex items-center justify-between w-full h-7.5 px-2 rounded-lg text-left transition-colors cursor-pointer group ${
               item.isActive
-                ? 'bg-white/10 text-white font-medium'
+                ? 'bg-white/15 text-white font-medium'
                 : 'text-zinc-300 hover:text-white hover:bg-white/5'
             }`}
           >
             <div className="flex items-center gap-2 min-w-0">
               <span className="shrink-0">{item.icon}</span>
-              <span className="text-[12px] truncate">{item.label}</span>
+              <span className="text-[11.5px] font-mono truncate">{item.label}</span>
             </div>
             {item.isActive && <Check className="w-3.5 h-3.5 text-white shrink-0 ml-1.5" />}
           </button>
@@ -502,7 +586,12 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     </div>
   ) : null;
 
-  // DIVIDER 2 LEADING: Mode Filter (Cycles between Safe, All, Closers, Pairs, Common, Long)
+  // ============================================================================
+  // DIVIDER 2 (WORD EXPLORER VERTICALSPLIT COMPLICATION BAR)
+  // Leading: WORDS | GRAPH | BLOCKS | STATS | SOLVE
+  // Center: Tactile Drag Notch Pill
+  // Trailing: FILTER (with Pop-Out Preset/Length/Search/Lexicon Menu) | SORT
+  // ============================================================================
   const currentMode = wordFilterMode || (avoidDeadEnds ? 'safe' : 'all');
   const safeCounts: Record<WordFilterMode, number> = countsByMode || {
     safe: solvableWordsCount || candidateWordsCount || 0,
@@ -516,28 +605,46 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     long: 0,
   };
 
-  const ALL_MODES: WordFilterMode[] = ['safe', 'domains', 'all', 'top', 'common', 'rare', 'closers', 'pairs', 'long'];
+  const ALL_MODES: WordFilterMode[] = [
+    'safe',
+    'domains',
+    'all',
+    'closers',
+    'pairs',
+    'long',
+    'top',
+    'common',
+    'rare',
+  ];
 
-  // Word Filter Quick-Select Menu state & interaction handlers
+  // Pop-out menu states for Divider 2 complications
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showViewMenu, setShowViewMenu] = useState(false);
   const filterMenuRef = useRef<HTMLDivElement>(null);
-  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+  const viewMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close menu when clicking outside
   useEffect(() => {
-    if (!showFilterMenu) return;
+    if (!showFilterMenu && !showSortMenu && !showViewMenu) return;
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-      if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (showFilterMenu && filterMenuRef.current && !filterMenuRef.current.contains(target)) {
         setShowFilterMenu(false);
+      }
+      if (showSortMenu && sortMenuRef.current && !sortMenuRef.current.contains(target)) {
+        setShowSortMenu(false);
+      }
+      if (showViewMenu && viewMenuRef.current && !viewMenuRef.current.contains(target)) {
+        setShowViewMenu(false);
       }
     };
     document.addEventListener('pointerdown', handleClickOutside);
     return () => document.removeEventListener('pointerdown', handleClickOutside);
-  }, [showFilterMenu]);
+  }, [showFilterMenu, showSortMenu, showViewMenu]);
 
   const handleSelectFilterMode = (mode: WordFilterMode) => {
     triggerHaptic('snap');
-    setShowFilterMenu(false);
     if (onSelectWordFilterMode) {
       onSelectWordFilterMode(mode);
     } else if (onSelectModeFilter && (mode === 'all' || mode === 'closers' || mode === 'pairs')) {
@@ -545,107 +652,26 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     }
   };
 
-  // Current Explorer View Mode (Graph / Inspector / Both / Blocks / Pebbles / Solutions)
+  // Current Explorer View Mode
   const rawExplorerView =
     explorerViewMode ||
-    (showGraphPanel && showInspectorPanel ? 'both' : showGraphPanel ? 'graph' : 'inspector');
+    (showGraphPanel && showInspectorPanel ? 'pebbles' : showGraphPanel ? 'graph' : 'inspector');
   const currentExplorerView: 'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions' =
     rawExplorerView === 'cards' ? 'blocks' : rawExplorerView;
-
-  const ALL_VIEWS: ('both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions')[] = [
-    'both',
-    'graph',
-    'inspector',
-    'blocks',
-    'pebbles',
-    'solutions',
-  ];
-
-  const viewConfigs: Record<
-    'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions',
-    {
-      label: string;
-      sublabel: string;
-      icon: React.ReactNode;
-      color: string;
-      dotColor: string;
-      title: string;
-    }
-  > = {
-    both: {
-      label: 'Split View',
-      sublabel: 'Graph and stats',
-      icon: <LayoutGrid className="w-3.5 h-3.5 text-zinc-100" />,
-      color: 'text-zinc-100',
-      dotColor: 'bg-white',
-      title: 'Split View: Word graph and stats side by side. Click to cycle, right-click for menu.',
-    },
-    graph: {
-      label: 'Word Graph',
-      sublabel: 'Physics cloud',
-      icon: <Network className="w-3.5 h-3.5 text-zinc-100" />,
-      color: 'text-zinc-100',
-      dotColor: 'bg-white',
-      title: 'Word Graph: Interactive physics-based word cloud. Click to cycle, right-click for menu.',
-    },
-    inspector: {
-      label: 'Word Stats',
-      sublabel: 'Length & letter charts',
-      icon: <BarChart3 className="w-3.5 h-3.5 text-zinc-200" />,
-      color: 'text-zinc-200',
-      dotColor: 'bg-zinc-300',
-      title: 'Word Stats: Length and letter charts. Click to cycle, right-click for menu.',
-    },
-    blocks: {
-      label: 'Word Blocks',
-      sublabel: 'Squarified treemap',
-      icon: <LayoutGrid className="w-3.5 h-3.5 text-zinc-200" />,
-      color: 'text-zinc-200',
-      dotColor: 'bg-zinc-300',
-      title: 'Word Blocks: Squarified word treemap. Click to cycle, right-click for menu.',
-    },
-    pebbles: {
-      label: 'Word Pebbles',
-      sublabel: 'Organic word field',
-      icon: <Layers className="w-3.5 h-3.5 text-zinc-200" />,
-      color: 'text-zinc-200',
-      dotColor: 'bg-zinc-300',
-      title: 'Word Pebbles: Organic word bubbles. Click to cycle, right-click for menu.',
-    },
-    solutions: {
-      label: 'Solutions',
-      sublabel: 'Winning finishes',
-      icon: <Sparkles className="w-3.5 h-3.5 text-white" />,
-      color: 'text-white',
-      dotColor: 'bg-white',
-      title: 'Solutions: Direct 1-word and 2-word finishes. Click to cycle, right-click for menu.',
-    },
-  };
-
-  const activeViewConfig = viewConfigs[currentExplorerView] || viewConfigs.both;
-
-  // Explorer View Quick-Select Menu state & interaction handlers
-  const [showViewMenu, setShowViewMenu] = useState(false);
-  const viewMenuRef = useRef<HTMLDivElement>(null);
-  const viewLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Close view menu when clicking outside
-  useEffect(() => {
-    if (!showViewMenu) return;
-    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) {
-        setShowViewMenu(false);
-      }
-    };
-    document.addEventListener('pointerdown', handleClickOutside);
-    return () => document.removeEventListener('pointerdown', handleClickOutside);
-  }, [showViewMenu]);
 
   const handleSelectViewMode = (
     mode: 'both' | 'graph' | 'inspector' | 'blocks' | 'pebbles' | 'solutions'
   ) => {
     triggerHaptic('snap');
     setShowViewMenu(false);
+    // If Explorer panel is currently minimized, expand it immediately when a view complication is clicked
+    if (isCard3Minimized || soloCard === 1) {
+      setIsCard3Minimized(false);
+      setSoloCard(null);
+      if (currentDetent.type === 'bottomMini' || currentDetent.type === 'topFull') {
+        setDetent(SplitDetents.topMini);
+      }
+    }
     if (onSelectExplorerView) {
       onSelectExplorerView(mode);
     } else {
@@ -662,231 +688,445 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
     }
   };
 
-  // DIVIDER 2 LEADING: Mode Filter with rich multi-action functionality
-  const resolvedDivider2Leading: SplitAccessory[] = [
+  const totalSolveCount = exactClosersCount + finisherPairsCount + completeSolutionsCount;
+
+  // Smart vertical direction for Divider 2 pop-out menus:
+  // Open downward (`top-full mt-1.5`) when Divider 2 is in the upper/middle portion of the viewport,
+  // and upward (`bottom-full mb-1.5`) only when the Explorer panel is minimized at the bottom edge.
+  const isDivider2NearBottom = isCard3Minimized || (hasStage && !isCard1Minimized && ratio1 > 0.68);
+  const menuVerticalPosClass = isDivider2NearBottom
+    ? 'bottom-full mb-1.5'
+    : 'top-full mt-1.5';
+
+  // DIVIDER 2 LEADING COMPLICATIONS: WORDS | GRAPH | BLOCKS | STATS | SOLVE
+  const VIEW_COMPLICATIONS: {
+    id: 'pebbles' | 'graph' | 'blocks' | 'inspector' | 'solutions';
+    label: string;
+    title: string;
+    icon: React.ReactNode;
+    badge?: number;
+  }[] = [
     {
-      id: 'wordsFilterToggle',
+      id: 'pebbles',
+      label: 'WORDS',
+      title: 'Words View: Organic tactile word pebbles (Right-click for layout presets)',
+      icon: <Layers className="w-3 h-3 hidden md:inline" />,
+    },
+    {
+      id: 'graph',
+      label: 'GRAPH',
+      title: 'Graph View: Interactive physics word network',
+      icon: <Network className="w-3 h-3 hidden md:inline" />,
+    },
+    {
+      id: 'blocks',
+      label: 'BLOCKS',
+      title: 'Blocks View: Proportional squarified word treemap',
+      icon: <LayoutGrid className="w-3 h-3 hidden md:inline" />,
+    },
+    {
+      id: 'inspector',
+      label: 'STATS',
+      title: 'Stats View: Word length, part of speech & frequency distributions',
+      icon: <BarChart3 className="w-3 h-3 hidden md:inline" />,
+    },
+    {
+      id: 'solutions',
+      label: 'SOLVE',
+      title: `Solve View: Direct 1-word wins, 2-word pairs & full anagram solutions (${totalSolveCount})`,
+      icon: <Sparkles className="w-3 h-3 hidden md:inline" />,
+      badge: totalSolveCount > 0 ? totalSolveCount : undefined,
+    },
+  ];
+
+  const resolvedDivider2Leading: SplitAccessory[] = VIEW_COMPLICATIONS.map((view) => ({
+    id: `view-complication-${view.id}`,
+    title: view.title,
+    icon: view.icon,
+    label: view.label,
+    badge: view.badge,
+    active:
+      !isCard3Minimized &&
+      (currentExplorerView === view.id ||
+        (currentExplorerView === 'both' && (view.id === 'graph' || view.id === 'inspector'))),
+    action: () => handleSelectViewMode(view.id),
+    onContextMenu: (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      triggerHaptic('medium');
+      setShowFilterMenu(false);
+      setShowSortMenu(false);
+      setShowViewMenu((prev) => !prev);
+    },
+  }));
+
+  // DIVIDER 2 LEADING MENU: Layout & Split View Context Menu (on right-click of view complications)
+  const divider2LeadingMenu = showViewMenu ? (
+    <div
+      ref={viewMenuRef}
+      role="menu"
+      className={`absolute ${menuVerticalPosClass} left-0 w-56 bg-[#141417]/98 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl p-1.5 z-50 select-none animate-in fade-in zoom-in-95 duration-100`}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between px-2 py-1 mb-1 border-b border-white/10">
+        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+          Workspace & Split
+        </span>
+        <kbd className="text-[9px] font-mono text-zinc-400 bg-white/5 border border-white/10 px-1 py-0.2 rounded">
+          V
+        </kbd>
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <button
+          type="button"
+          onClick={() => handleSelectViewMode('both')}
+          className={`flex items-center justify-between w-full h-7.5 px-2 rounded-lg text-left transition-colors cursor-pointer ${
+            currentExplorerView === 'both'
+              ? 'bg-white/15 text-white font-medium'
+              : 'text-zinc-300 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Rows2 className="w-3.5 h-3.5 text-zinc-200 shrink-0" />
+            <span className="text-[11.5px] font-mono truncate">Side-by-Side (Graph + Stats)</span>
+          </div>
+          {currentExplorerView === 'both' && <Check className="w-3.5 h-3.5 text-white shrink-0" />}
+        </button>
+        <div className="my-0.5 border-t border-white/10" />
+        {[
+          {
+            id: 'words75',
+            label: 'Focus Explorer (75%)',
+            icon: <ChevronsUp className="w-3.5 h-3.5 text-zinc-200" />,
+            action: () => setDetent(SplitDetents.focusBottom),
+          },
+          {
+            id: 'balanced',
+            label: 'Balanced Split (50/50)',
+            icon: <Rows2 className="w-3.5 h-3.5 text-zinc-200" />,
+            action: () => setDetent(SplitDetents.balanced),
+          },
+          {
+            id: 'bottomMini',
+            label: isCard3Minimized ? 'Expand Explorer' : 'Minimize Explorer (34px)',
+            icon: <ChevronDown className="w-3.5 h-3.5 text-zinc-200" />,
+            action: toggleMinimizeCard3,
+          },
+        ].map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            onClick={() => {
+              triggerHaptic('snap');
+              setShowViewMenu(false);
+              preset.action();
+            }}
+            className="flex items-center gap-2 w-full h-7.5 px-2 rounded-lg text-left text-zinc-300 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+          >
+            <span className="shrink-0">{preset.icon}</span>
+            <span className="text-[11.5px] font-mono truncate">{preset.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
+  // Check if any secondary filter modifiers are currently active
+  const activeLengthArray = Array.isArray(selectedLengthFilter)
+    ? selectedLengthFilter
+    : selectedLengthFilter !== null && selectedLengthFilter !== undefined
+    ? [selectedLengthFilter]
+    : [];
+
+  const hasActiveFilterModifiers = Boolean(
+    currentMode !== 'safe' ||
+      activeLengthArray.length > 0 ||
+      (selectedPosFilter && selectedPosFilter !== 'all') ||
+      (selectedFreqFilter && selectedFreqFilter !== 'all') ||
+      searchQuery.trim()
+  );
+
+  const handleResetAllFilters = () => {
+    triggerHaptic('snap');
+    handleSelectFilterMode('safe');
+    if (onClearLengthFilter) onClearLengthFilter();
+    if (onSelectPosFilter) onSelectPosFilter(null);
+    if (onClearFreqFilter) onClearFreqFilter();
+    if (onSearchQueryChange) onSearchQueryChange('');
+  };
+
+  const handleToggleLengthChip = (len: number) => {
+    triggerHaptic('light');
+    if (!onSelectLengthFilter) return;
+    if (activeLengthArray.includes(len)) {
+      const next = activeLengthArray.filter((l) => l !== len);
+      onSelectLengthFilter(next.length > 0 ? next : null);
+    } else {
+      onSelectLengthFilter([...activeLengthArray, len]);
+    }
+  };
+
+  const activeSortConfig =
+    SORT_OPTIONS.find((s) => s.id === sortBy) || SORT_OPTIONS[0];
+
+  // DIVIDER 2 TRAILING COMPLICATIONS: FILTER + SORT
+  const resolvedDivider2Trailing: SplitAccessory[] = [
+    {
+      id: 'filterComplication',
       title: MODE_CONFIGS[currentMode].getDescription(safeCounts[currentMode]),
-      icon: (
-        <div className="relative flex items-center justify-center group/filtericon">
-          {MODE_CONFIGS[currentMode].icon}
-          {/* Micro active mode accent indicator dot */}
-          <span
-            className={`absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${MODE_CONFIGS[currentMode].dotColor} ring-1 ring-black/80 transition-all group-hover/filtericon:scale-125`}
-          />
-        </div>
-      ),
+      icon: <SlidersHorizontal className="w-3 h-3" />,
+      label:
+        currentMode === 'safe' && !hasActiveFilterModifiers
+          ? 'FILTER'
+          : MODE_CONFIGS[currentMode].shortLabel,
+      badge: safeCounts[currentMode],
       shortcut: 'S',
+      active: showFilterMenu || hasActiveFilterModifiers,
       action: (e?: React.MouseEvent) => {
         if (e?.shiftKey) {
-          // Shift-Click: cycle backwards!
-          const idx = ALL_MODES.indexOf(currentMode);
-          const prevIdx = (idx - 1 + ALL_MODES.length) % ALL_MODES.length;
-          handleSelectFilterMode(ALL_MODES[prevIdx]);
+          // Shift-click: cycle filter preset directly
+          if (onCycleWordFilter) {
+            onCycleWordFilter();
+          } else {
+            const idx = ALL_MODES.indexOf(currentMode);
+            const nextIdx = (idx + 1) % ALL_MODES.length;
+            handleSelectFilterMode(ALL_MODES[nextIdx]);
+          }
           return;
         }
-        if (onCycleWordFilter) {
-          onCycleWordFilter();
-        } else {
-          const idx = ALL_MODES.indexOf(currentMode);
-          const nextIdx = (idx + 1) % ALL_MODES.length;
-          handleSelectFilterMode(ALL_MODES[nextIdx]);
-        }
+        triggerHaptic('snap');
+        setShowSortMenu(false);
+        setShowViewMenu(false);
+        setShowFilterMenu((prev) => !prev);
       },
       onContextMenu: (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        triggerHaptic('medium');
-        setShowFilterMenu((prev) => !prev);
+        if (onCycleWordFilter) onCycleWordFilter();
       },
-      onDoubleClick: (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        triggerHaptic('snap');
-        handleSelectFilterMode('safe');
-      },
-      onPointerDown: () => {
-        longPressTimerRef.current = setTimeout(() => {
-          triggerHaptic('medium');
-          setShowFilterMenu(true);
-        }, 420);
-      },
-      onPointerUp: () => {
-        if (longPressTimerRef.current) {
-          clearTimeout(longPressTimerRef.current);
-          longPressTimerRef.current = null;
-        }
-      },
-      onPointerLeave: () => {
-        if (longPressTimerRef.current) {
-          clearTimeout(longPressTimerRef.current);
-          longPressTimerRef.current = null;
-        }
-      },
-      active: true,
     },
+    ...(onSortByChange
+      ? [
+          {
+            id: 'sortComplication',
+            title: `Sort Words: ${activeSortConfig.label} (Click for menu, Shift-click to cycle)`,
+            icon: activeSortConfig.icon,
+            label: activeSortConfig.shortLabel,
+            active: showSortMenu || sortBy !== 'length-desc',
+            action: (e?: React.MouseEvent) => {
+              if (e?.shiftKey) {
+                triggerHaptic('light');
+                const idx = SORT_OPTIONS.findIndex((o) => o.id === sortBy);
+                const nextIdx = (idx + 1) % SORT_OPTIONS.length;
+                onSortByChange(SORT_OPTIONS[nextIdx].id);
+                return;
+              }
+              triggerHaptic('snap');
+              setShowFilterMenu(false);
+              setShowViewMenu(false);
+              setShowSortMenu((prev) => !prev);
+            },
+          },
+        ]
+      : []),
   ];
 
-  // DIVIDER 2 LEADING MENU: Quick-Select Mode Popover (Deslopped, minimal, high-craft)
-  const divider2LeadingMenu = showFilterMenu ? (
+  // DIVIDER 2 TRAILING MENU: Pop-Out Filter & Lexicon Complication Capsule OR Sort Menu Capsule
+  const availableLengths = histogramData.filter((bin) => bin.count > 0);
+
+  const divider2TrailingMenu = showFilterMenu ? (
     <div
       ref={filterMenuRef}
-      className="absolute bottom-full left-0 mb-2 w-52 bg-[#18181b]/98 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-1 z-50 select-none animate-in fade-in zoom-in-95 duration-100"
+      role="menu"
+      className={`absolute ${menuVerticalPosClass} right-0 w-[290px] sm:w-[340px] bg-[#121215]/98 backdrop-blur-xl border border-white/15 rounded-2xl shadow-2xl p-2.5 z-50 select-none animate-in fade-in zoom-in-95 duration-100`}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between px-2 py-1 mb-0.5 border-b border-white/5">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-          Filter Words
-        </span>
-        <kbd className="text-[9px] font-mono text-zinc-400 bg-white/5 border border-white/10 px-1 py-0.2 rounded">
-          S
-        </kbd>
+      {/* Header Row: Title + Custom Words + Reset */}
+      <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-white/10">
+        <div className="flex items-center gap-1.5">
+          <SlidersHorizontal className="w-3.5 h-3.5 text-white" />
+          <span className="text-[10.5px] font-mono font-black uppercase tracking-wider text-white">
+            Filter & Lexicon
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {onOpenCustomWordManager && (
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('light');
+                setShowFilterMenu(false);
+                onOpenCustomWordManager();
+              }}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-mono font-bold bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-colors cursor-pointer"
+              title="Manage custom dictionary words and 1,200+ global TLDs"
+            >
+              <Globe className="w-2.5 h-2.5" />
+              <span>Custom Words</span>
+              {customWordsCount > 0 && (
+                <span className="px-1 rounded bg-white text-black text-[8.5px] font-black tabular-nums">
+                  {customWordsCount}
+                </span>
+              )}
+            </button>
+          )}
+          {hasActiveFilterModifiers && (
+            <button
+              type="button"
+              onClick={handleResetAllFilters}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-mono font-bold bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white border border-white/10 transition-colors cursor-pointer"
+              title="Reset all active filters"
+            >
+              <RotateCcw className="w-2.5 h-2.5" />
+              <span>Reset</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-col gap-0.5">
+      {/* Quick Substring Search Input */}
+      {onSearchQueryChange && (
+        <div className="relative flex items-center mb-2">
+          <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearchQueryChange(e.target.value)}
+            placeholder="Search candidate words..."
+            className="w-full h-7.5 pl-8 pr-7 rounded-lg bg-black/60 border border-white/15 focus:border-white text-xs font-mono text-white placeholder:text-zinc-500 outline-none transition-colors"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => onSearchQueryChange('')}
+              className="absolute right-2 text-zinc-400 hover:text-white p-0.5 cursor-pointer"
+              title="Clear search"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 3x3 Filter Preset Matrix */}
+      <div className="grid grid-cols-3 gap-1 mb-2">
         {ALL_MODES.map((modeKey) => {
           const config = MODE_CONFIGS[modeKey];
           const count = safeCounts[modeKey] || 0;
-          const isActive = currentMode === modeKey;
+          const isSelected = currentMode === modeKey;
+          const isZero = count === 0;
 
           return (
             <button
               key={modeKey}
               type="button"
               onClick={() => handleSelectFilterMode(modeKey)}
-              className={`flex items-center justify-between w-full h-7.5 px-2 rounded-lg text-left transition-colors cursor-pointer group ${
-                isActive
-                  ? 'bg-white/10 text-white font-medium'
-                  : 'text-zinc-300 hover:text-white hover:bg-white/5'
+              className={`flex items-center justify-between px-2 py-1.5 rounded-lg border text-left transition-all cursor-pointer ${
+                isSelected
+                  ? 'bg-white text-black border-white font-black shadow-xs'
+                  : isZero
+                  ? 'bg-white/[0.02] text-zinc-500 border-white/5 hover:border-white/15 font-medium'
+                  : 'bg-white/[0.05] text-zinc-200 border-white/10 hover:bg-white/10 hover:border-white/25 font-bold'
               }`}
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className={`shrink-0 ${config.color}`}>{config.icon}</span>
-                <span className="text-[12px] truncate">{config.label}</span>
-              </div>
-
-              <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                <span className="text-[11px] font-mono tabular-nums text-zinc-400 group-hover:text-zinc-300">
-                  {count}
-                </span>
-                {isActive && (
-                  <Check className="w-3.5 h-3.5 text-white shrink-0" />
-                )}
-              </div>
+              <span className="text-[9px] font-mono uppercase tracking-tight truncate">
+                {config.shortLabel}
+              </span>
+              <span
+                className={`text-[8.5px] font-mono tabular-nums ml-1 shrink-0 px-1 py-0.2 rounded ${
+                  isSelected
+                    ? 'bg-black/15 text-black font-black'
+                    : isZero
+                    ? 'text-zinc-600'
+                    : 'bg-white/10 text-zinc-300'
+                }`}
+              >
+                {count}
+              </span>
             </button>
           );
         })}
       </div>
-    </div>
-  ) : null;
 
-  // DIVIDER 2 TRAILING: Single Merged View Mode Button with rich multi-action functionality
-  const resolvedDivider2Trailing: SplitAccessory[] = [
-    {
-      id: 'explorerViewToggle',
-      title: activeViewConfig.title,
-      icon: (
-        <div className="relative flex items-center justify-center group/viewicon">
-          {activeViewConfig.icon}
-          {/* Micro active layout accent indicator dot */}
-          <span
-            className={`absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${activeViewConfig.dotColor} ring-1 ring-black/80 transition-all group-hover/viewicon:scale-125`}
-          />
+      {/* Quick Word Length Multi-Select Pills */}
+      {availableLengths.length > 0 && onSelectLengthFilter && (
+        <div className="pt-1.5 border-t border-white/10">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+              Word Length Filter
+            </span>
+            {activeLengthArray.length > 0 && onClearLengthFilter && (
+              <button
+                type="button"
+                onClick={onClearLengthFilter}
+                className="text-[9px] font-mono text-zinc-400 hover:text-white cursor-pointer"
+              >
+                Clear ({activeLengthArray.length})
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1 flex-wrap">
+            {availableLengths.map((bin) => {
+              const isLenActive = activeLengthArray.includes(bin.length);
+              return (
+                <button
+                  key={bin.length}
+                  type="button"
+                  onClick={() => handleToggleLengthChip(bin.length)}
+                  className={`px-2 py-0.5 rounded-md text-[9.5px] font-mono tabular-nums border transition-all cursor-pointer ${
+                    isLenActive
+                      ? 'bg-white text-black border-white font-black'
+                      : 'bg-white/[0.05] text-zinc-300 border-white/10 hover:bg-white/15 hover:text-white font-bold'
+                  }`}
+                  title={`${bin.length} letters (${bin.count} words)`}
+                >
+                  {bin.length}L <span className="opacity-60 text-[8.5px]">{bin.count}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      ),
-      shortcut: 'V',
-      action: (e?: React.MouseEvent) => {
-        if (e?.shiftKey) {
-          // Shift-Click: cycle backward!
-          const idx = ALL_VIEWS.indexOf(currentExplorerView);
-          const prevIdx = (idx - 1 + ALL_VIEWS.length) % ALL_VIEWS.length;
-          handleSelectViewMode(ALL_VIEWS[prevIdx]);
-          return;
-        }
-        if (onCycleExplorerView) {
-          onCycleExplorerView();
-        } else {
-          const idx = ALL_VIEWS.indexOf(currentExplorerView);
-          const nextIdx = (idx + 1) % ALL_VIEWS.length;
-          handleSelectViewMode(ALL_VIEWS[nextIdx]);
-        }
-      },
-      onContextMenu: (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        triggerHaptic('medium');
-        setShowViewMenu((prev) => !prev);
-      },
-      onDoubleClick: (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        triggerHaptic('snap');
-        handleSelectViewMode('both');
-      },
-      onPointerDown: () => {
-        viewLongPressTimerRef.current = setTimeout(() => {
-          triggerHaptic('medium');
-          setShowViewMenu(true);
-        }, 420);
-      },
-      onPointerUp: () => {
-        if (viewLongPressTimerRef.current) {
-          clearTimeout(viewLongPressTimerRef.current);
-          viewLongPressTimerRef.current = null;
-        }
-      },
-      onPointerLeave: () => {
-        if (viewLongPressTimerRef.current) {
-          clearTimeout(viewLongPressTimerRef.current);
-          viewLongPressTimerRef.current = null;
-        }
-      },
-      active: true,
-    },
-  ];
-
-  // DIVIDER 2 TRAILING MENU: Quick-Select Explorer Layout Popover (Deslopped, minimal, high-craft)
-  const divider2TrailingMenu = showViewMenu ? (
+      )}
+    </div>
+  ) : showSortMenu && onSortByChange ? (
     <div
-      ref={viewMenuRef}
-      className="absolute bottom-full right-0 mb-2 w-48 bg-[#18181b]/98 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-1 z-50 select-none animate-in fade-in zoom-in-95 duration-100"
+      ref={sortMenuRef}
+      role="menu"
+      className={`absolute ${menuVerticalPosClass} right-0 w-48 bg-[#121215]/98 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl p-1.5 z-50 select-none animate-in fade-in zoom-in-95 duration-100`}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between px-2 py-1 mb-0.5 border-b border-white/5">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-          View Layout
+      <div className="flex items-center justify-between px-2 py-1 mb-1 border-b border-white/10">
+        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+          Sort Words
         </span>
-        <kbd className="text-[9px] font-mono text-zinc-400 bg-white/5 border border-white/10 px-1 py-0.2 rounded">
-          V
-        </kbd>
       </div>
-
       <div className="flex flex-col gap-0.5">
-        {ALL_VIEWS.map((viewKey) => {
-          const config = viewConfigs[viewKey];
-          const isActive = currentExplorerView === viewKey;
-
+        {SORT_OPTIONS.map((option) => {
+          const isSelected = sortBy === option.id;
           return (
             <button
-              key={viewKey}
+              key={option.id}
               type="button"
-              onClick={() => handleSelectViewMode(viewKey)}
-              className={`flex items-center justify-between w-full h-7.5 px-2 rounded-lg text-left transition-colors cursor-pointer group ${
-                isActive
-                  ? 'bg-white/10 text-white font-medium'
-                  : 'text-zinc-300 hover:text-white hover:bg-white/5'
+              onClick={() => {
+                triggerHaptic('snap');
+                onSortByChange(option.id);
+                setShowSortMenu(false);
+              }}
+              className={`flex items-center justify-between w-full h-7.5 px-2 rounded-lg text-left transition-colors cursor-pointer ${
+                isSelected
+                  ? 'bg-white text-black font-bold'
+                  : 'text-zinc-300 hover:text-white hover:bg-white/10'
               }`}
             >
               <div className="flex items-center gap-2 min-w-0">
-                <span className={`shrink-0 ${config.color}`}>{config.icon}</span>
-                <span className="text-[12px] truncate">{config.label}</span>
+                <span className="shrink-0">{option.icon}</span>
+                <span className="text-[11px] font-mono truncate">{option.label}</span>
               </div>
-
-              {isActive && (
-                <Check className="w-3.5 h-3.5 text-white shrink-0 ml-2" />
-              )}
+              {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
             </button>
           );
         })}
@@ -926,7 +1166,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             onMoveDown={() => movePanel('stage', 'down')}
             isMinimized={isStageMinimized}
             isFull={soloCard === 1}
-            isResizing={activeDrag === 1}
+            isResizing={activeDrag === 1 || activeDrag === 2}
             onRestore={() => {
               setIsCard1Minimized(false);
               setSoloCard(null);
@@ -955,35 +1195,70 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           />
         );
 
-      case 'composer':
+      case 'composer': {
+        // When !hasStage (only composer and explorer are visible), allow dragging the divider
+        // to smoothly resize composer or collapse it to 36px when minimized!
+        const isComposerMini = isComposerCollapsed || (!hasStage && isCard1Minimized && hasUserCustomized);
+        const isComposerFlexing =
+          !hasStage &&
+          (isExplorerMinimized ||
+            activeDrag !== null ||
+            (hasUserCustomized && !isCard1Minimized && ratio1 > 0.22));
+
+        const composerStyle: React.CSSProperties = isComposerMini
+          ? { height: '36px', minHeight: '34px', flex: 'none' }
+          : !hasStage && isExplorerMinimized
+          ? { flex: '1 1 0%', minHeight: '120px' }
+          : isComposerFlexing
+          ? {
+              flex: `${Math.max(0.14, Math.min(0.75, ratio1))} 1 0%`,
+              minHeight: isKeyboardOpen ? '56px' : '72px',
+            }
+          : {
+              height: isKeyboardOpen ? '58px' : '72px',
+              minHeight: '56px',
+              flex: 'none',
+            };
+
         return (
           <div
             key="composer"
-            className={`w-full relative overflow-hidden flex flex-col min-h-0 flex-none shrink-0 bg-transparent px-1 sm:px-1.5 transition-all ${
+            className={`w-full relative overflow-hidden flex flex-col min-h-0 shrink-0 bg-transparent px-1 sm:px-1.5 transition-all ${
               activeDrag ? 'duration-0' : 'duration-350 ease-[cubic-bezier(0.16,1,0.3,1)]'
             } ${
               isBeingDragged
                 ? 'opacity-80 ring-2 ring-white/40 shadow-2xl scale-[0.99] z-40'
                 : ''
             }`}
-            style={{
-              height: isComposerCollapsed ? '34px' : isKeyboardOpen ? '58px' : '72px',
-              minHeight: isComposerCollapsed ? '32px' : '56px',
-            }}
+            style={composerStyle}
           >
             <div className="w-full h-full flex flex-col justify-center min-h-0">
               {React.isValidElement(card2)
                 ? React.cloneElement(card2 as React.ReactElement<any>, {
-                    isCollapsed: isComposerCollapsed,
-                    onToggleCollapse: handleToggleComposerCollapse,
+                    isCollapsed: isComposerMini,
+                    onToggleCollapse: () => {
+                      if (!hasStage && isCard1Minimized && hasUserCustomized) {
+                        setIsCard1Minimized(false);
+                        setDetent(SplitDetents.balanced);
+                      } else {
+                        handleToggleComposerCollapse();
+                      }
+                    },
                   })
                 : card2}
             </div>
           </div>
         );
+      }
 
-      case 'explorer':
+      case 'explorer': {
         if (!hasCard3) return null;
+        const isComposerFlexing =
+          !hasStage &&
+          (isExplorerMinimized ||
+            activeDrag !== null ||
+            (hasUserCustomized && !isCard1Minimized && ratio1 > 0.22));
+
         return (
           <BottomWrapper
             key="explorer"
@@ -997,7 +1272,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             onMoveDown={() => movePanel('explorer', 'down')}
             isMinimized={isExplorerMinimized}
             isFull={soloCard === 3}
-            isResizing={activeDrag === 2}
+            isResizing={activeDrag === 1 || activeDrag === 2}
             onRestore={() => {
               setIsCard3Minimized(false);
               setSoloCard(null);
@@ -1006,9 +1281,9 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             style={
               isExplorerMinimized
                 ? { height: '34px', flex: 'none' }
-                : isStageMinimized || !hasStage
+                : (isStageMinimized && hasStage) || (!hasStage && !isComposerFlexing)
                 ? { flex: '1 1 0%', minHeight: '120px' }
-                : { flex: `${Math.max(0.18, Math.min(0.82, 1 - ratio1))} 1 0%`, minHeight: '100px' }
+                : { flex: `${Math.max(0.18, Math.min(0.86, 1 - ratio1))} 1 0%`, minHeight: '100px' }
             }
             content={card3}
             overlay={
@@ -1025,6 +1300,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
             }
           />
         );
+      }
     }
   };
 
@@ -1061,16 +1337,17 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
                 isDragging={isDivider1 ? activeDrag === 1 : activeDrag === 2}
                 onPointerDown={isDivider1 ? startDrag1 : startDrag2}
                 onDoubleClick={cyclePresets}
+                shouldSuppressClick={shouldSuppressClick}
                 onToggleCollapse={isDivider1 ? toggleMinimizeCard1 : toggleMinimizeCard3}
                 isCollapsed={isDivider1 ? isCard1Minimized : isCard3Minimized}
                 collapseTooltip={
                   isDivider1
                     ? isCard1Minimized
-                      ? 'Expand stage'
-                      : 'Minimize stage'
+                      ? 'Expand stage · Drag to resize'
+                      : 'Minimize stage · Drag to resize'
                     : isCard3Minimized
-                    ? 'Expand word panel'
-                    : 'Minimize word panel'
+                    ? 'Expand word panel · Drag to resize'
+                    : 'Minimize word panel · Drag to resize'
                 }
                 isBusy={isExplorerDivider && isSolving}
                 isSuccess={isExplorerDivider && justFoundResults}
@@ -1107,7 +1384,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           <BookOpen className="w-3.5 h-3.5 text-zinc-300" />
           <span className="text-xs font-semibold">Word Explorer</span>
           {candidateWordsCount !== undefined && candidateWordsCount > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-mono text-zinc-300">
+            <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-mono tabular-nums text-zinc-300">
               {candidateWordsCount} words
             </span>
           )}
@@ -1130,7 +1407,7 @@ export const ThreePaneSplit: React.FC<ThreePaneSplitProps> = ({
           <Theater className="w-3.5 h-3.5 text-zinc-200" />
           <span className="text-xs font-semibold">Kinetic Stage</span>
           {solveProgressPercent !== undefined && (
-            <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-mono text-zinc-300">
+            <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-mono tabular-nums text-zinc-300">
               {solveProgressPercent}% solved
             </span>
           )}
