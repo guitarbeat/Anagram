@@ -688,7 +688,9 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full relative flex flex-col min-h-0 text-zinc-900 select-none overflow-hidden bg-white border-x-2 border-b-2 border-black rounded-b-xl sm:rounded-b-2xl shadow-xs"
+      className={`w-full h-full relative flex flex-col min-h-0 text-zinc-900 select-none overflow-hidden border-x-2 border-b-2 border-black rounded-b-xl sm:rounded-b-2xl shadow-xs ${
+        explorerViewMode === 'both' ? 'bg-[#09090b]' : 'bg-white'
+      }`}
     >
       {/* Workspace View Surface */}
       <div className="flex-1 w-full min-h-0 relative overflow-hidden">
@@ -697,15 +699,15 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             ref={splitContainerRef}
             onPointerMove={handleSplitterPointerMove}
             onPointerUp={handleSplitterPointerUp}
-            className="w-full h-full flex flex-row min-h-0 overflow-hidden select-none"
+            className="w-full h-full flex flex-row min-h-0 overflow-hidden select-none bg-[#09090b] p-1.5 sm:p-2 gap-1 sm:gap-1.5"
           >
             {/* Left Split Pane */}
             <div
               style={{ flex: `${splitRatio} 1 0%` }}
-              className="h-full min-w-[200px] flex flex-col min-h-0 overflow-hidden bg-white"
+              className="h-full min-w-[200px] flex flex-col min-h-0 overflow-hidden bg-white rounded-xl sm:rounded-2xl border-2 border-black shadow-xs"
             >
               {/* Sleek Left Pane Header */}
-              <div className="h-7 bg-zinc-50 border-b border-black/15 flex items-center justify-between px-2.5 shrink-0 select-none">
+              <div className="h-7.5 bg-zinc-50 border-b border-black/15 flex items-center justify-between px-2.5 shrink-0 select-none rounded-t-[10px] sm:rounded-t-[14px]">
                 <div ref={leftDropdownRef} className="relative">
                   <button
                     type="button"
@@ -784,7 +786,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
               </div>
 
               {/* Left Pane Content */}
-              <div className="flex-1 w-full min-h-0 relative overflow-hidden">
+              <div className="flex-1 w-full min-h-0 relative overflow-hidden rounded-b-[10px] sm:rounded-b-[14px]">
                 {renderViewContent(currentLeftView)}
               </div>
             </div>
@@ -792,22 +794,23 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
             {/* Draggable Split Divider between Left & Right */}
             <div
               onPointerDown={handleSplitterPointerDown}
+              onPointerUp={handleSplitterPointerUp}
               onDoubleClick={() => setSplitRatio(0.5)}
               title="Drag to resize split screen · Double click for 50/50"
-              className={`w-2.5 h-full bg-zinc-100 hover:bg-zinc-200 cursor-col-resize shrink-0 transition-colors flex items-center justify-center border-x border-black/15 group z-20 ${
-                isDraggingSplitter ? 'bg-zinc-300' : ''
+              className={`relative w-1.5 sm:w-2 h-[calc(100%-8px)] my-auto bg-black hover:bg-zinc-800 cursor-col-resize shrink-0 transition-all flex items-center justify-center group z-20 rounded-full border border-white/20 shadow-xs before:absolute before:inset-y-0 before:-inset-x-2.5 before:content-[''] ${
+                isDraggingSplitter ? 'bg-zinc-800 ring-2 ring-white/30' : ''
               }`}
             >
-              <div className="w-0.5 h-8 bg-zinc-400 group-hover:bg-black rounded-full transition-colors" />
+              <div className="w-0.5 h-8 sm:h-10 bg-zinc-400 group-hover:bg-white rounded-full transition-all group-hover:scale-y-110 shadow-xs" />
             </div>
 
             {/* Right Split Pane */}
             <div
               style={{ flex: `${1 - splitRatio} 1 0%` }}
-              className="h-full min-w-[200px] flex flex-col min-h-0 overflow-hidden bg-white"
+              className="h-full min-w-[200px] flex flex-col min-h-0 overflow-hidden bg-white rounded-xl sm:rounded-2xl border-2 border-black shadow-xs"
             >
               {/* Sleek Right Pane Header */}
-              <div className="h-7 bg-zinc-50 border-b border-black/15 flex items-center justify-between px-2.5 shrink-0 select-none">
+              <div className="h-7.5 bg-zinc-50 border-b border-black/15 flex items-center justify-between px-2.5 shrink-0 select-none rounded-t-[10px] sm:rounded-t-[14px]">
                 <div ref={rightDropdownRef} className="relative">
                   <button
                     type="button"
@@ -886,7 +889,7 @@ export const CandidateWordsList: React.FC<CandidateWordsListProps> = ({
               </div>
 
               {/* Right Pane Content */}
-              <div className="flex-1 w-full min-h-0 relative overflow-hidden">
+              <div className="flex-1 w-full min-h-0 relative overflow-hidden rounded-b-[10px] sm:rounded-b-[14px]">
                 {renderViewContent(currentRightView)}
               </div>
             </div>
